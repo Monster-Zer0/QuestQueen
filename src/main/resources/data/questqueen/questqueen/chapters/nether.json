@@ -1,0 +1,78 @@
+{
+  "id": "questqueen:nether",
+  "title": "Nether Bound",
+  "parent": "questqueen:starter",
+  "order": 10,
+  "icon": {
+    "item": "minecraft:obsidian"
+  },
+  "grid_width": 6,
+  "grid_height": 4,
+  "unlock": {
+    "op": "and",
+    "conditions": [
+      {
+        "type": "quest_complete",
+        "id": "questqueen:starter/go_nether"
+      }
+    ]
+  },
+  "tiles": [
+    {
+      "id": "nether_start",
+      "pos": {
+        "x": 1,
+        "y": 1
+      },
+      "title": "Heat check",
+      "description": "You made it. Stand in the Nether and claim the next path.",
+      "icon": {
+        "item": "minecraft:netherrack"
+      },
+      "tasks": [
+        {
+          "type": "visit_dimension",
+          "dimension": "minecraft:the_nether"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 15
+        }
+      ]
+    },
+    {
+      "id": "nether_fortress",
+      "pos": {
+        "x": 2,
+        "y": 1
+      },
+      "title": "Find a fortress",
+      "description": "Stand INSIDE a Nether fortress StructureStart bounding box (not just locate XYZ). Prove BB / piece membership before blaming the hook.",
+      "icon": {
+        "item": "minecraft:nether_bricks"
+      },
+      "tasks": [
+        {
+          "type": "visit_structure",
+          "structure": "minecraft:fortress"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "item",
+          "item": "minecraft:golden_sword",
+          "count": 1
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from": "nether_start",
+      "to": "nether_fortress",
+      "gate": "and"
+    }
+  ]
+}

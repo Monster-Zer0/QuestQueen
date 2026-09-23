@@ -1,0 +1,41 @@
+{
+  "id": "questqueen:showcase_stage",
+  "title": "Stage Wing",
+  "parent": "questqueen:showcase",
+  "order": 0,
+  "icon": { "item": "minecraft:amethyst_shard" },
+  "grid_width": 6,
+  "grid_height": 4,
+  "unlock": {
+    "op": "and",
+    "conditions": [
+      { "type": "quest_complete", "id": "questqueen:showcase/finale" }
+    ]
+  },
+  "tiles": [
+    {
+      "id": "wing_start",
+      "pos": { "x": 1, "y": 1 },
+      "title": "Wing unlocked",
+      "description": "This chapter unlocks when finale is complete.\nPress DONE for a level and a loot roll.",
+      "icon": { "item": "minecraft:amethyst_shard" },
+      "tasks": [{ "type": "checkmark" }],
+      "rewards": [
+        { "type": "xp_levels", "levels": 1 },
+        { "type": "loot", "table": "minecraft:chests/simple_dungeon" }
+      ]
+    },
+    {
+      "id": "signal",
+      "pos": { "x": 2, "y": 1 },
+      "title": "Fire the trigger",
+      "description": "Run /questqueen trigger showcase_ping or press DONE after the trigger fires.",
+      "icon": { "item": "minecraft:redstone" },
+      "tasks": [{ "type": "trigger", "trigger": "showcase_ping" }],
+      "rewards": [{ "type": "command", "command": "give @s minecraft:gold_ingot 2" }]
+    }
+  ],
+  "links": [
+    { "from": "wing_start", "to": "signal", "gate": "and" }
+  ]
+}

@@ -1,0 +1,214 @@
+{
+  "id": "questqueen:starter",
+  "title": "Getting Started",
+  "order": 0,
+  "icon": {
+    "item": "minecraft:chest"
+  },
+  "grid_width": 6,
+  "grid_height": 5,
+  "tiles": [
+    {
+      "id": "make_chest",
+      "pos": {
+        "x": 1,
+        "y": 1
+      },
+      "title": "Make a chest",
+      "description": "Craft or find a chest. A place to keep what you gather.",
+      "icon": {
+        "item": "minecraft:chest"
+      },
+      "tasks": [
+        {
+          "type": "obtain",
+          "item": "minecraft:chest",
+          "count": 1
+        }
+      ],
+      "rewards": [
+        {
+          "type": "item",
+          "item": "minecraft:oak_log",
+          "count": 8
+        },
+        {
+          "type": "item",
+          "item": "minecraft:apple",
+          "count": 3
+        }
+      ],
+      "scrolls": [
+        "questqueen:chest_note"
+      ]
+    },
+    {
+      "id": "fight_zombie",
+      "pos": {
+        "x": 2,
+        "y": 1
+      },
+      "title": "Fight a zombie",
+      "description": "The night is not empty. Slay a zombie.",
+      "icon": {
+        "item": "minecraft:rotten_flesh"
+      },
+      "tasks": [
+        {
+          "type": "kill",
+          "entity": "minecraft:zombie",
+          "count": 1
+        }
+      ],
+      "rewards": [
+        {
+          "type": "item",
+          "item": "minecraft:iron_ingot",
+          "count": 2
+        }
+      ],
+      "scrolls": [
+        "questqueen:zombie_note"
+      ]
+    },
+    {
+      "id": "story_time",
+      "pos": {
+        "x": 3,
+        "y": 1
+      },
+      "title": "Story time",
+      "description": "Earn the Minecraft story root advancement.",
+      "icon": {
+        "item": "minecraft:book"
+      },
+      "tasks": [
+        {
+          "type": "advancement",
+          "advancement": "minecraft:story/root"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 10
+        }
+      ]
+    },
+    {
+      "id": "tribute",
+      "pos": {
+        "x": 2,
+        "y": 2
+      },
+      "title": "Tribute",
+      "description": "Submit rotten flesh to prove the hunt.",
+      "icon": {
+        "item": "minecraft:rotten_flesh"
+      },
+      "tasks": [
+        {
+          "type": "submit",
+          "item": "minecraft:rotten_flesh",
+          "count": 1
+        }
+      ],
+      "rewards": [
+        {
+          "type": "item",
+          "item": "minecraft:bread",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "id": "go_nether",
+      "pos": {
+        "x": 3,
+        "y": 2
+      },
+      "title": "See the nether",
+      "description": "Stand in the Nether while alive. After /execute in minecraft:the_nether run tp @s ~ ~ ~ assert Marionette /state shows dimension=minecraft:the_nether AND health>0. If still overworld → harness. Only if NEW while in-nether and alive is this a hook fail.",
+      "icon": {
+        "item": "minecraft:obsidian"
+      },
+      "tasks": [
+        {
+          "type": "visit_dimension",
+          "dimension": "minecraft:the_nether"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp_levels",
+          "levels": 1
+        }
+      ],
+      "target": {
+        "chapter": "questqueen:nether",
+        "tile": "nether_start"
+      }
+    },
+    {
+      "id": "take_your_pick",
+      "pos": {
+        "x": 2,
+        "y": 3
+      },
+      "title": "Take your pick",
+      "description": "Mark this complete, then claim one reward.",
+      "icon": {
+        "item": "minecraft:emerald"
+      },
+      "tasks": [
+        {
+          "type": "checkmark"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "type": "item",
+              "item": "minecraft:diamond",
+              "count": 1
+            },
+            {
+              "type": "item",
+              "item": "minecraft:emerald",
+              "count": 8
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from": "make_chest",
+      "to": "fight_zombie",
+      "gate": "and"
+    },
+    {
+      "from": "fight_zombie",
+      "to": "story_time",
+      "gate": "and"
+    },
+    {
+      "from": "fight_zombie",
+      "to": "tribute",
+      "gate": "and"
+    },
+    {
+      "from": "story_time",
+      "to": "go_nether",
+      "gate": "and"
+    },
+    {
+      "from": "tribute",
+      "to": "take_your_pick",
+      "gate": "and"
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Quest Queen Editor</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app" class="lens-author">
+      <header>
+        <div class="header-primary">
+          <span class="brand">QUEST QUEEN</span>
+          <button type="button" id="show-guide" title="Steps for the whole editor">HOW TO</button>
+          <span class="mode-group" role="group" aria-label="Tool mode">
+            <button type="button" id="mode-edit" class="mode" data-mode="edit">EDIT</button>
+            <button type="button" id="mode-link" class="mode" data-mode="link">LINK</button>
+            <button type="button" id="mode-view" class="mode active" data-mode="view">VIEW</button>
+          </span>
+          <span class="lens-group" role="group" aria-label="Lens">
+            <button type="button" id="lens-author" class="lens active" data-lens="author">AUTHOR</button>
+            <button type="button" id="lens-player" class="lens" data-lens="player">PLAYER</button>
+          </span>
+          <span id="gate-group" class="gate-group" hidden>
+            <button id="gate-and" class="gate active" type="button" title="AND — every quest leading in must be finished">AND</button>
+            <button id="gate-or" class="gate" type="button" title="OR — any one quest leading in is enough">OR</button>
+            <button id="gate-xor" class="gate" type="button" title="XOR — the player picks exactly one path">XOR</button>
+          </span>
+          <span class="zoom-group" role="group" aria-label="Zoom">
+            <button type="button" id="zoom-out" title="Zoom out">−</button>
+            <span id="zoom-label">100%</span>
+            <button type="button" id="zoom-in" title="Zoom in">+</button>
+            <button type="button" id="zoom-fit" title="Fit chapter">FIT</button>
+          </span>
+          <span class="layout-group" role="group" aria-label="Layout assist">
+            <button type="button" id="layout-pack" title="Pack tiles into BFS columns from starts">PACK</button>
+            <button type="button" id="layout-align" title="Align / compact columns">ALIGN</button>
+            <button type="button" id="layout-spread" title="Spread selected row">SPREAD</button>
+          </span>
+          <span id="link-confirm" class="link-confirm" hidden>
+            <span id="link-confirm-label">link</span>
+            <button type="button" id="link-confirm-yes">CONFIRM</button>
+            <button type="button" id="link-confirm-no">CANCEL</button>
+          </span>
+          <span id="link-status">View mode</span>
+          <input id="search" placeholder="SEARCH" />
+          <span id="pack-status" class="pack-chip">Waiting for Minecraft</span>
+        </div>
+        <div class="header-secondary">
+          <button id="load-zip" class="secondary">LOAD</button>
+          <button id="save-world" class="secondary" title="Draft hot-reload into open world (not pack write)">SAVE TO WORLD</button>
+          <button id="export-zip" class="secondary" title="Export chapter ZIP backup">EXPORT ZIP</button>
+          <button id="write-pack" class="secondary" title="Writes chapter JSON into the pack datapack — NOT the same as Save to World">WRITE TO PACK</button>
+          <button id="template-blank" class="secondary">BLANK</button>
+          <button id="template-starter" class="secondary">STARTER</button>
+          <label class="grid-size secondary" for="grid-size">GRID
+            <select id="grid-size" title="Chapter grid size">
+              <option value="12x10">12×10</option>
+              <option value="16x16">16×16</option>
+              <option value="32x32">32×32</option>
+              <option value="64x64">64×64</option>
+              <option value="128x128">128×128</option>
+              <option value="custom">Custom…</option>
+            </select>
+          </label>
+        </div>
+      </header>
+      <main>
+        <aside id="chapters" class="chapters">
+          <div class="chapters-head">
+            <span>CHAPTERS</span>
+            <button type="button" id="new-chapter">+</button>
+          </div>
+          <div id="chapter-tree"></div>
+        </aside>
+        <div id="map-stack" class="map-stack">
+          <canvas id="grid" width="960" height="640"></canvas>
+          <canvas id="minimap" width="180" height="120" title="Minimap — click to pan"></canvas>
+        </div>
+        <aside id="card" class="docked">
+          <div id="card-chrome" class="card-chrome">
+            <span id="card-title">INSPECTOR</span>
+            <button type="button" id="close-card" title="Clear selection">X</button>
+          </div>
+          <div id="card-body" class="card-body"><p class="muted">Select a tile</p></div>
+        </aside>
+        <div id="guide" class="guide" hidden>
+          <p id="guide-count" class="muted"></p>
+          <h2 id="guide-title"></h2>
+          <div id="guide-body"></div>
+          <div class="guide-actions">
+            <button type="button" id="guide-back">Back</button>
+            <button type="button" id="guide-next">Next</button>
+            <button type="button" id="guide-close">Close</button>
+          </div>
+        </div>
+        <div id="gate-ask" class="gate-ask" hidden>
+          <h2 id="gate-ask-title">How does this quest open?</h2>
+          <ol id="gate-ask-steps"></ol>
+          <div class="gate-choices">
+            <button type="button" class="choice" data-ask-gate="and"><strong>AND</strong><span>All quests leading here must be finished.</span></button>
+            <button type="button" class="choice" data-ask-gate="or"><strong>OR</strong><span>Any one quest leading here is enough.</span></button>
+            <button type="button" class="choice" data-ask-gate="xor"><strong>XOR</strong><span>The player picks exactly one. The other paths stay closed.</span></button>
+          </div>
+          <p id="gate-ask-note" class="muted"></p>
+          <div class="gate-ask-actions">
+            <button type="button" id="gate-ask-remove">Remove this link</button>
+            <button type="button" id="gate-ask-cancel">Cancel</button>
+          </div>
+        </div>
+        <div id="lock">
+          <h1>Waiting for Minecraft</h1>
+          <p>This editor reads items from the pack loaded in Minecraft. It cannot run by itself.</p>
+          <p>In game, as an operator, run <code>/questqueen editor</code></p>
+          <p id="lock-status">Bridge offline…</p>
+        </div>
+      </main>
+      <input id="file-zip" type="file" accept=".zip" hidden />
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

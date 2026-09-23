@@ -1,0 +1,106 @@
+{
+  "id": "questqueen:test_bonus",
+  "title": "Bonus Tests",
+  "parent": "questqueen:test",
+  "order": 0,
+  "icon": {
+    "item": "minecraft:nether_star"
+  },
+  "grid_width": 6,
+  "grid_height": 4,
+  "unlock": {
+    "op": "and",
+    "conditions": [
+      {
+        "type": "quest_complete",
+        "id": "questqueen:test/claim_done"
+      }
+    ]
+  },
+  "tiles": [
+    {
+      "id": "bonus_start",
+      "pos": {
+        "x": 1,
+        "y": 1
+      },
+      "title": "Bonus unlocked",
+      "description": "You unlocked this chapter by finishing Claim complete.",
+      "icon": {
+        "item": "minecraft:nether_star"
+      },
+      "tasks": [
+        {
+          "type": "checkmark"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp_levels",
+          "levels": 1
+        }
+      ]
+    },
+    {
+      "id": "look_at_stone",
+      "pos": {
+        "x": 2,
+        "y": 1
+      },
+      "title": "Look at stone",
+      "description": "Look directly at a stone block within 32 blocks using SERVER facing. /setblock ~ ~ ~1 stone then /execute as @s at @s anchored eyes facing ~ ~ ~1 run tp @s ~ ~ ~ — hold ≥5 ticks. Marionette client /look alone will not complete this.",
+      "icon": {
+        "item": "minecraft:stone"
+      },
+      "tasks": [
+        {
+          "type": "observation",
+          "block": "minecraft:stone"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "item",
+          "item": "minecraft:cobblestone",
+          "count": 16
+        }
+      ]
+    },
+    {
+      "id": "plains_walk",
+      "pos": {
+        "x": 3,
+        "y": 1
+      },
+      "title": "Find plains",
+      "description": "Stand in a plains biome at overworld spawn. Fire: /execute in minecraft:overworld run tp @s 768 80 256 (qq-ui-1789182000 spawn is plains). fillbiome only if spawn biome was overwritten.",
+      "icon": {
+        "item": "minecraft:grass_block"
+      },
+      "tasks": [
+        {
+          "type": "visit_biome",
+          "biome": "minecraft:plains"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "toast",
+          "message": "Test Range cleared!"
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from": "bonus_start",
+      "to": "look_at_stone",
+      "gate": "and"
+    },
+    {
+      "from": "look_at_stone",
+      "to": "plains_walk",
+      "gate": "and"
+    }
+  ]
+}

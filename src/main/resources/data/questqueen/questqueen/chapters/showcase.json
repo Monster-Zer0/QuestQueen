@@ -1,0 +1,148 @@
+{
+  "id": "questqueen:showcase",
+  "title": "Feature Showcase",
+  "order": -20,
+  "icon": { "item": "minecraft:writable_book" },
+  "grid_width": 6,
+  "grid_height": 6,
+  "tiles": [
+    {
+      "id": "briefing",
+      "pos": { "x": 1, "y": 1 },
+      "title": "Read the brief",
+      "description": "Open this card. The TASK and REWARD rows below are the inspector format.\n\nPress DONE when you are ready.",
+      "icon": { "item": "minecraft:writable_book" },
+      "tasks": [{ "type": "checkmark" }],
+      "rewards": [
+        { "type": "item", "item": "minecraft:apple", "count": 1 },
+        { "type": "toast", "message": "Showcase started" }
+      ],
+      "scrolls": ["questqueen:showcase_brief"]
+    },
+    {
+      "id": "gather",
+      "pos": { "x": 2, "y": 1 },
+      "title": "Hold the apple",
+      "description": "The briefing reward puts an apple in your inventory. Keep it.",
+      "icon": { "item": "minecraft:apple" },
+      "tasks": [{ "type": "obtain", "item": "minecraft:apple", "count": 1 }],
+      "rewards": [{ "type": "xp", "amount": 8 }]
+    },
+    {
+      "id": "workbench",
+      "pos": { "x": 3, "y": 1 },
+      "title": "Open a table",
+      "description": "Right-click a crafting table. Either this or the hunt unlocks tribute.",
+      "icon": { "item": "minecraft:crafting_table" },
+      "tasks": [{ "type": "interact_block", "block": "minecraft:crafting_table", "count": 1 }],
+      "rewards": [{ "type": "item", "item": "minecraft:oak_planks", "count": 8 }]
+    },
+    {
+      "id": "hunt",
+      "pos": { "x": 2, "y": 2 },
+      "title": "Hunt a chicken",
+      "description": "Kill one chicken. /summon chicken if the world is empty.",
+      "icon": { "item": "minecraft:chicken" },
+      "tasks": [{ "type": "kill", "entity": "minecraft:chicken", "count": 1 }],
+      "rewards": [{ "type": "item", "item": "minecraft:feather", "count": 3 }]
+    },
+    {
+      "id": "story",
+      "pos": { "x": 1, "y": 2 },
+      "title": "Tell the story",
+      "description": "Earn the Minecraft story root advancement.",
+      "icon": { "item": "minecraft:book" },
+      "tasks": [{ "type": "advancement", "advancement": "minecraft:story/root" }],
+      "rewards": [{ "type": "advancement", "advancement": "minecraft:adventure/root" }]
+    },
+    {
+      "id": "tribute",
+      "pos": { "x": 3, "y": 2 },
+      "title": "Hand it over",
+      "description": "OR gate: finish the table or the hunt, then SUBMIT one apple.",
+      "icon": { "item": "minecraft:apple" },
+      "tasks": [{ "type": "submit", "item": "minecraft:apple", "count": 1 }],
+      "rewards": [{ "type": "item", "item": "minecraft:bread", "count": 4 }]
+    },
+    {
+      "id": "stage_grant",
+      "pos": { "x": 3, "y": 3 },
+      "title": "Unlock a stage",
+      "description": "DONE grants the Progressive Stages id questqueen_demo.\nThat stage reveals the hidden tile.",
+      "icon": { "item": "minecraft:amethyst_shard" },
+      "tasks": [{ "type": "checkmark" }],
+      "rewards": [
+        { "type": "stage", "stage": "questqueen_demo" },
+        { "type": "toast", "message": "Stage questqueen_demo granted" }
+      ]
+    },
+    {
+      "id": "hidden_age",
+      "pos": { "x": 3, "y": 4 },
+      "title": "Stage gate",
+      "description": "Hidden until you own questqueen_demo. required_stage keeps it locked without that stage.",
+      "icon": { "item": "minecraft:amethyst_block" },
+      "tasks": [{ "type": "checkmark" }],
+      "rewards": [{ "type": "item", "item": "minecraft:diamond", "count": 1 }],
+      "hidden_until": { "type": "stage", "id": "questqueen_demo" },
+      "required_stage": "questqueen_demo"
+    },
+    {
+      "id": "fork_hub",
+      "pos": { "x": 2, "y": 3 },
+      "title": "Pick a path",
+      "description": "XOR fork. Finish this, then only one color can complete.",
+      "icon": { "item": "minecraft:compass" },
+      "tasks": [{ "type": "checkmark" }],
+      "rewards": [{ "type": "xp", "amount": 5 }]
+    },
+    {
+      "id": "fork_red",
+      "pos": { "x": 1, "y": 3 },
+      "title": "Red path",
+      "description": "One XOR branch. Completing this closes the blue path.",
+      "icon": { "item": "minecraft:red_banner" },
+      "tasks": [{ "type": "checkmark" }],
+      "rewards": [{ "type": "item", "item": "minecraft:red_dye", "count": 4 }]
+    },
+    {
+      "id": "fork_blue",
+      "pos": { "x": 2, "y": 4 },
+      "title": "Blue path",
+      "description": "The other XOR branch. Completing this closes the red path.",
+      "icon": { "item": "minecraft:blue_banner" },
+      "tasks": [{ "type": "checkmark" }],
+      "rewards": [{ "type": "item", "item": "minecraft:blue_dye", "count": 4 }]
+    },
+    {
+      "id": "finale",
+      "pos": { "x": 4, "y": 4 },
+      "title": "Take your pick",
+      "description": "Claim one reward, then jump to the Stage Wing chapter.",
+      "icon": { "item": "minecraft:emerald" },
+      "tasks": [{ "type": "checkmark" }],
+      "rewards": [{
+        "type": "choice",
+        "options": [
+          { "type": "item", "item": "minecraft:diamond", "count": 1 },
+          { "type": "item", "item": "minecraft:emerald", "count": 8 }
+        ]
+      }],
+      "target": { "chapter": "questqueen:showcase_stage", "tile": "wing_start" }
+    }
+  ],
+  "links": [
+    { "from": "briefing", "to": "gather", "gate": "and" },
+    { "from": "briefing", "to": "story", "gate": "and" },
+    { "from": "gather", "to": "workbench", "gate": "and" },
+    { "from": "gather", "to": "hunt", "gate": "and" },
+    { "from": "workbench", "to": "tribute", "gate": "or" },
+    { "from": "hunt", "to": "tribute", "gate": "or" },
+    { "from": "tribute", "to": "stage_grant", "gate": "and" },
+    { "from": "stage_grant", "to": "hidden_age", "gate": "and" },
+    { "from": "stage_grant", "to": "fork_hub", "gate": "and" },
+    { "from": "fork_hub", "to": "fork_red", "gate": "xor" },
+    { "from": "fork_hub", "to": "fork_blue", "gate": "xor" },
+    { "from": "hidden_age", "to": "finale", "gate": "and" }
+  ]
+}

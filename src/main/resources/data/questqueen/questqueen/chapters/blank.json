@@ -1,0 +1,18 @@
+{
+  "id": "questqueen:blank",
+  "title": "New Chapter",
+  "grid_width": 12,
+  "grid_height": 10,
+  "tiles": [
+    {
+      "id": "start",
+      "pos": { "x": 1, "y": 1 },
+      "title": "First step",
+      "description": "Replace this template tile. A tile with no inbound links is a start.",
+      "icon": { "item": "minecraft:paper" },
+      "tasks": [{ "type": "obtain", "item": "minecraft:dirt", "count": 1 }],
+      "rewards": [{ "type": "xp", "amount": 5 }]
+    }
+  ],
+  "links": []
+}

@@ -1,0 +1,676 @@
+{
+  "id": "questqueen:test",
+  "title": "Test Range",
+  "order": -10,
+  "icon": {
+    "item": "minecraft:target"
+  },
+  "grid_width": 16,
+  "grid_height": 10,
+  "tiles": [
+    {
+      "id": "grab_dirt",
+      "pos": {
+        "x": 1,
+        "y": 1
+      },
+      "title": "Grab dirt",
+      "description": "Have at least 1 dirt in your inventory. Creative mode works.",
+      "icon": {
+        "item": "minecraft:dirt"
+      },
+      "tasks": [
+        {
+          "type": "obtain",
+          "item": "minecraft:dirt",
+          "count": 1
+        }
+      ],
+      "rewards": [
+        {
+          "type": "item",
+          "item": "minecraft:stick",
+          "count": 4
+        }
+      ],
+      "scrolls": [
+        "questqueen:test_note"
+      ]
+    },
+    {
+      "id": "grab_stick",
+      "pos": {
+        "x": 2,
+        "y": 1
+      },
+      "title": "Get a stick",
+      "description": "Have a stick. The previous reward already gives you some.",
+      "icon": {
+        "item": "minecraft:stick"
+      },
+      "tasks": [
+        {
+          "type": "obtain",
+          "item": "minecraft:stick",
+          "count": 1
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 5
+        }
+      ]
+    },
+    {
+      "id": "kill_sheep",
+      "pos": {
+        "x": 3,
+        "y": 1
+      },
+      "title": "Shear the flock",
+      "description": "Kill 1 sheep. /summon sheep if you need one.",
+      "icon": {
+        "item": "minecraft:white_wool"
+      },
+      "tasks": [
+        {
+          "type": "kill",
+          "entity": "minecraft:sheep",
+          "count": 1
+        }
+      ],
+      "rewards": [
+        {
+          "type": "item",
+          "item": "minecraft:cooked_mutton",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "use_table",
+      "pos": {
+        "x": 2,
+        "y": 2
+      },
+      "title": "Open a table",
+      "description": "Right-click a crafting table.",
+      "icon": {
+        "item": "minecraft:crafting_table"
+      },
+      "tasks": [
+        {
+          "type": "interact_block",
+          "block": "minecraft:crafting_table",
+          "count": 1
+        }
+      ],
+      "rewards": [
+        {
+          "type": "item",
+          "item": "minecraft:oak_planks",
+          "count": 8
+        }
+      ]
+    },
+    {
+      "id": "hand_it_over",
+      "pos": {
+        "x": 3,
+        "y": 2
+      },
+      "title": "Hand it over",
+      "description": "Open the quest, press SUBMIT, and turn in 1 dirt.",
+      "icon": {
+        "item": "minecraft:dirt"
+      },
+      "tasks": [
+        {
+          "type": "submit",
+          "item": "minecraft:dirt",
+          "count": 1
+        }
+      ],
+      "rewards": [
+        {
+          "type": "item",
+          "item": "minecraft:bread",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "id": "claim_done",
+      "pos": {
+        "x": 4,
+        "y": 2
+      },
+      "title": "Claim complete",
+      "description": "Press DONE. Completing this unlocks the Bonus Tests chapter.",
+      "icon": {
+        "item": "minecraft:emerald"
+      },
+      "tasks": [
+        {
+          "type": "checkmark"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "type": "item",
+              "item": "minecraft:diamond",
+              "count": 1
+            },
+            {
+              "type": "item",
+              "item": "minecraft:golden_apple",
+              "count": 2
+            }
+          ]
+        }
+      ],
+      "target": {
+        "chapter": "questqueen:test_bonus",
+        "tile": "bonus_start"
+      }
+    },
+    {
+      "id": "fork_hub",
+      "pos": {
+        "x": 2,
+        "y": 0
+      },
+      "title": "Pick a path",
+      "description": "XOR fork. Finish this, then choose only one branch.",
+      "icon": {
+        "item": "minecraft:compass"
+      },
+      "tasks": [
+        {
+          "type": "checkmark"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 5
+        }
+      ]
+    },
+    {
+      "id": "fork_left",
+      "pos": {
+        "x": 3,
+        "y": 0
+      },
+      "title": "Left path",
+      "description": "One XOR branch. Completing this closes the right path.",
+      "icon": {
+        "item": "minecraft:red_banner"
+      },
+      "tasks": [
+        {
+          "type": "checkmark"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "item",
+          "item": "minecraft:red_dye",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "id": "fork_right",
+      "pos": {
+        "x": 1,
+        "y": 0
+      },
+      "title": "Right path",
+      "description": "The other XOR branch. Completing this closes the left path.",
+      "icon": {
+        "item": "minecraft:blue_banner"
+      },
+      "tasks": [
+        {
+          "type": "checkmark"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "item",
+          "item": "minecraft:blue_dye",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "id": "and_parent_a",
+      "pos": {
+        "x": 5,
+        "y": 0
+      },
+      "title": "AND parent A",
+      "description": "Easy checkmark. Complete this alone first - child stays LOCKED until parent B is done too. Outbound path must stay red.",
+      "icon": {
+        "item": "minecraft:redstone"
+      },
+      "tasks": [
+        {
+          "type": "checkmark"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "and_parent_b",
+      "pos": {
+        "x": 6,
+        "y": 0
+      },
+      "title": "AND parent B",
+      "description": "Second AND parent. Finish A first to prove COMPLETED to LOCKED red arrow, then finish B to open the child.",
+      "icon": {
+        "item": "minecraft:lapis_lazuli"
+      },
+      "tasks": [
+        {
+          "type": "checkmark"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "and_child",
+      "pos": {
+        "x": 5,
+        "y": 1
+      },
+      "title": "AND child",
+      "description": "Needs both AND parents. Stays LOCKED after only one parent completes.",
+      "icon": {
+        "item": "minecraft:iron_door"
+      },
+      "tasks": [
+        {
+          "type": "checkmark"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "item",
+          "item": "minecraft:iron_ingot",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "id": "type_item_tag",
+      "pos": {
+        "x": 5,
+        "y": 3
+      },
+      "title": "Hold planks",
+      "description": "Have any minecraft:planks-tagged item (oak planks work). /give @s oak_planks 1",
+      "icon": {
+        "item": "minecraft:oak_planks"
+      },
+      "tasks": [
+        {
+          "type": "item_tag",
+          "tag": "minecraft:planks",
+          "count": 1
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "type_location",
+      "pos": {
+        "x": 6,
+        "y": 3
+      },
+      "title": "Near origin",
+      "description": "Stand within 512 blocks of 0,70,0 (overworld). Huge radius so spawn worlds usually pass.",
+      "icon": {
+        "item": "minecraft:compass"
+      },
+      "tasks": [
+        {
+          "type": "location",
+          "x": 0,
+          "y": 70,
+          "z": 0,
+          "radius": 512,
+          "dimension": "minecraft:overworld"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "type_stat",
+      "pos": {
+        "x": 7,
+        "y": 3
+      },
+      "title": "Walk a little",
+      "description": "Walk ~100 cm (a few steps). Stat minecraft:walk_one_cm.",
+      "icon": {
+        "item": "minecraft:leather_boots"
+      },
+      "tasks": [
+        {
+          "type": "stat",
+          "stat": "minecraft:walk_one_cm",
+          "count": 100
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "type_interact_entity",
+      "pos": {
+        "x": 5,
+        "y": 4
+      },
+      "title": "Pet a pig",
+      "description": "Right-click a pig. /summon pig ~ ~ ~",
+      "icon": {
+        "item": "minecraft:porkchop"
+      },
+      "tasks": [
+        {
+          "type": "interact_entity",
+          "entity": "minecraft:pig",
+          "count": 1
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "type_fluid",
+      "pos": {
+        "x": 6,
+        "y": 4
+      },
+      "title": "Stand in water",
+      "description": "Stand in water (feet in minecraft:water).",
+      "icon": {
+        "item": "minecraft:water_bucket"
+      },
+      "tasks": [
+        {
+          "type": "fluid",
+          "fluid": "minecraft:water",
+          "count": 1
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "type_xp_levels",
+      "pos": {
+        "x": 7,
+        "y": 4
+      },
+      "title": "Spend a level",
+      "description": "Have at least 1 XP level, open the quest, press DONE/SUBMIT. /xp add @s 1 levels",
+      "icon": {
+        "item": "minecraft:experience_bottle"
+      },
+      "tasks": [
+        {
+          "type": "xp_levels",
+          "levels": 1
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "type_npc_dialog",
+      "pos": {
+        "x": 5,
+        "y": 5
+      },
+      "title": "Talk to guide",
+      "description": "Fire npc_dialog for npc id qq_guide via /questqueen dialog qq_guide (or QuestNpcApi.onTalked).",
+      "icon": {
+        "item": "minecraft:name_tag"
+      },
+      "tasks": [
+        {
+          "type": "npc_dialog",
+          "npc": "qq_guide"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "type_raid",
+      "pos": {
+        "x": 6,
+        "y": 5
+      },
+      "title": "Raid credit",
+      "description": "Get 1 raid kill-credit while standing in an active raid (or win the raid). MUST stand in a village with occupied POIs first (qq-229). Fire: /difficulty normal ; /execute in minecraft:overworld run tp @s 1741 173 1779 ; /questqueen raid-start 1 ; /questqueen raid-check ; /summon minecraft:cow ~ ~1 ~ ; /execute as @s at @s run damage @e[type=minecraft:cow,limit=1,sort=nearest,distance=..8] 40 minecraft:player_attack by @s . Alt: /place structure minecraft:village_plains then seat villagers. No /questqueen grant. Vanilla /raid is gametest-only.",
+      "icon": {
+        "item": "minecraft:crossbow"
+      },
+      "tasks": [
+        {
+          "type": "raid",
+          "waves": 1
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 2
+        }
+      ]
+    },
+    {
+      "id": "type_visit_dimension",
+      "pos": {
+        "x": 5,
+        "y": 6
+      },
+      "title": "Enter the Nether",
+      "description": "Stand in minecraft:the_nether while ALIVE. /execute in minecraft:the_nether run tp @s ~ ~ ~ then assert /state dimension=minecraft:the_nether (health>0). If still overworld → harness. If NEW while in-nether → hook.",
+      "icon": {
+        "item": "minecraft:obsidian"
+      },
+      "tasks": [
+        {
+          "type": "visit_dimension",
+          "dimension": "minecraft:the_nether"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "type_visit_structure",
+      "pos": {
+        "x": 6,
+        "y": 6
+      },
+      "title": "Inside a plains village",
+      "description": "Stand INSIDE minecraft:village_plains StructureStart BB (not fortress). Fire (pick one): (1) In overworld: /place structure minecraft:village_plains ~ ~ ~ then stand at feet. (2) /execute in minecraft:overworld run tp @s 1728 80 1776 (known village near qq-ui; assert /state dim=overworld first — dim tp chat can lie). Prove BB by completing the tile.",
+      "icon": {
+        "item": "minecraft:oak_door"
+      },
+      "tasks": [
+        {
+          "type": "visit_structure",
+          "structure": "minecraft:village_plains"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "type_observation",
+      "pos": {
+        "x": 7,
+        "y": 6
+      },
+      "title": "Look at stone",
+      "description": "Look at stone with SERVER facing (client /look alone is not enough). /setblock ~ ~ ~1 stone then /execute as @s at @s anchored eyes facing ~ ~ ~1 run tp @s ~ ~ ~ — hold look ≥5 ticks.",
+      "icon": {
+        "item": "minecraft:stone"
+      },
+      "tasks": [
+        {
+          "type": "observation",
+          "block": "minecraft:stone"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "type_visit_biome",
+      "pos": {
+        "x": 8,
+        "y": 6
+      },
+      "title": "Stand in plains",
+      "description": "Stand in minecraft:plains at overworld spawn. Fire: /execute in minecraft:overworld run tp @s 768 80 256 (qq-ui spawn chunk is plains). Do not use fillbiome unless spawn was overwritten.",
+      "icon": {
+        "item": "minecraft:grass_block"
+      },
+      "tasks": [
+        {
+          "type": "visit_biome",
+          "biome": "minecraft:plains"
+        }
+      ],
+      "rewards": [
+        {
+          "type": "xp",
+          "amount": 1
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from": "grab_dirt",
+      "to": "grab_stick",
+      "gate": "and"
+    },
+    {
+      "from": "grab_stick",
+      "to": "kill_sheep",
+      "gate": "and"
+    },
+    {
+      "from": "grab_stick",
+      "to": "use_table",
+      "gate": "and"
+    },
+    {
+      "from": "kill_sheep",
+      "to": "hand_it_over",
+      "gate": "or"
+    },
+    {
+      "from": "use_table",
+      "to": "hand_it_over",
+      "gate": "or"
+    },
+    {
+      "from": "hand_it_over",
+      "to": "claim_done",
+      "gate": "and"
+    },
+    {
+      "from": "grab_stick",
+      "to": "fork_hub",
+      "gate": "and"
+    },
+    {
+      "from": "fork_hub",
+      "to": "fork_left",
+      "gate": "xor"
+    },
+    {
+      "from": "fork_hub",
+      "to": "fork_right",
+      "gate": "xor"
+    },
+    {
+      "from": "and_parent_a",
+      "to": "and_child",
+      "gate": "and"
+    },
+    {
+      "from": "and_parent_b",
+      "to": "and_child",
+      "gate": "and"
+    }
+  ]
+}

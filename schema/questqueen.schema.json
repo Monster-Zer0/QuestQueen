@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://questqueen.dev/schema/questqueen.schema.json",
+  "title": "Quest Queen chapter",
+  "type": "object",
+  "required": ["id"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$" },
+    "title": { "type": "string" },
+    "grid_width": { "type": "integer", "minimum": 1, "maximum": 128, "default": 12 },
+    "grid_height": { "type": "integer", "minimum": 1, "maximum": 128, "default": 10 },
+    "parent": { "type": "string", "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$" },
+    "order": { "type": "integer", "default": 0 },
+    "theme": {
+      "type": "string",
+      "default": "midnight_royalty",
+      "enum": [
+        "midnight_royalty",
+        "ocean_depths",
+        "ember_forge",
+        "verdant_grove",
+        "desert_oasis",
+        "frost_peak",
+        "nether_scar",
+        "end_chorus",
+        "copper_circuit",
+        "paper_scroll"
+      ]
+    },
+    "background": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "type": "string", "enum": ["color", "image"], "default": "color" },
+        "color": { "type": "string" },
+        "image": { "type": "string", "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$" },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1, "default": 1 }
+      }
+    },
+    "icon": {
+      "$ref": "#/$defs/icon"
+    },
+    "unlock": {
+      "oneOf": [
+        { "type": "string", "enum": ["and", "or", "not", "xor"] },
+        {
+          "type": "object",
+          "properties": {
+            "op": { "type": "string", "enum": ["and", "or", "not", "xor"] },
+            "conditions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["type", "id"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["advancement", "scoreboard", "team_flag", "quest_complete", "chapter_complete", "trigger"] },
+                  "id": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "hide_until_unlocked": {
+      "type": "boolean",
+      "default": false,
+      "description": "If true, this chapter is omitted from the book sidebar until its unlock conditions and parent chapter are met. Locked chapters without this flag still appear with a padlock."
+    },
+    "intro": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Shown automatically when this chapter has children (act intro). PNG plus markup body; the quest board is hidden.",
+      "properties": {
+        "image": { "type": "string", "pattern": "^[a-z0-9_.-]+:[a-z0-9_./-]+$" },
+        "body": { "type": "string" }
+      }
+    },
+    "tiles": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/tile" }
+    },
+    "links": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/link" }
+    }
+  },
+  "$defs": {
+    "icon": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "item": { "type": "string" },
+        "glyph": {
+          "type": "string",
+          "enum": [
+            "sword", "pickaxe", "hammer", "shield",
+            "bread", "flask", "chest", "key",
+            "map", "flag", "rocket", "flame",
+            "book", "star", "skull", "speech"
+          ]
+        }
+      },
+      "anyOf": [
+        { "required": ["item"] },
+        { "required": ["glyph"] }
+      ]
+    },
+    "tile": {
+      "type": "object",
+      "required": ["id", "pos"],
+      "properties": {
+        "id": { "type": "string" },
+        "pos": {
+          "type": "object",
+          "required": ["x", "y"],
+          "properties": {
+            "x": { "type": "integer" },
+            "y": { "type": "integer" }
+          }
+        },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "icon": {
+          "$ref": "#/$defs/icon"
+        },
+        "tasks": { "type": "array", "items": { "$ref": "#/$defs/task" } },
+        "rewards": { "type": "array", "items": { "$ref": "#/$defs/reward" } },
+        "scrolls": { "type": "array", "items": { "type": "string" } },
+        "target": {
+          "type": "object",
+          "required": ["chapter", "tile"],
+          "properties": {
+            "chapter": { "type": "string" },
+            "tile": { "type": "string" }
+          }
+        },
+        "hidden_until": {
+          "type": "object",
+          "required": ["type", "id"],
+          "properties": {
+            "type": { "type": "string", "enum": ["trigger", "quest_complete", "advancement", "team_flag", "scoreboard"] },
+            "id": { "type": "string" }
+          }
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "gate": {
+          "oneOf": [
+            { "type": "string", "enum": ["and", "or", "not", "xor"] },
+            {
+              "type": "object",
+              "properties": {
+                "op": { "type": "string", "enum": ["and", "or", "not", "xor"] },
+                "conditions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["type", "id"],
+                    "properties": {
+                      "type": { "type": "string", "enum": ["advancement", "scoreboard", "team_flag", "quest_complete", "trigger"] },
+                      "id": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["obtain", "item", "item_tag", "submit", "kill", "kill_entity", "raid", "advancement", "location", "visit_structure", "structure", "visit_dimension", "dimension", "visit_biome", "biome", "observation", "checkmark", "stat", "interact_block", "interact_entity", "fluid", "xp_levels", "npc_dialog", "trigger"]
+        },
+        "item": { "type": "string" },
+        "tag": { "type": "string" },
+        "entity": { "type": "string" },
+        "count": { "type": "integer", "minimum": 1 },
+        "waves": { "type": "integer", "minimum": 1 },
+        "levels": { "type": "integer", "minimum": 1 },
+        "advancement": { "type": "string" },
+        "structure": { "type": "string" },
+        "block": { "type": "string" },
+        "stat": { "type": "string" },
+        "npc": { "type": "string" },
+        "trigger": { "type": "string" },
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "z": { "type": "integer" },
+        "radius": { "type": "integer" },
+        "dimension": { "type": "string" },
+        "biome": { "type": "string" },
+        "fluid": { "type": "string" }
+      }
+    },
+    "reward": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["item", "xp", "xp_levels", "command", "loot", "toast", "advancement", "choice"] },
+        "item": { "type": "string" },
+        "count": { "type": "integer" },
+        "amount": { "type": "integer" },
+        "levels": { "type": "integer" },
+        "command": { "type": "string" },
+        "table": { "type": "string" },
+        "message": { "type": "string" },
+        "advancement": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/reward" }
+        }
+      }
+    },
+    "scroll": {
+      "type": "object",
+      "required": ["id", "title", "text"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "text": { "type": "string" }
+      }
+    }
+  }
+}
