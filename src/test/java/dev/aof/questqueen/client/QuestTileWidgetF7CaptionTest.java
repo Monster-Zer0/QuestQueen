@@ -29,8 +29,8 @@ import org.junit.jupiter.api.Test;
  * <ul>
  *   <li>THE WIDTH TABLE IS A CALIBRATED APPROXIMATION of the default font, not a font dump. It is
  *       calibrated so that the PRE-FIX algorithm reproduces the three frame-documented cuts EXACTLY
- *       at the flag class (maxW = 88 font px, keep = 2) - the constraint set the proposal measured
- *       off Troi's own frame: letters 6, 'I' 3, space 4, '.' 2. Exact per-glyph fidelity is NOT
+ *       at the flag class (maxW = 88 font px, keep = 2): letters 6, 'I' 3, space 4, '.' 2.
+ *       Exact per-glyph fidelity is NOT
  *       claimed; the A1 capture on the real font is the full-fidelity proof, this table makes the
  *       policy hermetic and headless.</li>
  *   <li>THE PRE-FIX REFERENCE IS THE CONTROL (A2 binding 4): a verbatim copy of the pre-fix wrap

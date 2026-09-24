@@ -239,21 +239,14 @@ public final class QuestTileWidget extends AbstractWidget {
         return hasIcon && size < 64;
     }
 
-    /** Jerry/Picard 1.1.191: half-scale captions — hard-cap at 2 lines (ellipsize). */
+    /** Half-scale captions: hard-cap at 2 lines (ellipsize). */
     static int titleLines(int size) {
         return compact(size) ? 1 : 2;
     }
 
     /**
-     * F7 fix B (Troi's ruling): the caption budget at a given size. Below 56 the caption is squeezed to
-     * {@link #titleLines(int)} lines; a third line is allowed ONLY where the lower band is free - no
-     * reward faces and no XOR badge present - and only on the 2-line rung (48..55; the size-48 ladder
-     * step is the only rendered size below 56). Decided from the conditions the renderer already holds,
-     * never a per-tile or per-name allowlist. >= 56 already has its 3 lines; the 32 preview keeps its 1.
-     */
-    /**
-     * Caption line budget. 1.1.191: always {@link #titleLines(int)} — max two half-scale lines;
-     * the old F7 third-line grant is retired (ellipsize instead of shrinking).
+     * Caption line budget. Always {@link #titleLines(int)} — max two half-scale lines.
+     * The old third-line grant is retired (ellipsize instead of shrinking).
      */
     static int captionBudget(int size, boolean facesPresent, boolean xorPresent) {
         return titleLines(size);
@@ -307,7 +300,7 @@ public final class QuestTileWidget extends AbstractWidget {
         if (!fullTitle.isEmpty()) {
             int budget = captionBudget(size, !faces.isEmpty(), xor);
             // When reward icons are present, leave a clear band above REWARDS so title lines
-            // cannot paint through the caption (Jerry: CRAFTING TABLE / REWARDS overlap).
+            // cannot paint through the caption.
             if (!faces.isEmpty() && size >= 40 && !compact) {
                 int rewardsLabelY = rewardRowY(y, size) - LINE_STEP;
                 int fit = Math.max(1, (rewardsLabelY - titleY) / LINE_STEP);
@@ -342,7 +335,7 @@ public final class QuestTileWidget extends AbstractWidget {
                 ItemStack face = faces.get(i);
                 int ix = rx + i * (rewardPx + gap);
                 drawScaledItem(graphics, face, ix, ry, rewardPx);
-                // Jerry: Nx drawn over the icon (bottom-right) so the amount reads
+                // Count drawn over the icon (bottom-right) so the amount reads
                 if (face.getCount() > 1) {
                     var pose = graphics.pose();
                     pose.pushPose();
@@ -482,12 +475,12 @@ public final class QuestTileWidget extends AbstractWidget {
 
     /** Word-wrap at half-scale. Last line clips without a hyphen (no "PICK A PATH-"). */
     /**
-     * Caption scale vs default font. 1.1.192: half-scale again (Jerry: clearer, not bigger). Pixel-snap + MC shadow; no outline.
+     * Caption scale vs default font. Half-scale. Pixel-snap + MC shadow; no outline.
      * Kept as a named constant so {@link #wrapTiny} maxW stays aligned with draw.
      */
     static final float TINY_SCALE = 0.5f;
 
-    /** Title / header cream (Troi/Picard): readable on dark tile faces without soft bloom. */
+    /** Title / header cream: readable on dark tile faces without soft bloom. */
     static final int CAPTION_INK = 0xFFF5E6C8;
 
     /** REWARDS label — same band as titles, one cream step warmer/dimmer. */
@@ -501,7 +494,7 @@ public final class QuestTileWidget extends AbstractWidget {
     }
 
     /**
-     * F7 fix A (Troi's ruling): marked truncation. Marker reserved before the shrink so the last line
+     * Marked truncation. Marker reserved before the shrink so the last line
      * ends with {@link #TRUNCATION_MARKER}. Width-function seam for headless tests.
      */
     static List<String> wrapTiny(ToIntFunction<String> widthOf, String text, int visualMax, int maxLines) {
