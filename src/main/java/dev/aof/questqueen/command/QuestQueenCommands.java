@@ -280,15 +280,13 @@ public final class QuestQueenCommands {
             return 0;
         }
         BlockPos pos = player.blockPosition();
-        // Without occupied village POIs, vanilla raid ticks stop / wander off — kill-credit then fails
-        // (qq-229: 768 spawn false-success; village BB 1741,173,1779 PASS).
+        // Vanilla raid ticks wander off without an occupied village POI, so the kill never counts.
         long villagePois = player.serverLevel().getPoiManager()
                 .getInRange(holder -> holder.is(PoiTypeTags.VILLAGE), pos, 64, PoiManager.Occupancy.IS_OCCUPIED)
                 .count();
         if (villagePois <= 0) {
             player.sendSystemMessage(Component.literal(
-                    QQ + " raid-start failed: no occupied village POI within 64. Stand in a village "
-                            + "(e.g. /execute in minecraft:overworld run tp @s 1741 173 1779) "
+                    QQ + " raid-start failed: no occupied village POI within 64. Stand in a village, "
                             + "or /place structure minecraft:village_plains then seat villagers, then retry."));
             return 0;
         }

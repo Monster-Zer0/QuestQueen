@@ -11,6 +11,20 @@ tasks.named('wrapper', Wrapper).configure {
 version = mod_version
 group = mod_group_id
 
+sourceSets {
+    dev
+}
+
+// Harness JSON is a second source set of this same mod, so runClient/runServer load it
+// and the published jar (main only) does not.
+afterEvaluate {
+    def runnable = sourceSets.dev.extensions.findByType(net.neoforged.gradle.dsl.common.extensions.sourceset.RunnableSourceSet)
+    if (runnable == null) {
+        throw new GradleException("dev source set has no NeoGradle mod identifier; harness chapters would not load in runClient")
+    }
+    runnable.modIdentifier.set(mod_id)
+}
+
 sourceSets.main.resources {
     srcDir('src/generated/resources')
     exclude("**/*.bbmodel")
@@ -35,6 +49,8 @@ runs {
         systemProperty 'forge.logging.console.level', 'debug'
         workingDirectory project.layout.projectDirectory.dir('run').dir(name)
         modSource project.sourceSets.main
+        // Harness chapters live in src/dev/resources. Runs see them; the published jar does not.
+        modSource project.sourceSets.dev
     }
 
     client {
@@ -74,6 +90,7 @@ dependencies {
             prefer sqlite_version
         }
     }
+    testImplementation sourceSets.dev.output
     testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }

@@ -1274,7 +1274,7 @@ function showCard(tile?: Tile) {
   const introFields = intro ? `
     <p class="intro-note">Act intro — board is not shown in-game. Child chapters keep a quest grid.</p>
     <label>INTRO IMAGE</label>
-    <input id="intro-image" value="${escapeAttr(chapter.intro?.image ?? "")}" placeholder="skylore:textures/gui/intro/act_i.png" ${ro} />
+    <input id="intro-image" value="${escapeAttr(chapter.intro?.image ?? "")}" placeholder="pack:textures/gui/intro/chapter.png" ${ro} />
     <label>INTRO BODY</label>
     <textarea id="intro-body" rows="8" ${ro}>${escapeText(chapter.intro?.body ?? "")}</textarea>
     <p class="intro-note"># title · ## subtitle · **bold** · *italic* · {#RRGGBB}text{/#} · {size:N}text{/size}</p>

@@ -333,6 +333,16 @@ class QuestNetworkAuthoredSaveTest {
     }
 
     @Test
+    void bookChromeWritesIntoThePackNamespace() throws Exception {
+        BookChrome chrome = new BookChrome("Saga", 0xFF123456, 1.5f, true, false);
+        Path file = QuestNetwork.writeAuthoredChrome(root(), chrome, "skylore");
+        assertEquals(root().resolve("data").resolve("skylore").resolve("questqueen").resolve("book.json"), file);
+        assertFalse(Files.exists(root().resolve("data").resolve("questqueen").resolve("questqueen").resolve("book.json")));
+        Path refused = QuestNetwork.writeAuthoredChrome(root(), chrome, "../escape");
+        assertEquals(root().resolve("data").resolve("questqueen").resolve("questqueen").resolve("book.json"), refused);
+    }
+
+    @Test
     void craftedChromePacketIsClampedIntoRange() {
         BookChrome chrome = new AuthorChromeC2S("", 0, Float.NaN, false, true).chrome();
         assertEquals(BookChrome.DEFAULT.sidebarTitle(), chrome.sidebarTitle(), "a blank title falls back");

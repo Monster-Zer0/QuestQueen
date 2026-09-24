@@ -12,6 +12,7 @@ import dev.aof.questqueen.task.TaskHooks;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -23,6 +24,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +32,8 @@ import java.util.Optional;
 
 public final class QuestDefinitions {
     private static QuestPack pack = QuestPack.empty();
+    /** Namespace of the {@code book.json} currently in force. Editor chrome saves write back here. */
+    private static String chromeNamespace = QuestQueen.MODID;
 
     private QuestDefinitions() {
     }
@@ -104,10 +108,15 @@ public final class QuestDefinitions {
         return pack.scrolls().stream().filter(scroll -> scroll.id().equals(id)).findFirst();
     }
 
+    public static String chromeNamespace() {
+        return chromeNamespace == null || chromeNamespace.isBlank() ? QuestQueen.MODID : chromeNamespace;
+    }
+
     public static QuestPack loadFrom(ResourceManager manager) {
         List<Chapter> loaded = new ArrayList<>();
         List<Scroll> scrolls = new ArrayList<>();
         List<DemoChapters.ChromeFile> chromeFiles = new ArrayList<>();
+        Map<String, Integer> packRank = packRanks(manager);
         for (Map.Entry<ResourceLocation, Resource> entry : manager.listResources("questqueen/chapters", path -> path.getPath().endsWith(".json")).entrySet()) {
             parse(entry, Chapter.CODEC).ifPresent(loaded::add);
         }
@@ -116,18 +125,35 @@ public final class QuestDefinitions {
         }
         for (Map.Entry<ResourceLocation, Resource> entry : manager.listResources("questqueen", path -> path.getPath().endsWith("/book.json") || path.getPath().equals("questqueen/book.json")).entrySet()) {
             Optional<BookChrome> parsed = parse(entry, BookChrome.CODEC);
-            parsed.ifPresent(chrome -> chromeFiles.add(new DemoChapters.ChromeFile(entry.getKey(), chrome)));
+            parsed.ifPresent(chrome -> {
+                String packId = entry.getValue().sourcePackId();
+                chromeFiles.add(new DemoChapters.ChromeFile(
+                        entry.getKey(), chrome, packId, packRank.getOrDefault(packId, 0)));
+            });
         }
         DemoChapters.Mode mode = DemoChapters.Mode.parse(safeDemoMode());
         boolean includeDev = safeIncludeDev();
         DemoChapters.FilterResult filtered = DemoChapters.filter(
                 loaded, mode, includeDev, ProgressiveStagesCompat.present());
         boolean hasCustom = filtered.customCount() > 0;
+        boolean keepPlayer = DemoChapters.keepPlayerDemos(mode, hasCustom);
+        List<Scroll> keptScrolls = DemoChapters.filterScrolls(scrolls, keepPlayer, includeDev);
         BookChrome chrome = DemoChapters.pickChrome(chromeFiles, hasCustom);
-        QuestQueen.LOGGER.info("Loaded {} quest chapters, {} scrolls, sidebarTitle={} demo={} custom={} dropped={}",
-                filtered.chapters().size(), scrolls.size(), chrome.sidebarTitle(),
+        chromeNamespace = DemoChapters.pickChromeNamespace(chromeFiles, hasCustom);
+        QuestQueen.LOGGER.info("Loaded {} quest chapters, {} scrolls, sidebarTitle={} namespace={} demo={} custom={} dropped={}",
+                filtered.chapters().size(), keptScrolls.size(), chrome.sidebarTitle(), chromeNamespace,
                 mode.name().toLowerCase(), filtered.customCount(), filtered.dropped());
-        return new QuestPack(filtered.chapters(), scrolls, chrome);
+        return new QuestPack(filtered.chapters(), keptScrolls, chrome);
+    }
+
+    /** Later packs in {@link ResourceManager#listPacks()} outrank earlier ones. */
+    private static Map<String, Integer> packRanks(ResourceManager manager) {
+        Map<String, Integer> ranks = new HashMap<>();
+        int index = 0;
+        for (PackResources pack : manager.listPacks().toList()) {
+            ranks.put(pack.packId(), index++);
+        }
+        return ranks;
     }
 
     private static String safeDemoMode() {

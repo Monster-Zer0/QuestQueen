@@ -46,7 +46,8 @@ public final class QuestConfig {
                 .comment("Built-in Feature Showcase: auto (hide when a pack has chapters), always, or never.")
                 .define("demoChapters", "auto");
         INCLUDE_DEV_CHAPTERS = builder
-                .comment("Load jar Test Range / blank / starter / nether chapters. Leave false for distribution.")
+                .comment("Load the dev-run harness chapters (test range, blank, starter, nether).",
+                        "Those files are not in the published jar, so this does nothing in a distributed build.")
                 .define("includeDevChapters", false);
         builder.pop();
         builder.push("sidebarTitleChrome");
