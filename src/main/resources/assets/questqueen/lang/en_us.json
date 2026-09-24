@@ -4,6 +4,7 @@
   "screen.questqueen.book": "Quest Queen",
   "questqueen.complete": "Quest complete: %s — open the book to claim your rewards",
   "questqueen.rewards_claimed": "Claimed rewards: %s",
+  "questqueen.rewards_claimed_chapter": "Claimed %s quests in %s",
   "questqueen.done.tooltip": "Completes this quest. Claim rewards with CLAIM when it is done.",
   "questqueen.done.claim_tooltip": "Claims this quest's rewards. You only receive them once.",
   "questqueen.authored": "Saved chapter %s",

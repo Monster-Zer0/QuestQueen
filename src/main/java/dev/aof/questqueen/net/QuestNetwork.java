@@ -48,6 +48,7 @@ public final class QuestNetwork {
         registrar.playToServer(AuthorChromeC2S.TYPE, AuthorChromeC2S.STREAM_CODEC, QuestNetwork::handleAuthorChrome);
         registrar.playToServer(ClaimChoiceC2S.TYPE, ClaimChoiceC2S.STREAM_CODEC, QuestNetwork::handleClaim);
         registrar.playToServer(ClaimRewardsC2S.TYPE, ClaimRewardsC2S.STREAM_CODEC, QuestNetwork::handleClaimRewards);
+        registrar.playToServer(ClaimAllC2S.TYPE, ClaimAllC2S.STREAM_CODEC, QuestNetwork::handleClaimAll);
     }
 
     public static void sendDefinitions(ServerPlayer player) {
@@ -172,6 +173,14 @@ public final class QuestNetwork {
             if (context.player() instanceof ServerPlayer player
                     && ProgressService.canClaimRewards(player, payload.chapter(), payload.tile())) {
                 ProgressService.claimTileRewards(player, payload.chapter(), payload.tile());
+            }
+        });
+    }
+
+    private static void handleClaimAll(ClaimAllC2S payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (context.player() instanceof ServerPlayer player) {
+                ProgressService.claimChapterRewards(player, payload.chapter());
             }
         });
     }

@@ -3,6 +3,7 @@ package dev.aof.questqueen.client;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.ToIntFunction;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -238,11 +239,24 @@ public final class QuestTileWidget extends AbstractWidget {
         return hasIcon && size < 64;
     }
 
+    /** Jerry/Picard 1.1.191: half-scale captions — hard-cap at 2 lines (ellipsize). */
     static int titleLines(int size) {
-        if (size >= 56) {
-            return 3;
-        }
         return compact(size) ? 1 : 2;
+    }
+
+    /**
+     * F7 fix B (Troi's ruling): the caption budget at a given size. Below 56 the caption is squeezed to
+     * {@link #titleLines(int)} lines; a third line is allowed ONLY where the lower band is free - no
+     * reward faces and no XOR badge present - and only on the 2-line rung (48..55; the size-48 ladder
+     * step is the only rendered size below 56). Decided from the conditions the renderer already holds,
+     * never a per-tile or per-name allowlist. >= 56 already has its 3 lines; the 32 preview keeps its 1.
+     */
+    /**
+     * Caption line budget. 1.1.191: always {@link #titleLines(int)} — max two half-scale lines;
+     * the old F7 third-line grant is retired (ellipsize instead of shrinking).
+     */
+    static int captionBudget(int size, boolean facesPresent, boolean xorPresent) {
+        return titleLines(size);
     }
 
     static int titleBudget(int size, boolean hasIcon) {
@@ -286,19 +300,22 @@ public final class QuestTileWidget extends AbstractWidget {
         } else {
             titleY = titleBeside && !stacked ? y + 16 : y + 20;
         }
-        int ink = locked ? QuestColors.LOCKED_TEXT : QuestColors.TEXT;
+        int ink = locked ? QuestColors.LOCKED_TEXT : CAPTION_INK;
+        // Hoisted so the caption budget (F7 fix B) is decided from the renderer's own conditions.
         List<ItemStack> faces = rewards.isEmpty() && !reward.isEmpty() ? List.of(reward) : rewards;
         String fullTitle = joinTitle(title1, title2, title3);
         if (!fullTitle.isEmpty()) {
-            int maxLines = titleLines(size);
+            int budget = captionBudget(size, !faces.isEmpty(), xor);
+            // When reward icons are present, leave a clear band above REWARDS so title lines
+            // cannot paint through the caption (Jerry: CRAFTING TABLE / REWARDS overlap).
             if (!faces.isEmpty() && size >= 40 && !compact) {
-                // Stop above the REWARDS caption: a three-line title used to print straight through it.
-                int captionTop = rewardRowY(y, size) - 6;
-                maxLines = Math.max(1, Math.min(maxLines, (captionTop - titleY) / 5));
+                int rewardsLabelY = rewardRowY(y, size) - LINE_STEP;
+                int fit = Math.max(1, (rewardsLabelY - titleY) / LINE_STEP);
+                budget = Math.min(budget, fit);
             }
-            List<String> lines = wrapTiny(font, fullTitle, Math.max(8, titleMax - titleX), maxLines);
+            List<String> lines = wrapTiny(font, fullTitle, Math.max(8, titleMax - titleX), budget);
             for (int i = 0; i < lines.size(); i++) {
-                tiny(graphics, font, lines.get(i), titleX, titleY + i * 5, ink);
+                tiny(graphics, font, lines.get(i), titleX, titleY + i * LINE_STEP, ink);
             }
         }
         if (!progress.isEmpty() && size >= 40) {
@@ -318,7 +335,8 @@ public final class QuestTileWidget extends AbstractWidget {
             int rx = x + size - pad - totalW;
             int ry = rewardRowY(y, size);
             if (!compact) {
-                tiny(graphics, font, "REWARDS", x + size - 28, ry - 6, QuestColors.MUTED);
+                // Slightly smaller than tile captions so it reads as chrome, not body text.
+                tinySmall(graphics, font, "REWARDS", x + size - 26, ry - LINE_STEP, REWARDS_INK);
             }
             for (int i = 0; i < show; i++) {
                 ItemStack face = faces.get(i);
@@ -459,13 +477,39 @@ public final class QuestTileWidget extends AbstractWidget {
         out.append(part.trim());
     }
 
+    /** House truncation marker - matches {@code ellipsize()} and {@code drawWrapped}'s body trim. */
+    static final String TRUNCATION_MARKER = "...";
+
     /** Word-wrap at half-scale. Last line clips without a hyphen (no "PICK A PATH-"). */
+    /**
+     * Caption scale vs default font. 1.1.192: half-scale again (Jerry: clearer, not bigger). Pixel-snap + MC shadow; no outline.
+     * Kept as a named constant so {@link #wrapTiny} maxW stays aligned with draw.
+     */
+    static final float TINY_SCALE = 0.5f;
+
+    /** Title / header cream (Troi/Picard): readable on dark tile faces without soft bloom. */
+    static final int CAPTION_INK = 0xFFF5E6C8;
+
+    /** REWARDS label — same band as titles, one cream step warmer/dimmer. */
+    static final int REWARDS_INK = 0xFFE8D4A8;
+
+    /** Half-scale line advance (visual ~5px glyph + gap → 6px step). */
+    static final int LINE_STEP = 6;
+
     static List<String> wrapTiny(Font font, String text, int visualMax, int maxLines) {
+        return wrapTiny(font::width, text, visualMax, maxLines);
+    }
+
+    /**
+     * F7 fix A (Troi's ruling): marked truncation. Marker reserved before the shrink so the last line
+     * ends with {@link #TRUNCATION_MARKER}. Width-function seam for headless tests.
+     */
+    static List<String> wrapTiny(ToIntFunction<String> widthOf, String text, int visualMax, int maxLines) {
         String upper = text == null ? "" : text.toUpperCase(Locale.ROOT).trim();
         if (upper.isEmpty()) {
             return List.of();
         }
-        int maxW = Math.max(8, visualMax) * 2;
+        int maxW = Math.max(8, Math.round(Math.max(8, visualMax) / TINY_SCALE));
         int keep = Math.max(1, maxLines);
         List<String> lines = new ArrayList<>();
         StringBuilder line = new StringBuilder();
@@ -474,7 +518,7 @@ public final class QuestTileWidget extends AbstractWidget {
                 continue;
             }
             String next = line.isEmpty() ? word : line + " " + word;
-            if (font.width(next) > maxW && !line.isEmpty()) {
+            if (widthOf.applyAsInt(next) > maxW && !line.isEmpty()) {
                 lines.add(line.toString());
                 line = new StringBuilder(word);
             } else {
@@ -494,27 +538,42 @@ public final class QuestTileWidget extends AbstractWidget {
         }
         if (!lines.isEmpty()) {
             String last = lines.get(lines.size() - 1);
-            if (font.width(last) > maxW) {
-                // Mark the cut: a bare mid-word stop ("OPEN A TABLE (EDITED VIA BRID") reads as a typo.
-                String dots = "...";
+            if (widthOf.applyAsInt(last) > maxW) {
+                int markerW = widthOf.applyAsInt(TRUNCATION_MARKER);
                 String cut = last;
-                while (cut.length() > 1 && font.width(cut.stripTrailing() + dots) > maxW) {
+                while (cut.length() > 1 && widthOf.applyAsInt(cut) + markerW > maxW) {
                     cut = cut.substring(0, cut.length() - 1);
                 }
-                lines.set(lines.size() - 1, cut.stripTrailing() + dots);
+                lines.set(lines.size() - 1, cut + TRUNCATION_MARKER);
             }
         }
         return lines;
     }
 
+    /**
+     * Half-scale caption: floor snap, pose.scale(0.5), MC chat shadow only. No cardinal outline.
+     */
     private static void tiny(GuiGraphics graphics, Font font, String text, int x, int y, int color) {
         var pose = graphics.pose();
         pose.pushPose();
-        pose.translate(x, y, 0);
-        pose.scale(0.5f, 0.5f, 1f);
-        graphics.drawString(font, text, 0, 0, color, false);
+        // Integer snap before half-scale so glyphs stay on the pixel grid (Linux/Hyprland).
+        pose.translate(Math.floor(x), Math.floor(y), 0);
+        pose.scale(TINY_SCALE, TINY_SCALE, 1f);
+        // Minecraft chat shadow only — single (+1,+1). No cardinal outline (1.1.190 blob).
+        graphics.drawString(font, text, 0, 0, color, true);
         pose.popPose();
     }
+
+    /** Smaller than half-scale captions — chrome labels like REWARDS. */
+    private static void tinySmall(GuiGraphics graphics, Font font, String text, int x, int y, int color) {
+        var pose = graphics.pose();
+        pose.pushPose();
+        pose.translate(Math.floor(x), Math.floor(y), 0);
+        pose.scale(0.35f, 0.35f, 1f);
+        graphics.drawString(font, text, 0, 0, color, true);
+        pose.popPose();
+    }
+
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
