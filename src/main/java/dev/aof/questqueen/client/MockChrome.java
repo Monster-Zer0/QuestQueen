@@ -39,6 +39,19 @@ public final class MockChrome {
         box(graphics, x + size - 2, y + size - 2, 2, 2, QuestColors.CELL_SHADOW);
     }
 
+    /**
+     * Empty slot as the player sees it: a faint flat square with a hairline edge. The bevelled {@link #cell}
+     * reads as a tile in its own right, so a sparse chapter looked like a wall of blank quests.
+     */
+    public static void quietCell(GuiGraphics graphics, int x, int y, int size) {
+        box(graphics, x, y, size, size, withAlpha(QuestColors.CELL, 0x70));
+        frame(graphics, x, y, size, size, withAlpha(QuestColors.CELL_LINE, 0x48));
+    }
+
+    private static int withAlpha(int argb, int alpha) {
+        return (alpha << 24) | (argb & 0x00FFFFFF);
+    }
+
     public static int tabWidth(int labelHalfPx, int max) {
         int w = Math.max(18, labelHalfPx + 8);
         return Math.min(Math.max(18, max), w) & -2;

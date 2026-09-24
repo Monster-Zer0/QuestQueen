@@ -4,7 +4,6 @@ import com.mojang.serialization.JsonOps;
 import dev.aof.questqueen.QuestConfig;
 import dev.aof.questqueen.QuestQueen;
 import dev.aof.questqueen.data.BookChrome;
-import dev.aof.questqueen.data.QuestDefinitions;
 import dev.aof.questqueen.data.Chapter;
 import dev.aof.questqueen.data.ChapterBackground;
 import dev.aof.questqueen.data.ChapterIntro;
@@ -24,6 +23,7 @@ import dev.aof.questqueen.data.task.LocationTask;
 import dev.aof.questqueen.data.task.Task;
 import dev.aof.questqueen.data.task.TaskFactory;
 import dev.aof.questqueen.data.task.TaskVerbs;
+import dev.aof.questqueen.net.AuthorChromeC2S;
 import dev.aof.questqueen.net.AuthorSaveC2S;
 import dev.aof.questqueen.net.ClaimChoiceC2S;
 import dev.aof.questqueen.net.ClaimRewardsC2S;
@@ -174,7 +174,7 @@ public class QuestBookScreen extends Screen {
     private int inspectOffY;
     /** XOR parents whose modal was dismissed. Fork debt stays until a child completes. */
     private final Set<String> xorDismissed = new HashSet<>();
-    /** Marionette / probe hover â€” sticky until cleared so a screenshot can catch the lock. */
+    /** Marionette / probe hover — sticky until cleared so a screenshot can catch the lock. */
     private static final int[][] EMPTY_PORTS = new int[0][];
     private boolean widgetsDirty = true;
     private int lastSyncCamSx = Integer.MIN_VALUE;
@@ -373,7 +373,8 @@ public class QuestBookScreen extends Screen {
         QuestQueen.LOGGER.info("[questqueen] book init #{} fresh={}", INIT_COUNT, fresh);
         applyBookGuiScale();
         search = new EditBox(font, searchX(), 7, searchW(), 12, Component.literal("Search"));
-        search.setHint(Component.literal("search"));
+        // EditBox draws the hint in the text colour, so an unstyled hint looked like typed text.
+        search.setHint(Component.literal("Search quests").withColor(QuestColors.SIDEBAR_HEADER & 0x00FFFFFF));
         search.setBordered(false);
         search.setTextColor(QuestColors.SIDEBAR_TEXT);
         search.setTextColorUneditable(QuestColors.SIDEBAR_HEADER);
@@ -535,7 +536,7 @@ public class QuestBookScreen extends Screen {
         modalTileId = "";
     }
 
-    /** Locked sidebar / probe chapter â€” GOTCHA or fade-lock after the cap. */
+    /** Locked sidebar / probe chapter — GOTCHA or fade-lock after the cap. */
     private void showLockedChapterCue() {
         int[] pos = lockedChapterCuePos(null);
         cueLocked("", pos[0], pos[1]);
@@ -735,6 +736,18 @@ public class QuestBookScreen extends Screen {
             // No placed tiles at all: keep the old bounding-box framing so an empty chapter still centres.
             cameraX = worldLeft - (contentWidth() - worldW * zoom) / (2.0 * zoom);
             cameraY = worldTop - (TOP_H + (contentHeight() - worldH * zoom) / 2.0) / zoom;
+        } else if (contentFitsView(minX, minY, maxX, maxY)) {
+            // The whole chapter fits at this zoom, so there is nothing for the anchor rule to trade off: centre
+            // the content. The anchor rule alone parked small chapters against one edge with the rest of the
+            // board empty.
+            FitCamera.View view = fitView();
+            int stride = view.stridePx();
+            int left = minX * stride;
+            int right = maxX * stride + view.tilePx();
+            int top = minY * stride;
+            int bottom = maxY * stride + view.tilePx();
+            cameraX = ((left + right) / 2.0 - view.contentWidth() / 2.0) / zoom;
+            cameraY = ((top + bottom) / 2.0 - view.topH() - view.contentHeight() / 2.0) / zoom;
         } else {
             // FitCamera works in screen pixels; the screen's camera is in world units.
             cameraX = choice.camSx() / zoom;
@@ -761,6 +774,53 @@ public class QuestBookScreen extends Screen {
                 choice.floor() == null ? 0 : choice.floor().shiftSx(),
                 choice.floor() == null ? 0 : choice.floor().shiftSy(),
                 choice.floor() == null ? -1 : choice.floor().visibleBefore());
+    }
+
+    /**
+     * Where the "tiles in view" cue goes: the first board corner (bottom-left, bottom-right, top-left, top-right)
+     * whose box is clear of every tile, so it never prints over a quest. Returns {x, y, clear?1:0}; when every
+     * corner is covered it falls back to bottom-left and the caller draws a more opaque backing.
+     */
+    private int[] cueSpot(int cueW) {
+        int left = boardLeft() + 6;
+        int right = boardLeft() + contentWidth() - cueW - 6;
+        int top = TOP_H + 8;
+        int bottom = TOP_H + contentHeight() - 16;
+        int[][] corners = {{left, bottom}, {right, bottom}, {left, top}, {right, top}};
+        int size = tilePx();
+        for (int[] c : corners) {
+            int x0 = c[0] - 4;
+            int y0 = c[1] - 4;
+            int x1 = c[0] + cueW + 4;
+            int y1 = c[1] + 7;
+            boolean clear = true;
+            if (drawingInspect()) {
+                int cx = cardX();
+                int cy = cardY();
+                if (cx < x1 && cx + cardW() > x0 && cy < y1 && cy + cardH() > y0) {
+                    continue;
+                }
+            }
+            for (Tile tile : chapter.tiles()) {
+                int[] s = screen(tile.pos().x(), tile.pos().y());
+                if (s[0] < x1 && s[0] + size > x0 && s[1] < y1 && s[1] + size > y0) {
+                    clear = false;
+                    break;
+                }
+            }
+            if (clear) {
+                return new int[]{c[0], c[1], 1};
+            }
+        }
+        return new int[]{left, bottom, 0};
+    }
+
+    /** True when the tile bounding box, plus the clamp inset on every side, fits inside the board viewport. */
+    private boolean contentFitsView(int minX, int minY, int maxX, int maxY) {
+        FitCamera.View view = fitView();
+        int w = (maxX - minX) * view.stridePx() + view.tilePx() + view.inset() * 2;
+        int h = (maxY - minY) * view.stridePx() + view.tilePx() + view.inset() * 2;
+        return w <= view.contentWidth() && h <= view.contentHeight();
     }
 
     /** The renderer's viewport in integer pixels, which is the space {@link FitCamera} works in. */
@@ -1100,7 +1160,7 @@ public class QuestBookScreen extends Screen {
         }
         modalPanel.sync(showModal, modalX, modalY, modalW, modalH, QuestColors.CARD, modalEdge, true, modalHeaderW,
                 false, true, true, modalChips);
-        // After sync â€” sync() resets dimLeft to 0 (Data).
+        // After sync — sync() resets dimLeft to 0 (Data).
         modalPanel.setDimLeft(boardLeft());
         int i = 0;
         for (Tile tile : chapter.tiles()) {
@@ -1153,7 +1213,9 @@ public class QuestBookScreen extends Screen {
     }
 
     private int tabWidth(String label, int max) {
-        return MockChrome.tabWidth(font.width(label) / 2, max);
+        // Tab labels go through tinyString (0.6 scale, with shadow), not half scale. Sizing the tab for half
+        // scale let longer words such as CURRENT run past the tab onto the card face, where they vanished.
+        return MockChrome.tabWidth((int) Math.ceil(font.width(label) * 0.6f) + 2, max);
     }
 
     private int pillW(String label) {
@@ -1248,10 +1310,12 @@ public class QuestBookScreen extends Screen {
                 int inView = inViewTileCount();
                 if (inView < placed) {
                     String cue = inView + " / " + placed + " tiles in view - drag to pan";
-                    int cueX = boardLeft() + 6;
-                    int cueY = TOP_H + contentHeight() - 16;
                     // tinyString renders at 0.6 scale; backing box uses font width * 0.6.
-                    graphics.fill(cueX - 4, cueY - 4, cueX + Math.round(font.width(cue) * 0.6f) + 4, cueY + 7, 0x66000000);
+                    int cueW = Math.round(font.width(cue) * 0.6f);
+                    int[] spot = cueSpot(cueW);
+                    int cueX = spot[0];
+                    int cueY = spot[1];
+                    graphics.fill(cueX - 4, cueY - 4, cueX + cueW + 4, cueY + 7, spot[2] == 1 ? 0x66000000 : 0xD0100C16);
                     tinyString(graphics, cue, cueX, cueY, QuestColors.MUTED);
                 }
             }
@@ -1346,7 +1410,7 @@ public class QuestBookScreen extends Screen {
             faces = collectRewardFaces(tile);
             reward = faces.isEmpty() ? ItemStack.EMPTY : faces.getFirst();
             rewardPlus = showsRewardPlus(tile);
-            title3 = ""; // Jerry: no prose caption â€” Nx on icons
+            title3 = ""; // Jerry: no prose caption — Nx on icons
         }
         boolean xor = !locked && ClientQuestState.hasXorBadge(chapter, tile);
         widget.setDecor(locked, header, edge != 0 ? MockChrome.tagInk(edge) : MockChrome.tagWhite(), icon, objective, title2,
@@ -1371,7 +1435,7 @@ public class QuestBookScreen extends Screen {
             return "No description yet.";
         }
         String rawBody = tile.description().isBlank() ? "No description yet." : tile.description();
-        // Drop trailing "Rewards: â€¦" prose from description (Jerry â€” counts on icons only).
+        // Drop trailing "Rewards: …" prose from description (Jerry — counts on icons only).
         String body = rawBody.replaceAll("(?is)\\s*Rewards?:\\s*.*$", "").trim();
         return body.isEmpty() ? "No description yet." : body;
     }
@@ -1428,7 +1492,7 @@ public class QuestBookScreen extends Screen {
         return faces;
     }
 
-    /** Board / inspect / log face â€” RewardIcons so XP / toast / stage / loot never leave a blank strip. */
+    /** Board / inspect / log face — RewardIcons so XP / toast / stage / loot never leave a blank strip. */
     private static ItemStack rewardFace(Reward reward) {
         if (reward == null) {
             return ItemStack.EMPTY;
@@ -1782,10 +1846,11 @@ public class QuestBookScreen extends Screen {
         QuestConfig.SIDEBAR_TITLE_COLOR.set(String.format("%08X", chrome.titleColor()));
         QuestConfig.SIDEBAR_TITLE_SCALE.set((double) chrome.titleScale());
         QuestConfig.SIDEBAR_TITLE_SHADOW.set(chrome.titleShadow() ? 1 : 0);
-        try {
-            QuestDefinitions.putChrome(chrome);
-        } catch (Exception ignored) {
-            // client-only worlds still keep ClientQuestState + config
+        // The server owns the pack: it re-applies it for every player and writes book.json to the authored pack.
+        // Calling QuestDefinitions from here ran server work on the render thread and did nothing on a remote
+        // server. Without author rights the edit stays local (ClientQuestState + config).
+        if (ClientQuestState.progress.canAuthor()) {
+            QuestNetwork.sendToServer(AuthorChromeC2S.of(chrome));
         }
     }
 
@@ -2037,7 +2102,7 @@ public class QuestBookScreen extends Screen {
         }
         List<String> keys = ClientQuestState.unresolvedXorKeys();
         String focus = keys.isEmpty() ? "" : keys.getFirst();
-        String label = focus.isEmpty() ? "CHOOSE PATH" : "CHOOSE PATH Â· " + shortXorLabel(focus);
+        String label = focus.isEmpty() ? "CHOOSE PATH" : "CHOOSE PATH · " + shortXorLabel(focus);
         int w = Math.min(contentWidth() - 16, pillW(label) + 16);
         int x = boardLeft() + Math.max(8, (contentWidth() - w) / 2);
         int y = height - 22;
@@ -2111,11 +2176,16 @@ public class QuestBookScreen extends Screen {
         List<String> titleLines = wrapTitle(rawTitle, maxTitle);
         int titleX = titleBeside ? inner + 18 : inner;
         int titleY = titleBeside ? y + 16 : y + 20;
-        for (int i = 0; i < Math.min(2, titleLines.size()); i++) {
+        int ry = y + size - 15;
+        int lineCap = 2;
+        if (!tile.rewards().isEmpty()) {
+            // Keep the title above the REWARDS caption at ry - 6.
+            lineCap = Math.max(1, Math.min(lineCap, (ry - 6 - titleY) / 6));
+        }
+        for (int i = 0; i < Math.min(lineCap, titleLines.size()); i++) {
             tinyString(graphics, titleLines.get(i), titleX, titleY + i * 6, QuestColors.TEXT);
         }
         if (!tile.rewards().isEmpty()) {
-            int ry = y + size - 15;
             tinyString(graphics, "REWARDS", x + size - 28, ry - 6, QuestColors.MUTED);
             List<ItemStack> faces = collectRewardFaces(tile);
             int show = Math.min(faces.size(), QuestTileWidget.REWARD_FACE_CAP);
@@ -2168,7 +2238,7 @@ public class QuestBookScreen extends Screen {
         return verb + " " + value + "/" + need;
     }
 
-    /** 0.6-scale board labels ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â mock tile text is ~5ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ7px tall. */
+    /** 0.6-scale board labels — mock tile text is ~5–7px tall. */
     private void tinyString(GuiGraphics graphics, String text, int x, int y, int color) {
         var pose = graphics.pose();
         pose.pushPose();
@@ -2211,7 +2281,7 @@ public class QuestBookScreen extends Screen {
     }
 
     /**
-     * Mock card: contained ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¹ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â  face + header tab. 2px font frame only if U+E000 is 1ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ3px.
+     * Mock card: contained — face + header tab. 2px font frame only if U+E000 is 1–3px.
      */
     private void drawGlyphCard(GuiGraphics graphics, int x, int y, TileVisual visual) {
         int size = tilePx();
@@ -2229,7 +2299,7 @@ public class QuestBookScreen extends Screen {
         }
     }
 
-    /** Quiet viewport squares â€” recessed mock grid cells, no LOCKED label. */
+    /** Quiet viewport squares — recessed mock grid cells, no LOCKED label. */
     private int drawQuietCells(GuiGraphics graphics) {
         ensureOccupiedCells();
         int gw = chapter.gridWidth();
@@ -2252,7 +2322,11 @@ public class QuestBookScreen extends Screen {
                 if (s[0] + size < left || s[1] + size < TOP_H || s[0] > width || s[1] > height) {
                     continue;
                 }
-                MockChrome.cell(graphics, s[0], s[1], size);
+                if (authoring) {
+                    MockChrome.cell(graphics, s[0], s[1], size);
+                } else {
+                    MockChrome.quietCell(graphics, s[0], s[1], size);
+                }
                 drawn++;
             }
         }
@@ -2448,7 +2522,7 @@ public class QuestBookScreen extends Screen {
         return cut;
     }
 
-    /** Faint corner dots only ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â full empty-cell boxes turned the book into a spreadsheet. */
+    /** Faint corner dots only — full empty-cell boxes turned the book into a spreadsheet. */
     private void drawCellDots(GuiGraphics graphics) {
         Set<Long> occupied = new java.util.HashSet<>();
         for (Tile tile : chapter.tiles()) {
@@ -2586,7 +2660,7 @@ public class QuestBookScreen extends Screen {
 
     /**
      * Detect per-tile state transitions once per frame and arm the matching one-shot effects. Keyed off
-     * {@link ClientQuestState#visual} so it uses exactly the same rules the chrome does â€” no second
+     * {@link ClientQuestState#visual} so it uses exactly the same rules the chrome does — no second
      * opinion about what "completed" or "failed" means.
      *
      * <p>Visuals only change when a progress snapshot lands, so this is a cheap map walk between syncs.
@@ -3011,7 +3085,7 @@ public class QuestBookScreen extends Screen {
         boolean xor = modal == ModalKind.XOR;
         int edge = xor ? QuestColors.XOR_EDGE : QuestColors.MODAL_PINK;
         String tag = xor ? "XOR QUEST COMPLETE" : "LOCKED";
-        // Troi: LOCKED tab + CONGRATULATIONS was copy dissonance â€” GOTCHA is a soft no, XOR keeps the win line.
+        // Troi: LOCKED tab + CONGRATULATIONS was copy dissonance — GOTCHA is a soft no, XOR keeps the win line.
         String title = xor ? "CONGRATULATIONS" : "NOT YET";
         String sub = xor ? "YOU TOTALLY SMASHED THAT QUEST (YAY)" : "I BET YOU ALWAYS WIN AT PEA-KNUCKLE";
         int lockers = 0;
@@ -3038,7 +3112,7 @@ public class QuestBookScreen extends Screen {
         int btnH = 12;
         int headerW = tabWidth(tag, w - 20);
         int h = 16 + 14 + 12 + body.size() * 10 + 10 + btnH + 12;
-        // Jerry: slide modal into the board when sidebar is open â€” never under CHAPTERS.
+        // Jerry: slide modal into the board when sidebar is open — never under CHAPTERS.
         int x = boardLeft() + Math.max(8, (contentWidth() - w) / 2);
         // Right-clamp: on a narrow GUI with a wide sidebar the max(8,..) branch wins and the frame, tab
         // tail and close X would be drawn off-screen.
@@ -3700,7 +3774,7 @@ public class QuestBookScreen extends Screen {
     }
 
     /**
-     * False for a card the player may look at but not act on â€” LOCKED, XOR-CLOSED, or still concealed.
+     * False for a card the player may look at but not act on — LOCKED, XOR-CLOSED, or still concealed.
      * Such a card must not offer SUBMIT / CLAIM / TAKE A / PIN: the server refuses all of them, so the
      * buttons looked live and silently did nothing (and, before the guard in {@code TaskHooks.trySubmit},
      * cost the player their items).
@@ -3925,7 +3999,7 @@ public class QuestBookScreen extends Screen {
 
     /**
      * Rows for one chapter's completed tiles, starting at {@code startY}. Pure in (chapter, predicate) so it
-     * is unit-testable without a game â€” only {@link Reward#describe()} is touched, never a registry.
+     * is unit-testable without a game — only {@link Reward#describe()} is touched, never a registry.
      */
     static List<LogRow> completedTileRows(Chapter entry, int startY, java.util.function.Predicate<Tile> isDone,
             java.util.function.Function<Reward, ItemStack> iconResolver) {
@@ -4309,7 +4383,7 @@ public class QuestBookScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // KeyMappings do not consume clicks while a Screen owns input â€” handle toggle close here.
+        // KeyMappings do not consume clicks while a Screen owns input — handle toggle close here.
         if (QuestKeybinds.OPEN_BOOK.matches(keyCode, scanCode)) {
             onClose();
             return true;
@@ -4424,7 +4498,7 @@ public class QuestBookScreen extends Screen {
     /**
      * Submit the open claimable task (or {@code taskIndex} when a specific row was clicked) and claim the
      * tile's rewards. The index used to be hardcoded to 0, so on a multi-task tile every row submitted task
-     * 0 â€” completing the wrong task and consuming its items/XP â€” and tasks at index >= 1 could never be
+     * 0 — completing the wrong task and consuming its items/XP — and tasks at index >= 1 could never be
      * submitted at all.
      */
     private void clickDone(Tile tile, int taskIndex) {
@@ -5113,7 +5187,7 @@ public class QuestBookScreen extends Screen {
         try {
             on = QuestConfig.AMBIENT_THEME_FX.get();
         } catch (Exception ignored) {
-            // Config not ready â€” leave it on.
+            // Config not ready — leave it on.
         }
         if (!on) {
             return;
@@ -5157,7 +5231,7 @@ public class QuestBookScreen extends Screen {
         }
     }
 
-    /** Sparse colour-coded specks falling slowly â€” circuit traces / drifting leaves. */
+    /** Sparse colour-coded specks falling slowly — circuit traces / drifting leaves. */
     private void drawAmbientDrift(GuiGraphics graphics, int left, int top, int w, int h, int base) {
         final int count = 18;
         for (int i = 0; i < count; i++) {
@@ -5222,7 +5296,7 @@ public class QuestBookScreen extends Screen {
         MockChrome.box(graphics, left + w - 2, top, 2, h, color);
     }
 
-    /** Optional chapter image background â€” board area only (right of sidebar). */
+    /** Optional chapter image background — board area only (right of sidebar). */
     private void drawBoardBackgroundImage(GuiGraphics graphics) {
         if (chapter == null || chapter.background().isEmpty()) {
             return;
@@ -5244,7 +5318,7 @@ public class QuestBookScreen extends Screen {
         }
         float opacity = bg.opacity();
         graphics.setColor(1f, 1f, 1f, opacity);
-        // Tile 64Ã—64 so ImmediatelyFast/Iris keep the blit (no stretch of tiny px).
+        // Tile 64×64 so ImmediatelyFast/Iris keep the blit (no stretch of tiny px).
         final int tile = 64;
         for (int py = top; py < top + h; py += tile) {
             int ph = Math.min(tile, top + h - py);
@@ -5265,7 +5339,7 @@ public class QuestBookScreen extends Screen {
     }
 
     private int searchX() {
-        // Expanded-sidebar anchor â€” collapse must not move or grow the search field.
+        // Expanded-sidebar anchor — collapse must not move or grow the search field.
         return Math.max(sidebarW + 8, 72);
     }
 
