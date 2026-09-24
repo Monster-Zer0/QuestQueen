@@ -251,6 +251,15 @@ public final class QuestTileWidget extends AbstractWidget {
         return Math.max(20, (size - pad * 2 - icon) * 2);
     }
 
+    static int rewardPx(int size) {
+        return Math.max(6, iconPx(size) > 12 ? 10 : 8);
+    }
+
+    /** Top of the reward icon row; the REWARDS caption sits 6px above it. */
+    static int rewardRowY(int y, int size) {
+        return y + size - padPx(size) - rewardPx(size);
+    }
+
     private void drawDecor(GuiGraphics graphics, int x, int y, int size) {
         Font font = Minecraft.getInstance().font;
         int pad = padPx(size);
@@ -278,9 +287,16 @@ public final class QuestTileWidget extends AbstractWidget {
             titleY = titleBeside && !stacked ? y + 16 : y + 20;
         }
         int ink = locked ? QuestColors.LOCKED_TEXT : QuestColors.TEXT;
+        List<ItemStack> faces = rewards.isEmpty() && !reward.isEmpty() ? List.of(reward) : rewards;
         String fullTitle = joinTitle(title1, title2, title3);
         if (!fullTitle.isEmpty()) {
-            List<String> lines = wrapTiny(font, fullTitle, Math.max(8, titleMax - titleX), titleLines(size));
+            int maxLines = titleLines(size);
+            if (!faces.isEmpty() && size >= 40 && !compact) {
+                // Stop above the REWARDS caption: a three-line title used to print straight through it.
+                int captionTop = rewardRowY(y, size) - 6;
+                maxLines = Math.max(1, Math.min(maxLines, (captionTop - titleY) / 5));
+            }
+            List<String> lines = wrapTiny(font, fullTitle, Math.max(8, titleMax - titleX), maxLines);
             for (int i = 0; i < lines.size(); i++) {
                 tiny(graphics, font, lines.get(i), titleX, titleY + i * 5, ink);
             }
@@ -294,14 +310,13 @@ public final class QuestTileWidget extends AbstractWidget {
                 }
             }
         }
-        List<ItemStack> faces = rewards.isEmpty() && !reward.isEmpty() ? List.of(reward) : rewards;
         if (!faces.isEmpty() && size >= 40) {
-            int rewardPx = Math.max(6, iconPx(size) > 12 ? 10 : 8);
+            int rewardPx = rewardPx(size);
             int show = Math.min(faces.size(), REWARD_FACE_CAP);
             int gap = show > 1 ? 1 : 0;
             int totalW = show * rewardPx + Math.max(0, show - 1) * gap;
             int rx = x + size - pad - totalW;
-            int ry = y + size - pad - rewardPx;
+            int ry = rewardRowY(y, size);
             if (!compact) {
                 tiny(graphics, font, "REWARDS", x + size - 28, ry - 6, QuestColors.MUTED);
             }
@@ -480,11 +495,13 @@ public final class QuestTileWidget extends AbstractWidget {
         if (!lines.isEmpty()) {
             String last = lines.get(lines.size() - 1);
             if (font.width(last) > maxW) {
+                // Mark the cut: a bare mid-word stop ("OPEN A TABLE (EDITED VIA BRID") reads as a typo.
+                String dots = "...";
                 String cut = last;
-                while (cut.length() > 1 && font.width(cut) > maxW) {
+                while (cut.length() > 1 && font.width(cut.stripTrailing() + dots) > maxW) {
                     cut = cut.substring(0, cut.length() - 1);
                 }
-                lines.set(lines.size() - 1, cut);
+                lines.set(lines.size() - 1, cut.stripTrailing() + dots);
             }
         }
         return lines;

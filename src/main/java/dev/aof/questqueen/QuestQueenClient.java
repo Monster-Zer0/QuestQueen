@@ -7,11 +7,13 @@ import dev.aof.questqueen.client.QuestHudOverlay;
 import dev.aof.questqueen.client.QuestKeybinds;
 import dev.aof.questqueen.client.UiFx;
 import dev.aof.questqueen.net.ClientSync;
+import dev.aof.questqueen.net.QuestNetwork;
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
@@ -27,6 +29,16 @@ public class QuestQueenClient {
         modEventBus.addListener(QuestQueenClient::onRegisterKeys);
         modEventBus.addListener(QuestQueenClient::onRegisterGuiLayers);
         NeoForge.EVENT_BUS.addListener(QuestQueenClient::onClientTick);
+        NeoForge.EVENT_BUS.addListener(QuestQueenClient::onLoggingOut);
+    }
+
+    /**
+     * Forget the last server's pack and progress. Without this the next server (or singleplayer world) showed
+     * the previous one's pinned quest on the HUD until its own definitions arrived.
+     */
+    private static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        ClientQuestState.reset();
+        QuestNetwork.clearClientChunks();
     }
 
     private static void onRegisterKeys(RegisterKeyMappingsEvent event) {

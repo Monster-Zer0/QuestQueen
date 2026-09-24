@@ -8,6 +8,7 @@ import dev.aof.questqueen.data.Tile;
 import dev.aof.questqueen.data.task.LocationTask;
 import dev.aof.questqueen.data.task.Task;
 import dev.aof.questqueen.progress.ProgressService;
+import dev.aof.questqueen.progress.TeamService;
 import dev.aof.questqueen.progress.ProgressSnapshot;
 import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.core.BlockPos;
@@ -27,6 +28,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.structure.Structure;
@@ -45,6 +47,7 @@ import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -158,6 +161,12 @@ public final class TaskHooks {
             return;
         }
         ResourceLocation id = event.getAdvancement().id();
+        // Chapter and tile gates can test advancements, and they are baked into the cached snapshot. Drop it so
+        // a gate this advancement opens is seen now, not after the next unrelated progress write.
+        // Recipe unlocks are advancements too and arrive in bursts; no gate is written against them.
+        if (!id.getPath().startsWith("recipes/")) {
+            ProgressService.syncTeam(player.server, TeamService.ensureSolo(player));
+        }
         forEachOfTypes(player, List.of("advancement"), (chapter, tile, index, task) -> {
             if (id.equals(task.advancementId().orElse(null))) {
                 ProgressService.setCompleted(player, chapter.id(), tile.id(), index);
@@ -168,6 +177,10 @@ public final class TaskHooks {
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onUseBlock(PlayerInteractEvent.RightClickBlock event) {
         if (event.getLevel().isClientSide() || !(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        // The event fires once per hand when the main hand passes; count the click once.
+        if (event.getHand() != InteractionHand.MAIN_HAND) {
             return;
         }
         Block block = player.level().getBlockState(event.getPos()).getBlock();
@@ -181,7 +194,7 @@ public final class TaskHooks {
 
     @SubscribeEvent
     public static void onUseEntity(PlayerInteractEvent.EntityInteract event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
+        if (!(event.getEntity() instanceof ServerPlayer player) || event.getHand() != InteractionHand.MAIN_HAND) {
             return;
         }
         // One target has one type, so match interact_entity directly instead of walking every task.
@@ -373,9 +386,14 @@ public final class TaskHooks {
                 return;
             }
             String baselineKey = player.getUUID() + "|" + ProgressSnapshot.questKey(chapter.id(), tile.id()) + "|" + index;
-            Integer baseline = STAT_BASELINE.putIfAbsent(baselineKey, lifetime);
+            Integer baseline = STAT_BASELINE.get(baselineKey);
             if (baseline == null) {
-                baseline = lifetime;
+                // The baseline is memory-only and is dropped on logout and every pack apply. Seed it from the
+                // progress already stored for this task, or a relog would reset the task to zero.
+                String questKey = ProgressSnapshot.questKey(chapter.id(), tile.id());
+                int stored = ProgressService.snapshot(player).value(questKey, ProgressSnapshot.taskKey(index));
+                baseline = lifetime - Math.max(0, stored);
+                STAT_BASELINE.put(baselineKey, baseline);
             }
             int gained = questRelativeGain(lifetime, baseline);
             ProgressService.setTaskValue(player, chapter.id(), tile.id(), index, gained);
@@ -555,6 +573,9 @@ public final class TaskHooks {
     private static void forEachOfTypes(ServerPlayer player, List<String> types, QuadConsumer consumer) {
         PlayerTaskIndex index = indexFor(player);
         ProgressSnapshot snap = ProgressService.snapshot(player);
+        // isUnlocked rebuilds the chapter's completed set and may query SQLite for flag gates. A tile with several
+        // tasks used to pay that once per task on every scan; evaluate it once per tile per scan instead.
+        Map<Tile, Boolean> unlocked = null;
         for (String type : types) {
             List<ActiveTask> tasks = index.byType.get(type);
             if (tasks == null || tasks.isEmpty()) {
@@ -564,7 +585,11 @@ public final class TaskHooks {
                 if (!stillOpen(snap, active.chapter, active.tile, active.taskIndex)) {
                     continue;
                 }
-                if (!ProgressService.isUnlocked(player, active.chapter, active.tile)) {
+                if (unlocked == null) {
+                    unlocked = new IdentityHashMap<>();
+                }
+                if (!unlocked.computeIfAbsent(active.tile,
+                        tile -> ProgressService.isUnlocked(player, active.chapter, tile))) {
                     continue;
                 }
                 consumer.accept(active.chapter, active.tile, active.taskIndex, active.task);
@@ -590,7 +615,7 @@ public final class TaskHooks {
         PlayerTaskIndex existing = INDEX.get(player.getUUID());
         if (existing != null
                 && existing.packEpoch == packEpoch
-                && existing.progressIdentity == System.identityHashCode(snap)) {
+                && existing.progress == snap) {
             return existing;
         }
         PlayerTaskIndex rebuilt = PlayerTaskIndex.build(snap);
@@ -603,12 +628,12 @@ public final class TaskHooks {
 
     private static final class PlayerTaskIndex {
         private final int packEpoch;
-        private final int progressIdentity;
+        private final ProgressSnapshot progress;
         private final Map<String, List<ActiveTask>> byType;
 
-        private PlayerTaskIndex(int packEpoch, int progressIdentity, Map<String, List<ActiveTask>> byType) {
+        private PlayerTaskIndex(int packEpoch, ProgressSnapshot progress, Map<String, List<ActiveTask>> byType) {
             this.packEpoch = packEpoch;
-            this.progressIdentity = progressIdentity;
+            this.progress = progress;
             this.byType = byType;
         }
 
@@ -639,7 +664,7 @@ public final class TaskHooks {
                     }
                 }
             }
-            return new PlayerTaskIndex(TaskHooks.packEpoch, System.identityHashCode(snap), byType);
+            return new PlayerTaskIndex(TaskHooks.packEpoch, snap, byType);
         }
     }
 

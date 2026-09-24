@@ -27,8 +27,11 @@ public final class UiFx {
         return enabled;
     }
 
+    /** Time source; tests pin it so two reads in one assertion cannot straddle a millisecond. */
+    static java.util.function.LongSupplier clock = Util::getMillis;
+
     public static long nowMs() {
-        return Util.getMillis();
+        return clock.getAsLong();
     }
 
     /** Milliseconds elapsed since {@code startMs}, floored at 0. */

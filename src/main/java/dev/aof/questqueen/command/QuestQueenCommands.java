@@ -46,7 +46,11 @@ public final class QuestQueenCommands {
 
     @SubscribeEvent
     public static void register(RegisterCommandsEvent event) {
-        CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
+        register(event.getDispatcher());
+    }
+
+    /** The whole command tree; split from the event so tests can build it and read its permission gates. */
+    static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("questqueen")
                 .then(Commands.literal("team")
                         .then(Commands.literal("create")
@@ -92,7 +96,10 @@ public final class QuestQueenCommands {
                                     ctx.getSource().sendSuccess(() -> Component.literal("Left team"), true);
                                     return 1;
                                 })))
+                // trigger/dialog complete quests and set team flags, so they are for command blocks, functions and
+                // NPC mods (all level 2), not for a survival player typing them into chat.
                 .then(Commands.literal("trigger")
+                        .requires(source -> source.hasPermission(2))
                         .then(Commands.argument("id", StringArgumentType.string())
                                 .executes(ctx -> {
                                     ServerPlayer player = ctx.getSource().getPlayerOrException();
@@ -102,6 +109,7 @@ public final class QuestQueenCommands {
                                     return 1;
                                 })))
                 .then(Commands.literal("dialog")
+                        .requires(source -> source.hasPermission(2))
                         .then(Commands.argument("npc", StringArgumentType.string())
                                 .executes(ctx -> {
                                     ServerPlayer player = ctx.getSource().getPlayerOrException();

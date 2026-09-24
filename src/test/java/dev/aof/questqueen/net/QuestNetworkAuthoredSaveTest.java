@@ -2,6 +2,7 @@ package dev.aof.questqueen.net;
 
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
+import dev.aof.questqueen.data.BookChrome;
 import dev.aof.questqueen.data.Chapter;
 import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
@@ -318,5 +319,26 @@ class QuestNetworkAuthoredSaveTest {
                 "no new entry may remain when the write failed — measured by inventory, added=" + added);
         assertTrue(Files.exists(chaptersFile) && "obstacle".equals(Files.readString(chaptersFile)),
                 "the pre-existing obstacle must never be deleted or altered");
+    }
+
+    @Test
+    void bookChromeLandsWhereTheReloadListenerReadsIt() throws Exception {
+        BookChrome chrome = new BookChrome("Saga", 0xFF123456, 1.5f, true, false);
+        Path file = QuestNetwork.writeAuthoredChrome(root(), chrome);
+        assertEquals(root().resolve("data").resolve("questqueen").resolve("questqueen").resolve("book.json"), file);
+        assertTrue(Files.exists(root().resolve("pack.mcmeta")), "the authored pack needs its mcmeta to load");
+        BookChrome read = BookChrome.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(Files.readString(file)))
+                .getOrThrow(RuntimeException::new);
+        assertEquals(chrome, read);
+    }
+
+    @Test
+    void craftedChromePacketIsClampedIntoRange() {
+        BookChrome chrome = new AuthorChromeC2S("", 0, Float.NaN, false, true).chrome();
+        assertEquals(BookChrome.DEFAULT.sidebarTitle(), chrome.sidebarTitle(), "a blank title falls back");
+        assertEquals(BookChrome.DEFAULT.titleScale(), chrome.titleScale(), "NaN must not survive the clamp");
+        assertEquals(2.0f, new AuthorChromeC2S("x", 0, 99f, false, true).chrome().titleScale());
+        assertEquals(AuthorChromeC2S.MAX_TITLE,
+                AuthorChromeC2S.of(BookChrome.DEFAULT.withTitle("y".repeat(500))).sidebarTitle().length());
     }
 }
