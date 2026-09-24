@@ -12,6 +12,7 @@ import dev.aof.questqueen.data.GateOp;
 import dev.aof.questqueen.data.GridPos;
 import dev.aof.questqueen.data.Icon;
 import dev.aof.questqueen.data.Link;
+import dev.aof.questqueen.data.QuestDefinitions;
 import dev.aof.questqueen.data.Scroll;
 import dev.aof.questqueen.data.StartNodes;
 import dev.aof.questqueen.data.Tile;
@@ -25,11 +26,13 @@ import dev.aof.questqueen.data.task.TaskFactory;
 import dev.aof.questqueen.data.task.TaskVerbs;
 import dev.aof.questqueen.net.AuthorChromeC2S;
 import dev.aof.questqueen.net.AuthorSaveC2S;
+import dev.aof.questqueen.net.ClaimAllC2S;
 import dev.aof.questqueen.net.ClaimChoiceC2S;
 import dev.aof.questqueen.net.ClaimRewardsC2S;
 import dev.aof.questqueen.net.PinC2S;
 import dev.aof.questqueen.net.QuestNetwork;
 import dev.aof.questqueen.net.SubmitTaskC2S;
+import dev.aof.questqueen.progress.ClaimAll;
 import dev.aof.questqueen.progress.ProgressSnapshot;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.platform.Window;
@@ -293,8 +296,10 @@ public class QuestBookScreen extends Screen {
     /** Log view scroll offset in pixels, and the measured content height that bounds it. */
     private int logScroll;
     private int logContentH;
+    /** Scroll offset for the CLAIM ALL preview list. */
+    private int claimAllScroll;
 
-    private enum ModalKind { NONE, GOTCHA, XOR }
+    private enum ModalKind { NONE, GOTCHA, XOR, CLAIM_ALL }
 
     private record SidebarRow(ResourceLocation id, int y, int depth, boolean locked, boolean hasChildren,
                               boolean collapsed, int caretX) {
@@ -534,6 +539,7 @@ public class QuestBookScreen extends Screen {
         }
         modal = ModalKind.NONE;
         modalTileId = "";
+        claimAllScroll = 0;
     }
 
     /** Locked sidebar / probe chapter — GOTCHA or fade-lock after the cap. */
@@ -1156,7 +1162,13 @@ public class QuestBookScreen extends Screen {
             modalH = box.h();
             modalEdge = box.edge();
             modalHeaderW = box.headerW();
-            modalChips = List.of(new QuestOverlayWidget.Chip(box.btnX(), box.btnY(), box.btnW(), box.btnH(), QuestColors.CURRENT));
+            if (box.cancelW() > 0) {
+                modalChips = List.of(
+                        new QuestOverlayWidget.Chip(box.btnX(), box.btnY(), box.btnW(), box.btnH(), QuestColors.CURRENT),
+                        new QuestOverlayWidget.Chip(box.cancelX(), box.btnY(), box.cancelW(), box.btnH(), QuestColors.SIDEBAR_EDGE));
+            } else {
+                modalChips = List.of(new QuestOverlayWidget.Chip(box.btnX(), box.btnY(), box.btnW(), box.btnH(), QuestColors.CURRENT));
+            }
         }
         modalPanel.sync(showModal, modalX, modalY, modalW, modalH, QuestColors.CARD, modalEdge, true, modalHeaderW,
                 false, true, true, modalChips);
@@ -1796,6 +1808,10 @@ public class QuestBookScreen extends Screen {
                 MockChrome.box(graphics, fitX(), 6, FIT_S, FIT_S, QuestColors.CARD);
                 MockChrome.frame(graphics, fitX(), 6, FIT_S, FIT_S, QuestColors.SIDEBAR_EDGE);
             }
+            if (claimAllShown()) {
+                MockChrome.box(graphics, claimAllX(), 6, claimAllW(), 14, QuestColors.CARD);
+                MockChrome.frame(graphics, claimAllX(), 6, claimAllW(), 14, QuestColors.CURRENT);
+            }
         }
         MockChrome.box(graphics, logX(), 6, LOG_W, 14, QuestColors.CARD);
         MockChrome.frame(graphics, logX(), 6, LOG_W, 14, QuestColors.SIDEBAR_EDGE);
@@ -2089,6 +2105,10 @@ public class QuestBookScreen extends Screen {
             }
         }
         drawButtonLabel(graphics, logX(), 6, LOG_W, 14, logOpen ? "BOOK" : "LOG", QuestColors.SIDEBAR_TEXT);
+        if (claimAllShown()) {
+            drawButtonLabel(graphics, claimAllX(), 6, claimAllW(), 14, "CLAIM ALL", QuestColors.TEXT);
+            drawClaimBracket(graphics, claimAllX(), 6, claimAllW(), 14);
+        }
         if (!QuestConfig.GITHUB_ISSUES_URL.get().isBlank() && !selectedId.isEmpty()) {
             drawButton(graphics, width - 70, height - 22, 62, 14, "REPORT", QuestColors.PORT_RED);
         }
@@ -3034,6 +3054,10 @@ public class QuestBookScreen extends Screen {
 
     private void drawModal(GuiGraphics graphics) {
         ModalLayout box = modalLayout();
+        if (modal == ModalKind.CLAIM_ALL) {
+            drawClaimAllModal(graphics, box);
+            return;
+        }
         tinyString(graphics, box.tag(), box.x() + 6, box.y() + 2, MockChrome.tagInk(box.edge()));
         drawCentered(graphics, box.title(), box.x(), box.y() + 16, box.w(), QuestColors.COMPLETED);
         drawCentered(graphics, box.sub(), box.x(), box.y() + 30, box.w(), QuestColors.TEXT);
@@ -3077,11 +3101,15 @@ public class QuestBookScreen extends Screen {
     }
 
     private record ModalLayout(int x, int y, int w, int h, int btnX, int btnY, int btnW, int btnH,
+                               int cancelX, int cancelW,
                                int headerW, int edge, String tag, String title, String sub, String btn,
-                               List<String> body) {
+                               List<String> body, int bodyTop, int bodyH) {
     }
 
     private ModalLayout modalLayout() {
+        if (modal == ModalKind.CLAIM_ALL) {
+            return claimAllLayout();
+        }
         boolean xor = modal == ModalKind.XOR;
         int edge = xor ? QuestColors.XOR_EDGE : QuestColors.MODAL_PINK;
         String tag = xor ? "XOR QUEST COMPLETE" : "LOCKED";
@@ -3119,7 +3147,163 @@ public class QuestBookScreen extends Screen {
         x = Math.max(4, Math.min(x, Math.max(4, width - w - 4)));
         int y = (height - h) / 2;
         return new ModalLayout(x, y, w, h, x + (w - btnW) / 2, y + h - 8 - btnH, btnW, btnH,
-                headerW, edge, tag, title, sub, btn, body);
+                0, 0, headerW, edge, tag, title, sub, btn, body, 0, 0);
+    }
+
+    private boolean claimAllUnlocked(Tile tile) {
+        return chapter != null && ClientQuestState.isUnlocked(chapter, tile);
+    }
+
+    private boolean claimAllShown() {
+        return !authoring && !logOpen && !isIntroChapter() && chapter != null
+                && !ClaimAll.grantable(chapter, ClientQuestState.progress, this::claimAllUnlocked).isEmpty();
+    }
+
+    private void openClaimAll() {
+        claimAllScroll = 0;
+        modal = ModalKind.CLAIM_ALL;
+        modalTileId = "";
+    }
+
+    private void confirmClaimAll() {
+        if (chapter != null && !ClaimAll.grantable(chapter, ClientQuestState.progress, this::claimAllUnlocked).isEmpty()) {
+            QuestNetwork.sendToServer(new ClaimAllC2S(chapter.id()));
+        }
+        dismissModal();
+    }
+
+    private record ClaimLine(String text, ItemStack icon, boolean header) {
+    }
+
+    private List<ClaimLine> claimAllLines() {
+        List<ClaimLine> lines = new ArrayList<>();
+        if (chapter == null) {
+            return lines;
+        }
+        ProgressSnapshot snap = ClientQuestState.progress;
+        for (Tile tile : ClaimAll.grantable(chapter, snap, this::claimAllUnlocked)) {
+            lines.add(new ClaimLine(claimAllTileName(tile), ItemStack.EMPTY, true));
+            lines.addAll(claimAllPayoff(tile, false));
+        }
+        List<Tile> picks = ClaimAll.pickOnQuest(chapter, snap, this::claimAllUnlocked);
+        if (!picks.isEmpty()) {
+            lines.add(new ClaimLine("PICK ON THE QUEST", ItemStack.EMPTY, true));
+            for (Tile tile : picks) {
+                lines.add(new ClaimLine(claimAllTileName(tile), ItemStack.EMPTY, true));
+                lines.addAll(claimAllPayoff(tile, true));
+            }
+        }
+        return lines;
+    }
+
+    private static String claimAllTileName(Tile tile) {
+        String title = tile.title().isBlank() ? tile.id() : tile.title();
+        return title.toUpperCase(Locale.ROOT);
+    }
+
+    private List<ClaimLine> claimAllPayoff(Tile tile, boolean choice) {
+        List<ClaimLine> lines = new ArrayList<>();
+        for (Reward reward : tile.rewards()) {
+            if (reward instanceof ChoiceReward pick) {
+                if (choice) {
+                    for (Reward option : pick.options()) {
+                        lines.add(new ClaimLine(option.describe(), rewardFace(option), false));
+                    }
+                }
+            } else {
+                lines.add(new ClaimLine(reward.describe(), rewardFace(reward), false));
+            }
+        }
+        for (ResourceLocation scroll : tile.scrolls()) {
+            String name = QuestDefinitions.scroll(scroll).map(Scroll::title).filter(title -> !title.isBlank())
+                    .orElse(scroll.getPath());
+            lines.add(new ClaimLine("scroll  " + name, ItemStack.EMPTY, false));
+        }
+        if (lines.isEmpty()) {
+            lines.add(new ClaimLine("no reward", ItemStack.EMPTY, false));
+        }
+        return lines;
+    }
+
+    private int claimAllContentH(List<ClaimLine> lines) {
+        int h = 0;
+        for (ClaimLine line : lines) {
+            h += line.header() ? 12 : 18;
+        }
+        return h;
+    }
+
+    private ModalLayout claimAllLayout() {
+        List<ClaimLine> lines = claimAllLines();
+        int w = 268;
+        int btnH = 12;
+        int claimW = pillW("CLAIM");
+        int cancelW = pillW("CANCEL");
+        int headerBlock = 46;
+        int footer = 8 + btnH + 8;
+        int content = claimAllContentH(lines);
+        int maxH = Math.max(headerBlock + footer + 36, Math.min(height - 24, 240));
+        int bodyH = Math.max(36, Math.min(content, maxH - headerBlock - footer));
+        int h = headerBlock + bodyH + footer;
+        int x = boardLeft() + Math.max(8, (contentWidth() - w) / 2);
+        x = Math.max(4, Math.min(x, Math.max(4, width - w - 4)));
+        int y = Math.max(8, (height - h) / 2);
+        int pair = claimW + 8 + cancelW;
+        int claimX = x + (w - pair) / 2;
+        int cancelX = claimX + claimW + 8;
+        String sub = chapter == null || chapter.title().isBlank()
+                ? ""
+                : chapter.title().toUpperCase(Locale.ROOT);
+        int headerW = tabWidth("REWARDS", w - 20);
+        return new ModalLayout(x, y, w, h, claimX, y + h - 8 - btnH, claimW, btnH, cancelX, cancelW,
+                headerW, QuestColors.CURRENT, "REWARDS", "CLAIM ALL", sub, "CLAIM", List.of(),
+                y + headerBlock, bodyH);
+    }
+
+    private void drawClaimAllModal(GuiGraphics graphics, ModalLayout box) {
+        tinyString(graphics, box.tag(), box.x() + 6, box.y() + 2, MockChrome.tagInk(box.edge()));
+        drawCentered(graphics, box.title(), box.x(), box.y() + 16, box.w(), QuestColors.TEXT);
+        if (!box.sub().isEmpty()) {
+            drawCentered(graphics, box.sub(), box.x(), box.y() + 30, box.w(), QuestColors.MUTED);
+        }
+        List<ClaimLine> lines = claimAllLines();
+        int content = claimAllContentH(lines);
+        int maxScroll = Math.max(0, content - box.bodyH());
+        claimAllScroll = Math.max(0, Math.min(claimAllScroll, maxScroll));
+        int clipTop = box.bodyTop();
+        int clipBottom = clipTop + box.bodyH();
+        graphics.enableScissor(box.x() + 8, clipTop, box.x() + box.w() - 8, clipBottom);
+        try {
+            int ly = clipTop - claimAllScroll;
+            for (ClaimLine line : lines) {
+                int rowH = line.header() ? 12 : 18;
+                if (ly + rowH >= clipTop && ly <= clipBottom) {
+                    if (line.header()) {
+                        graphics.drawString(font, line.text(), box.x() + 12, ly + 1, QuestColors.SIDEBAR_HEADER, false);
+                    } else {
+                        if (!line.icon().isEmpty()) {
+                            graphics.renderItem(line.icon(), box.x() + 12, ly);
+                            drawRewardCountOver(graphics, line.icon(), box.x() + 12, ly);
+                        }
+                        int textX = line.icon().isEmpty() ? box.x() + 12 : box.x() + 32;
+                        graphics.drawString(font, ellipsize(line.text(), box.w() - (textX - box.x()) - 16),
+                                textX, ly + 4, QuestColors.TEXT, false);
+                    }
+                }
+                ly += rowH;
+            }
+        } finally {
+            graphics.disableScissor();
+        }
+        if (maxScroll > 0) {
+            int trackX = box.x() + box.w() - 6;
+            int thumbH = Math.max(12, box.bodyH() * box.bodyH() / Math.max(content, 1));
+            int thumbY = clipTop + (int) ((box.bodyH() - thumbH) * (claimAllScroll / (double) maxScroll));
+            MockChrome.box(graphics, trackX, clipTop, 2, box.bodyH(), QuestColors.SIDEBAR_EDGE);
+            MockChrome.box(graphics, trackX, thumbY, 2, thumbH, QuestColors.SIDEBAR_HEADER);
+        }
+        drawButtonLabel(graphics, box.btnX(), box.btnY(), box.btnW(), box.btnH(), box.btn());
+        drawButtonLabel(graphics, box.cancelX(), box.btnY(), box.cancelW(), box.btnH(), "CANCEL", QuestColors.TEXT);
     }
 
 
@@ -4071,6 +4255,18 @@ public class QuestBookScreen extends Screen {
         }
         if (modal != ModalKind.NONE) {
             ModalLayout box = modalLayout();
+            if (modal == ModalKind.CLAIM_ALL) {
+                if (over(box.btnX(), box.btnY(), box.btnW(), box.btnH(), mouseX, mouseY)) {
+                    confirmClaimAll();
+                    return true;
+                }
+                if (over(box.cancelX(), box.btnY(), box.cancelW(), box.btnH(), mouseX, mouseY)
+                        || over(box.x() + box.w() - 14, box.y() + 1, 12, 12, mouseX, mouseY)) {
+                    dismissModal();
+                    return true;
+                }
+                return true;
+            }
             if (over(box.btnX(), box.btnY(), box.btnW(), box.btnH(), mouseX, mouseY)) {
                 dismissModal();
                 return true;
@@ -4152,6 +4348,10 @@ public class QuestBookScreen extends Screen {
                     return true;
                 }
             }
+            return true;
+        }
+        if (claimAllShown() && over(claimAllX(), 6, claimAllW(), 14, mouseX, mouseY)) {
+            openClaimAll();
             return true;
         }
         if (over(logX(), 6, LOG_W, 14, mouseX, mouseY)) {
@@ -4346,6 +4546,14 @@ public class QuestBookScreen extends Screen {
         if (picker.mouseScrolled(scrollY)) {
             return true;
         }
+        if (modal == ModalKind.CLAIM_ALL) {
+            ModalLayout box = modalLayout();
+            int max = Math.max(0, claimAllContentH(claimAllLines()) - box.bodyH());
+            if (max > 0) {
+                claimAllScroll = Math.max(0, Math.min(max, claimAllScroll - (int) Math.round(scrollY * 18)));
+            }
+            return true;
+        }
         if (logOpen) {
             // The log owns the wheel while it is open: it is a full-panel view with its own overflow.
             int max = logMaxScroll();
@@ -4390,6 +4598,10 @@ public class QuestBookScreen extends Screen {
         }
         if (picker.open) {
             return picker.keyTyped((char) 0, keyCode) || super.keyPressed(keyCode, scanCode, modifiers);
+        }
+        if (modal == ModalKind.CLAIM_ALL && keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            dismissModal();
+            return true;
         }
         if (editingTitle || editingBody) {
             if (keyCode == GLFW.GLFW_KEY_ENTER) {
@@ -4711,6 +4923,9 @@ public class QuestBookScreen extends Screen {
         ClientQuestState.chapter(id).ifPresent(next -> {
             if (!authoring && !ClientQuestState.isChapterListed(next)) {
                 return;
+            }
+            if (modal == ModalKind.CLAIM_ALL) {
+                dismissModal();
             }
             this.chapter = next;
             ClientQuestState.rememberChapter(next.id());
@@ -5334,8 +5549,17 @@ public class QuestBookScreen extends Screen {
         return width - 8 - LOG_W;
     }
 
+    private int claimAllW() {
+        return pillW("CLAIM ALL");
+    }
+
+    private int claimAllX() {
+        return logX() - 6 - claimAllW();
+    }
+
     private int fitX() {
-        return logX() - 6 - FIT_S;
+        int right = claimAllShown() ? claimAllX() : logX();
+        return right - 6 - FIT_S;
     }
 
     private int searchX() {

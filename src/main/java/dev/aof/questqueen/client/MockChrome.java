@@ -84,7 +84,12 @@ public final class MockChrome {
         box(graphics, x, y, w, h, face);
         frame(graphics, x, y, w, h, edge);
         if (edge != 0 && headerW > 0) {
-            statusTab(graphics, x, y, Math.min(headerW, w - 16), edge, face);
+            // Inset by FRAME so COMPLETED/CURRENT tab sits inside the gold border
+            // (drawing at x,y painted over the top-left frame corner).
+            int tabX = x + FRAME;
+            int tabY = y + FRAME;
+            int tabMax = Math.max(0, w - 16 - FRAME);
+            statusTab(graphics, tabX, tabY, Math.min(headerW, tabMax), edge, face);
         }
     }
 
@@ -116,9 +121,9 @@ public final class MockChrome {
         cornerPlus(graphics, x + w, y + h, color);
     }
 
+    /** Header label ink. Always theme text — never force near-black on CURRENT/COMPLETED/EDIT tabs. */
     public static int tagInk(int edge) {
-        return edge != QuestColors.CURRENT && edge != QuestColors.COMPLETED && edge != QuestColors.EDIT
-                ? tagWhite() : INK;
+        return tagWhite();
     }
 
     public static void cornerOrnaments(GuiGraphics graphics, int x, int y, int size, int color) {

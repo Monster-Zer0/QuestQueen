@@ -344,6 +344,54 @@ public final class ProgressService {
         return true;
     }
 
+    /**
+     * Claim every ready non-choice reward in one chapter. The eligible set is recomputed here; a client
+     * list is never trusted. One sync and one chat line, not one of each per quest.
+     */
+    public static int claimChapterRewards(ServerPlayer player, ResourceLocation chapterId) {
+        Optional<Chapter> chapter = QuestDefinitions.chapter(chapterId);
+        if (chapter.isEmpty() || !isChapterUnlocked(player, chapter.get())) {
+            return 0;
+        }
+        Chapter open = chapter.get();
+        ProgressSnapshot snap = snapshot(player);
+        List<Tile> tiles = ClaimAll.grantable(open, snap, tile -> isUnlocked(player, open, tile));
+        if (tiles.isEmpty()) {
+            return 0;
+        }
+        String teamId = TeamService.ensureSolo(player);
+        int granted = 0;
+        SUSPEND_SYNC.set(true);
+        try {
+            for (Tile tile : tiles) {
+                String questId = ProgressSnapshot.questKey(chapterId, tile.id());
+                if (!isCompleted(teamId, questId, "tile") || isCompleted(teamId, questId, "claimed")
+                        || hasChoiceReward(tile)) {
+                    continue;
+                }
+                for (Reward reward : tile.rewards()) {
+                    reward.grant(player);
+                }
+                for (ResourceLocation scroll : tile.scrolls()) {
+                    grantScroll(player, scroll, false);
+                }
+                writeProgress(teamId, questId, "claimed", 1, true);
+                granted++;
+            }
+        } finally {
+            SUSPEND_SYNC.set(false);
+        }
+        if (granted == 0) {
+            return 0;
+        }
+        noteMutation(player, teamId);
+        syncTeam(player.server, teamId);
+        player.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.4F, 1.2F);
+        String title = open.title().isBlank() ? open.id().toString() : open.title();
+        player.sendSystemMessage(Component.translatable("questqueen.rewards_claimed_chapter", granted, title));
+        return granted;
+    }
+
     /** Clear the claimed flag so CLAIM / TAKE A·B can run again (ops repairing a missed grant). */
     public static boolean unclaimRewards(ServerPlayer player, ResourceLocation chapterId, String tileId) {
         Optional<Chapter> chapter = QuestDefinitions.chapter(chapterId);
