@@ -30,8 +30,8 @@ import {
   type UnlockCondition,
 } from "./types";
 import { emptyCatalog, fromApi, type CatalogEntry, type PackCatalog } from "./packCatalog";
-import { itemSelectHtml, readItemSelect, wireItemSelects } from "./itemSelect";
-import { glyphPickerHtml, previewIntroHtml, readGlyph, wireGlyphPicker } from "./glyphs";
+import { iconUrl, itemSelectHtml, readItemSelect, wireItemSelects } from "./itemSelect";
+import { glyphPickerHtml, glyphSvg, previewIntroHtml, readGlyph, wireGlyphPicker } from "./glyphs";
 import {
   DEFAULT_THEME_ID,
   STOCK_BACKGROUNDS,
@@ -42,7 +42,8 @@ import {
 const TILE = 64;
 const GAP = 12;
 const STRIDE = TILE + GAP;
-const CAPTION_FONT = "'Courier New', monospace";
+const CAPTION_FONT = "'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif";
+const MONO_FONT = "'Cascadia Mono', Consolas, 'Courier New', monospace";
 const canvas = document.getElementById("grid") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
 const card = document.getElementById("card") as HTMLElement;
@@ -69,11 +70,15 @@ const CARD_MIN_H = 200;
 
 let chapter: Chapter = structuredClone(STARTER);
 let packChapters: Chapter[] = [structuredClone(STARTER)];
+/** Board size in CSS pixels. The backing store is this times devicePixelRatio, so text and icons stay sharp. */
+let viewW = 960;
+let viewH = 640;
 let camX = -STRIDE;
 let camY = -STRIDE;
 let zoom = 1; // Slice 2: canvas zoom (LOD)
 const ZOOM_MIN = 0.35;
 const ZOOM_MAX = 2.5;
+const FIT_ZOOM_MAX = 1.6;
 let selected = "make_chest";
 let unlocked = false;
 type UiMode = "view" | "edit" | "link";
@@ -179,12 +184,6 @@ closeCardBtn.addEventListener("click", (event) => {
   setCardOpen(false);
   draw();
 });
-wireCardWindow();
-applyCardGeom();
-setLocked(true, "Waiting for Minecraft…");
-syncGateButtons();
-updateLinkStatus();
-renderChapterTree();
 
 function rememberChapter() {
   const index = packChapters.findIndex((entry) => entry.id === chapter.id);
@@ -363,9 +362,17 @@ function setCardOpen(open: boolean) {
   }
 }
 
+function sizeCanvas() {
+  if (canvas.clientWidth <= 0 || canvas.clientHeight <= 0) return;
+  const dpr = window.devicePixelRatio || 1;
+  viewW = canvas.clientWidth;
+  viewH = canvas.clientHeight;
+  canvas.width = Math.round(viewW * dpr);
+  canvas.height = Math.round(viewH * dpr);
+}
+
 function resize() {
-  canvas.width = canvas.clientWidth;
-  canvas.height = canvas.clientHeight;
+  sizeCanvas();
   applyCardGeom();
   draw();
 }
@@ -411,12 +418,7 @@ function setZoomAt(next: number, anchorX: number, anchorY: number) {
 /** Fit camera to tile AABB (+pad), else chapter grid. Data S2. */
 function fitChapterBoard() {
   // Ensure canvas has layout size (Data saw no auto-fit when width was 0 mid-switch)
-  if (canvas.clientWidth > 0 && canvas.clientHeight > 0) {
-    canvas.width = canvas.clientWidth;
-    canvas.height = canvas.clientHeight;
-  }
-  const viewW = canvas.width || canvas.clientWidth || 960;
-  const viewH = canvas.height || canvas.clientHeight || 640;
+  sizeCanvas();
   const pad = 48;
   const tiles = chapter.tiles ?? [];
   let minX = 0, minY = 0, maxX = chapterGridWidth(chapter), maxY = chapterGridHeight(chapter);
@@ -430,9 +432,13 @@ function fitChapterBoard() {
   const worldH = Math.max(1, maxY - minY) * STRIDE;
   const zx = (viewW - pad * 2) / worldW;
   const zy = (viewH - pad * 2) / worldH;
-  zoom = clampZoom(Math.min(zx, zy, ZOOM_MAX));
-  camX = minX * STRIDE * zoom - pad;
-  camY = minY * STRIDE * zoom - pad;
+  // Past ~1.6x a fitted small chapter is just big tiles; leave room around it instead.
+  zoom = clampZoom(Math.min(zx, zy, FIT_ZOOM_MAX));
+  // Centre the content box (tile extents, not the trailing gap) in the view.
+  const contentW = ((maxX - minX) * STRIDE - GAP) * zoom;
+  const contentH = ((maxY - minY) * STRIDE - GAP) * zoom;
+  camX = minX * STRIDE * zoom - (viewW - contentW) / 2;
+  camY = minY * STRIDE * zoom - (viewH - contentH) / 2;
   syncZoomChrome();
 }
 
@@ -458,9 +464,9 @@ function gateColor(op: GateOpName): string {
   return "#C8C0D8";
 }
 
-function drawArrowHead(x: number, y: number, dx: number, dy: number, color: string) {
+function drawArrowHead(x: number, y: number, dx: number, dy: number, color: string, len = 6) {
   ctx.fillStyle = color;
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < len; i++) {
     const px = x - dx * i;
     const py = y - dy * i;
     if (dx !== 0) ctx.fillRect(px, py - i, 1, i * 2 + 1);
@@ -489,12 +495,18 @@ function drawLinkArrow(from: Tile, to: Tile, link: Link) {
     ctx.lineTo(x2, y2);
   }
   ctx.stroke();
-  const dx = x1 === x2 ? 0 : Math.sign(x2 - x1);
-  const dy = y1 === y2 ? 0 : (x1 === x2 ? Math.sign(y2 - y1) : Math.sign(y2 - y1));
-  if (x1 !== x2 && y1 !== y2) drawArrowHead(x2, y2, 0, Math.sign(y2 - y1) || 1, color);
-  else drawArrowHead(x2, y2, dx, dy === 0 && dx === 0 ? 1 : dy, color);
+  // Direction of the final segment; the head goes on the destination's edge; at its centre the tile hid it.
+  let fdx = 0;
+  let fdy = 0;
+  if (x1 !== x2 && y1 !== y2) fdy = Math.sign(y2 - y1) || 1;
+  else if (x1 !== x2) fdx = Math.sign(x2 - x1);
+  else fdy = Math.sign(y2 - y1) || 1;
+  const headLen = Math.max(4, Math.round(5 * Math.min(zoom, 1.6)));
+  drawArrowHead(Math.round(x2 - fdx * (size / 2 + 1)), Math.round(y2 - fdy * (size / 2 + 1)), fdx, fdy, color, headLen);
   // Edge chip: Link mode always; else only at high LOD (Data S2 — hide gate text in overview)
-  const showChip = canLink() || isSelectedEdge(link); // Data: no lod≥2 spray in Edit/View
+  // Data: no lod≥2 spray in Edit/View. Outside Link mode the chip also needs a gap wide enough to hold it,
+  // or it lands on the tiles either side.
+  const showChip = canLink() || (isSelectedEdge(link) && GAP * zoom >= 30);
   if (showChip) {
     const mx = x1 === x2 ? x1 + 4 : (x1 + x2) / 2;
     const my = y1 === y2 ? (y1 + y2) / 2 : y1;
@@ -504,7 +516,7 @@ function drawLinkArrow(from: Tile, to: Tile, link: Link) {
     ctx.strokeStyle = color;
     ctx.strokeRect(mx - 14.5, my - 10.5, 29, 17);
     ctx.fillStyle = color;
-    ctx.font = "11px 'Courier New', monospace";
+    ctx.font = `11px ${MONO_FONT}`;
     ctx.textAlign = "center";
     ctx.fillText(label, mx, my + 3);
     ctx.textAlign = "left";
@@ -517,23 +529,34 @@ function drawMinimap() {
   const mctx = minimapCtx;
   const w = minimap.width;
   const h = minimap.height;
-  mctx.fillStyle = "#0c0a12";
+  const theme = activeTheme();
+  mctx.fillStyle = "#0c0810";
   mctx.fillRect(0, 0, w, h);
   const gw = Math.max(1, chapterGridWidth(chapter));
   const gh = Math.max(1, chapterGridHeight(chapter));
   const scale = Math.min(w / (gw * STRIDE), h / (gh * STRIDE));
   for (const tile of chapter.tiles ?? []) {
     const inbound = (chapter.links ?? []).some((l) => l.to === tile.id);
-    mctx.fillStyle = inbound ? "#3a3050" : "#3dff6e";
+    mctx.fillStyle = tile.id === selected ? theme.text : inbound ? theme.lockedEdge : theme.current;
     mctx.fillRect(tile.pos.x * STRIDE * scale, tile.pos.y * STRIDE * scale, Math.max(2, TILE * scale), Math.max(2, TILE * scale));
   }
+  // The map only earns its corner when part of the chapter is off screen.
+  const stride = stridePx();
+  const size = tileSize();
+  const allInView = (chapter.tiles ?? []).every((t) => {
+    const sx = t.pos.x * stride - camX;
+    const sy = t.pos.y * stride - camY;
+    return sx >= 0 && sy >= 0 && sx + size <= viewW && sy + size <= viewH;
+  });
+  minimap.classList.toggle("idle", allInView && !chapterHasChildren(chapter.id));
   // viewport rect
   const vx = camX * scale;
   const vy = camY * scale;
-  const vw = (canvas.width / zoom) * scale;
-  const vh = (canvas.height / zoom) * scale;
-  mctx.strokeStyle = "#ffb84a";
-  mctx.strokeRect(vx, vy, vw, vh);
+  const vw = (viewW / zoom) * scale;
+  const vh = (viewH / zoom) * scale;
+  mctx.strokeStyle = "#d6b25e";
+  mctx.lineWidth = 1;
+  mctx.strokeRect(Math.round(vx) + 0.5, Math.round(vy) + 0.5, Math.round(vw), Math.round(vh));
 }
 
 minimap?.addEventListener("click", (event) => {
@@ -544,13 +567,13 @@ minimap?.addEventListener("click", (event) => {
   const scale = Math.min(minimap.width / (gw * STRIDE), minimap.height / (gh * STRIDE));
   const mx = (event.clientX - rect.left) * (minimap.width / rect.width);
   const my = (event.clientY - rect.top) * (minimap.height / rect.height);
-  camX = mx / scale - canvas.width / (2 * zoom);
-  camY = my / scale - canvas.height / (2 * zoom);
+  camX = mx / scale - viewW / (2 * zoom);
+  camY = my / scale - viewH / (2 * zoom);
   draw();
 });
 
 function setCaptionFont(px: number) {
-  ctx.font = `${px}px ${CAPTION_FONT}`;
+  ctx.font = `600 ${px}px ${CAPTION_FONT}`;
 }
 
 /** Cut on a word boundary when one fits; otherwise keep as many glyphs as fit. Width stays <= maxWidth. */
@@ -636,9 +659,10 @@ function paintCaptionLines(
   lineH: number,
   fontPx: number,
   bottom: number,
+  align: CanvasTextAlign = "left",
 ) {
   ctx.textBaseline = "top";
-  ctx.textAlign = "left";
+  ctx.textAlign = align;
   let y = top;
   for (const line of lines) {
     if (y + fontPx > bottom + 0.5) break;
@@ -646,6 +670,56 @@ function paintCaptionLines(
     y += lineH;
   }
   ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left";
+}
+
+/*
+ * Tile faces. Item icons come from Minecraft through the bridge (/api/icon renders the real item); glyphs are the
+ * mod's own 16x16 pixel set rendered from SVG. Images load lazily and one coalesced redraw lands them.
+ */
+const iconCache = new Map<string, HTMLImageElement | null>();
+let iconRedraw = 0;
+
+function cachedImage(key: string, src: string): HTMLImageElement | null {
+  const hit = iconCache.get(key);
+  if (hit !== undefined) return hit && hit.complete && hit.naturalWidth > 0 ? hit : null;
+  const img = new Image();
+  img.decoding = "async";
+  img.onload = () => {
+    if (!iconRedraw) iconRedraw = requestAnimationFrame(() => { iconRedraw = 0; draw(); });
+  };
+  img.onerror = () => iconCache.set(key, null);
+  img.src = src;
+  iconCache.set(key, img);
+  return null;
+}
+
+function tileIconImage(tile: Tile, color: string): HTMLImageElement | null {
+  const glyph = tile.icon?.glyph;
+  if (glyph) {
+    const svg = glyphSvg(glyph, color);
+    if (svg) return cachedImage(`g:${glyph}:${color}`, `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`);
+  }
+  const item = tile.icon?.item;
+  if (item && unlocked) return cachedImage(`i:${item}`, iconUrl(bridgeBase(), item));
+  return null;
+}
+
+/** Icon edge in px: whole multiples of 8 so 16px pixel art scales without shimmer. */
+function tileIconPx(size: number, band: number): number {
+  const room = Math.min(size * 0.36, size - band - 18);
+  return Math.max(8, Math.floor(room / 8) * 8);
+}
+
+function roundRectPath(x: number, y: number, w: number, h: number, r: number) {
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
 }
 
 function tileOrigin(tile: Tile): { x: number; y: number } {
@@ -825,15 +899,17 @@ function draw() {
   const lod = labelLod();
   const size = tileSize();
   const stride = stridePx();
+  const dpr = window.devicePixelRatio || 1;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = theme.void;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, viewW, viewH);
   if (chapterHasChildren(chapter.id)) {
     ctx.fillStyle = theme.text;
-    ctx.font = "14px 'Courier New', monospace";
+    ctx.font = `600 15px ${CAPTION_FONT}`;
     ctx.fillText("Act intro — board is not shown in-game", 24, 48);
     ctx.fillStyle = theme.neu;
-    ctx.font = "12px 'Courier New', monospace";
+    ctx.font = `13px ${CAPTION_FONT}`;
     ctx.fillText("Child chapters still use a quest board. Edit intro image + body in the card.", 24, 70);
     return;
   }
@@ -841,24 +917,30 @@ function draw() {
   const gh = chapterGridHeight(chapter);
   const minGx = Math.max(0, Math.floor(camX / stride) - 1);
   const minGy = Math.max(0, Math.floor(camY / stride) - 1);
-  const maxGx = Math.min(gw, Math.ceil((camX + canvas.width) / stride) + 1);
-  const maxGy = Math.min(gh, Math.ceil((camY + canvas.height) / stride) + 1);
+  const maxGx = Math.min(gw, Math.ceil((camX + viewW) / stride) + 1);
+  const maxGy = Math.min(gh, Math.ceil((camY + viewH) / stride) + 1);
   for (let gx = minGx; gx < maxGx; gx++) {
     for (let gy = minGy; gy < maxGy; gy++) {
       const p = screen(gx, gy);
       // Empty slots: faint dots only (not loud empty tiles)
-      ctx.fillStyle = theme.cell;
-      ctx.globalAlpha = lod === 0 ? 0.25 : 0.45;
-      const dot = Math.max(2, size * 0.08);
-      ctx.fillRect(p.x + size / 2 - dot / 2, p.y + size / 2 - dot / 2, dot, dot);
+      ctx.fillStyle = theme.text;
+      ctx.globalAlpha = lod === 0 ? 0.06 : 0.1;
+      const dot = Math.max(2, Math.round(size * 0.05));
+      ctx.fillRect(Math.round(p.x + size / 2 - dot / 2), Math.round(p.y + size / 2 - dot / 2), dot, dot);
       ctx.globalAlpha = 1;
     }
   }
   const origin = screen(0, 0);
   const corner = screen(gw, gh);
-  ctx.strokeStyle = theme.lockedEdge;
+  ctx.save();
+  ctx.strokeStyle = theme.text;
+  ctx.globalAlpha = 0.14;
   ctx.lineWidth = 1;
-  ctx.strokeRect(origin.x - 0.5, origin.y - 0.5, corner.x - origin.x + 1, corner.y - origin.y + 1);
+  ctx.setLineDash([6, 6]);
+  const gap = GAP * zoom;
+  ctx.strokeRect(Math.round(origin.x - gap / 2) + 0.5, Math.round(origin.y - gap / 2) + 0.5,
+    Math.round(corner.x - origin.x), Math.round(corner.y - origin.y));
+  ctx.restore();
   const starts = startsOf(chapter);
   for (const link of chapter.links ?? []) {
     const from = chapter.tiles.find((t) => t.id === link.from);
@@ -887,7 +969,7 @@ function draw() {
           ctx.stroke();
           ctx.setLineDash([]);
           ctx.fillStyle = theme.edit;
-          ctx.font = "11px 'Courier New', monospace";
+          ctx.font = `600 11px ${CAPTION_FONT}`;
           ctx.fillText("CONFIRM?", (a.x + b.x) / 2 + size / 2 - 20, (a.y + b.y) / 2 + size / 2 - 8);
         }
       }
@@ -902,98 +984,138 @@ function draw() {
       : starts.has(tile.id) ? "CURRENT"
       : inbound ? "LOCKED"
       : "NEW";
-    const border = state === "CURRENT" ? theme.current : state === "NEW" ? theme.neu : state === "EDIT" ? theme.edit : "";
-    ctx.fillStyle = state === "LOCKED" ? theme.locked : theme.card;
-    ctx.globalAlpha = state === "LOCKED" && lod === 0 ? 0.55 : 1;
-    ctx.fillRect(p.x, p.y, size, size);
+    const locked = state === "LOCKED";
+    // The player lens shows what a player sees: a locked quest is a padlock. Authors always see the quest itself.
+    const hideFace = locked && lens === "player";
+    const accent = state === "CURRENT" ? theme.current : state === "NEW" ? theme.neu : state === "EDIT" ? theme.edit : theme.lockedEdge;
+    const isSelected = tile.id === selected;
+    const radius = Math.max(2, Math.round(4 * zoom));
+
+    // Selection ring sits outside the tile so it never covers the face.
+    if (isSelected && !searchHits) {
+      ctx.save();
+      ctx.strokeStyle = theme.text;
+      ctx.globalAlpha = pointerOnBoard() ? 0.45 + 0.4 * fxWave() : 0.75;
+      ctx.lineWidth = 2;
+      roundRectPath(p.x - 3, p.y - 3, size + 6, size + 6, radius + 3);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.save();
+    roundRectPath(p.x, p.y, size, size, radius);
+    ctx.fillStyle = locked ? theme.locked : theme.card;
+    ctx.globalAlpha = locked && lod === 0 ? 0.6 : 1;
+    ctx.fill();
     ctx.globalAlpha = 1;
     if (searchHits && !searchHits.has(tile.id)) {
       ctx.fillStyle = "rgba(8,6,14,0.72)";
-      ctx.fillRect(p.x, p.y, size, size);
+      ctx.fill();
+      ctx.restore();
       continue; // Data: scope board to hits — skip labels on non-matches
     }
-    const pad = Math.max(3, Math.floor(4 * zoom));
-    const maxW = Math.max(0, size - pad * 2 - 1);
-    const title = (tile.title ?? tile.id).toUpperCase();
-    if (state === "LOCKED") {
-      // Quiet lock: dim padlock, never board-wide red LOCKED stamp
-      ctx.strokeStyle = theme.lockedEdge;
-      ctx.globalAlpha = 0.55;
-      ctx.strokeRect(p.x + 0.5, p.y + 0.5, size - 1, size - 1);
+    ctx.clip();
+    const band = lod >= 1 ? Math.max(9, Math.round(12 * zoom)) : 0;
+    if (lod >= 1) {
+      ctx.fillStyle = accent;
+      ctx.globalAlpha = locked ? 0.35 : 1;
+      ctx.fillRect(p.x, p.y, size, band);
       ctx.globalAlpha = 1;
-    } else if (border) {
-      ctx.strokeStyle = border;
-      ctx.globalAlpha = tile.id === selected && pointerOnBoard() ? 0.55 + 0.45 * fxWave() : 1;
-      ctx.strokeRect(p.x + 0.5, p.y + 0.5, size - 1, size - 1);
+      setCaptionFont(Math.max(7, Math.min(10, Math.floor(8 * zoom))));
+      ctx.fillStyle = locked ? theme.text : theme.card;
+      ctx.globalAlpha = locked ? 0.75 : 1;
+      ctx.textBaseline = "middle";
+      const stateText = lod === 1 ? state.slice(0, 1) : state;
+      ctx.fillText(ellipsizeToWidth(stateText, Math.max(0, size - 8)), p.x + Math.max(3, 4 * zoom), p.y + band / 2 + 0.5);
+      ctx.textBaseline = "alphabetic";
       ctx.globalAlpha = 1;
-      if (lod >= 1) {
-        const band = Math.max(8, Math.floor(10 * zoom));
-        ctx.fillStyle = border;
-        ctx.fillRect(p.x + 1, p.y + 1, size - 2, band);
-      }
-      if (lod === 0) {
-        // overview chip: status color only
-        ctx.fillStyle = border;
-        ctx.fillRect(p.x + size * 0.3, p.y + size * 0.3, size * 0.4, size * 0.4);
+      if (locked && !hideFace) {
+        // Small lock badge in the band: the quest reads as gated without hiding what it is.
+        ctx.fillStyle = theme.text;
+        ctx.globalAlpha = 0.8;
+        drawPadlock(p.x + size - band / 2 - 2, p.y + band / 2 - 1, band * 1.6);
+        ctx.globalAlpha = 1;
       }
     }
-    // Inset clip: captions, the lock glyph, and the status word stay inside this tile.
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(p.x + 1, p.y + 1, Math.max(0, size - 2), Math.max(0, size - 2));
-    ctx.clip();
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
-    if (state === "LOCKED") {
+    const pad = Math.max(3, Math.floor(5 * zoom));
+    const maxW = Math.max(0, size - pad * 2);
+    const iconPx = tileIconPx(size, band);
+    const iconX = Math.round(p.x + (size - iconPx) / 2);
+    const iconY = Math.round(p.y + band + Math.max(3, 4 * zoom));
+    if (hideFace) {
       ctx.globalAlpha = 0.55;
       ctx.fillStyle = theme.neu;
-      drawPadlock(p.x + size / 2, p.y + size / 2, size);
+      drawPadlock(p.x + size / 2, p.y + band / 2 + size / 2, size);
       ctx.globalAlpha = 1;
-      if (lod >= 2 && zoom >= 1.1 && maxW >= 8) {
-        const bottomReserve = hasXor ? Math.ceil(12 * zoom) + 1 : pad;
-        const unit = Math.max(1, Math.round(size / 16));
-        const lockBottom = size / 2 + unit * 5;
-        const innerTop = p.y + lockBottom + 2;
-        const innerBottom = p.y + size - bottomReserve;
-        const fontPx = captionFontPx(zoom, maxW, title, 9);
-        const lineH = fontPx + Math.max(1, Math.round(fontPx * 0.2));
-        const maxLines = Math.min(2, Math.floor((innerBottom - innerTop) / lineH));
-        if (maxLines >= 1) {
-          ctx.fillStyle = theme.neu;
-          paintCaptionLines(fitCaptionLines(title, maxW, maxLines), p.x + pad, innerTop, lineH, fontPx, innerBottom);
-        }
+    } else {
+      const img = tileIconImage(tile, theme.text);
+      ctx.globalAlpha = locked ? 0.6 : 1;
+      if (img) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, iconX, iconY, iconPx, iconPx);
+      } else if (lod >= 1) {
+        // No icon yet (or none set): a monogram keeps the tile identifiable.
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = locked ? 0.25 : 0.18;
+        roundRectPath(iconX, iconY, iconPx, iconPx, Math.max(2, iconPx / 6));
+        ctx.fill();
+        ctx.globalAlpha = locked ? 0.6 : 0.9;
+        ctx.fillStyle = theme.text;
+        setCaptionFont(Math.max(8, Math.floor(iconPx * 0.55)));
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText((tile.title ?? tile.id).trim().charAt(0).toUpperCase(), iconX + iconPx / 2, iconY + iconPx / 2 + 1);
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
       }
-    } else if (border && lod >= 1) {
-      const band = Math.max(8, Math.floor(10 * zoom));
-      setCaptionFont(Math.max(8, Math.floor(9 * zoom)));
-      ctx.fillStyle = theme.card;
-      ctx.textBaseline = "alphabetic";
-      const stateText = lod === 1 ? state.slice(0, 1) : state;
-      ctx.fillText(ellipsizeToWidth(stateText, Math.max(0, size - 8)), p.x + 3, p.y + band - 2);
-      if (maxW >= 8) {
-        const bottomReserve = hasXor ? Math.ceil(12 * zoom) + 1 : pad;
-        const innerTop = p.y + band + 3;
-        const innerBottom = p.y + size - bottomReserve;
-        const fontPx = captionFontPx(zoom, maxW, title, 10);
-        const lineH = fontPx + Math.max(1, Math.round(fontPx * 0.2));
-        const fitLines = Math.floor((innerBottom - innerTop) / lineH);
-        const maxLines = lod === 1 ? Math.min(1, fitLines) : Math.min(3, fitLines);
-        if (maxLines >= 1) {
-          ctx.fillStyle = theme.text;
-          paintCaptionLines(fitCaptionLines(title, maxW, maxLines), p.x + pad, innerTop, lineH, fontPx, innerBottom);
-        }
+      ctx.globalAlpha = 1;
+    }
+    if (lod === 0 && !locked) {
+      // Overview: a status pip in the corner, the icon carries identity.
+      ctx.fillStyle = accent;
+      ctx.fillRect(p.x + size - Math.max(4, size * 0.22), p.y, Math.max(4, size * 0.22), Math.max(4, size * 0.22));
+    }
+    if (lod >= 1 && !hideFace && maxW >= 12) {
+      const title = tile.title ?? tile.id;
+      const bottomReserve = hasXor ? Math.max(7, Math.min(10, Math.floor(7 * zoom))) + 8 : pad;
+      const innerTop = iconY + iconPx + Math.max(2, Math.round(2 * zoom));
+      const innerBottom = p.y + size - bottomReserve;
+      // Caption size tracks zoom only up to a reading size; beyond that the tile grows, not the text.
+      const fontPx = captionFontPx(Math.min(zoom, 1.45), maxW, title, 8.5);
+      const lineH = fontPx + Math.max(1, Math.round(fontPx * 0.12));
+      const fitLines = Math.floor((innerBottom - innerTop) / lineH);
+      const maxLines = lod === 1 ? Math.min(1, fitLines) : Math.min(2, fitLines);
+      if (maxLines >= 1) {
+        ctx.fillStyle = theme.text;
+        ctx.globalAlpha = locked ? 0.6 : 1;
+        paintCaptionLines(fitCaptionLines(title, maxW, maxLines), p.x + size / 2, innerTop, lineH, fontPx, innerBottom, "center");
+        ctx.globalAlpha = 1;
       }
     }
     if (hasXor && lod >= 1) {
-      ctx.textBaseline = "alphabetic";
-      ctx.textAlign = "left";
+      // Badge sized from its own text so the label can never overflow it.
+      const fontPx = Math.max(7, Math.min(10, Math.floor(7 * zoom)));
+      setCaptionFont(fontPx);
+      const bw = Math.ceil(ctx.measureText("XOR").width) + 6;
+      const bh = fontPx + 4;
+      const bx = p.x + 3;
+      const by = p.y + size - bh - 3;
       ctx.fillStyle = theme.completed;
-      ctx.fillRect(p.x + 2, p.y + size - 12 * zoom, 22 * zoom, 10 * zoom);
+      roundRectPath(bx, by, bw, bh, 2);
+      ctx.fill();
       ctx.fillStyle = theme.card;
-      setCaptionFont(Math.max(8, Math.floor(9 * zoom)));
-      const xorLabel = ellipsizeToWidth("XOR", Math.max(0, 22 * zoom - 4));
-      if (xorLabel) ctx.fillText(xorLabel, p.x + 4, p.y + size - 4 * zoom);
+      ctx.textBaseline = "middle";
+      ctx.fillText("XOR", bx + 3, by + bh / 2 + 0.5);
+      ctx.textBaseline = "alphabetic";
     }
+    ctx.restore();
+    // Outline after the clip so it is crisp on all four sides.
+    ctx.save();
+    roundRectPath(p.x + 0.5, p.y + 0.5, size - 1, size - 1, radius);
+    ctx.strokeStyle = accent;
+    ctx.globalAlpha = locked ? 0.55 : 1;
+    ctx.lineWidth = 1;
+    ctx.stroke();
     ctx.restore();
     if ((authoring || canLink()) && tile.id === linkFrom) {
       ctx.strokeStyle = theme.edit;
@@ -1121,6 +1243,17 @@ function questlineHtml(tile: Tile): string {
   return rows.join("");
 }
 
+/** Which inspector sections are expanded; kept across tile and chapter switches. */
+const sectionOpen: Record<string, boolean> = { quest: true, intro: true, chapter: false };
+
+function section(key: string, title: string, meta: string, body: string, forceOpen = false): string {
+  const open = forceOpen || sectionOpen[key] ? "open" : "";
+  return `<details class="section" data-section="${key}" ${open}>
+    <summary>${escapeText(title)}<span class="section-meta">${escapeText(meta)}</span></summary>
+    <div class="section-body">${body}</div>
+  </details>`;
+}
+
 function showCard(tile?: Tile) {
   const intro = chapterHasChildren(chapter.id);
   if (!intro && !tile) {
@@ -1132,7 +1265,7 @@ function showCard(tile?: Tile) {
   applyCardGeom();
   const header = intro ? "ACT INTRO" : uiMode === "edit" && lens === "author" ? "EDIT" : uiMode === "link" && lens === "author" ? "LINK" : "INSPECTOR";
   const heading = intro ? (chapter.title || chapter.id) : (tile!.title ?? tile!.id);
-  cardTitle.textContent = `${header} · ${heading.toUpperCase()}`;
+  cardTitle.textContent = `${header} · ${heading}`;
   const hint = authoring ? "" : (lens === "player" ? "<p>Player lens — read only.</p>" : "<p>Switch to EDIT mode (Author lens) to change this tile.</p>");
   const ro = authoring ? "" : "readonly";
   const disabled = authoring ? "" : "disabled";
@@ -1148,7 +1281,6 @@ function showCard(tile?: Tile) {
     <label>INTRO PREVIEW</label>
     <div id="intro-preview" class="intro-preview">${previewIntroHtml(chapter.intro?.body ?? "")}</div>
   ` : `
-    <hr />
     <label>TILE TITLE</label>
     <input id="tile-title" value="${escapeAttr(tile?.title ?? "")}" ${ro} />
     <label>DESCRIPTION</label>
@@ -1183,8 +1315,7 @@ function showCard(tile?: Tile) {
     ${authoring ? `<button type="button" id="add-reward">+ REWARD</button>` : ""}
     ${authoring ? `<button type="button" id="remove-tile">REMOVE TILE</button>` : ""}
   `;
-  cardBody.innerHTML = `
-    ${hint}
+  const chapterFields = `
     <datalist id="pack-entities">${listOptions(catalog.entities)}</datalist>
     <datalist id="pack-blocks">${listOptions(catalog.blocks)}</datalist>
     <datalist id="pack-tags">${listOptions(catalog.tags)}</datalist>
@@ -1255,8 +1386,15 @@ function showCard(tile?: Tile) {
       <input id="chapter-hide-until" type="checkbox" ${chapter.hide_until_unlocked ? "checked" : ""} ${disabled} />
       Hide until all requirements are met
     </label>
-    ${introFields}
   `;
+  const primary = intro
+    ? section("intro", "Act intro", "", introFields)
+    : section("quest", "Quest", tile?.id ?? "", introFields);
+  // A chapter with no selectable quest has nothing else to show, so its settings open by default.
+  cardBody.innerHTML = `${hint}${primary}${section("chapter", "Chapter settings", chapter.id, chapterFields, !tile && !intro)}`;
+  cardBody.querySelectorAll<HTMLDetailsElement>("details.section").forEach((el) => {
+    el.addEventListener("toggle", () => { sectionOpen[el.dataset.section ?? ""] = el.open; });
+  });
   const apply = () => {
     if (!authoring) return;
     chapter.title = (document.getElementById("chapter-title") as HTMLInputElement).value;
@@ -1487,7 +1625,9 @@ function escapeText(value: string): string {
 
 function updatePackStatus() {
   if (packStatus) {
-    packStatus.textContent = unlocked ? `${catalog.items.length} items from Minecraft pack` : "Waiting for Minecraft";
+    packStatus.textContent = unlocked ? `Connected · ${catalog.items.length.toLocaleString()} items` : "Waiting for Minecraft";
+    packStatus.classList.toggle("online", unlocked);
+    packStatus.title = unlocked ? "Item catalog comes from the pack loaded in Minecraft" : "Run /questqueen editor in game";
   }
 }
 
@@ -1557,6 +1697,10 @@ async function syncFromMinecraft() {
     }
     setLocked(false, "");
     if (firstConnect) {
+      // The header used to keep VIEW lit while the editor had switched itself to EDIT.
+      syncModeChrome();
+      updateLinkStatus();
+      fitChapterBoard();
       draw();
       if (chapterHasChildren(chapter.id)) showCard();
       else {
@@ -1922,8 +2066,8 @@ search.addEventListener("keydown", (event) => {
   if (hit) {
     selected = hit.id;
     // center on hit
-    camX = hit.pos.x * stridePx() - canvas.width / 2 + tileSize() / 2;
-    camY = hit.pos.y * stridePx() - canvas.height / 2 + tileSize() / 2;
+    camX = hit.pos.x * stridePx() - viewW / 2 + tileSize() / 2;
+    camY = hit.pos.y * stridePx() - viewH / 2 + tileSize() / 2;
     showCard(hit);
   }
   draw();
@@ -2311,10 +2455,10 @@ document.getElementById("layout-pack")?.addEventListener("click", () => layoutPa
 document.getElementById("layout-align")?.addEventListener("click", () => layoutAlignSelection());
 document.getElementById("layout-spread")?.addEventListener("click", () => layoutSpreadRow());
 document.getElementById("zoom-in")?.addEventListener("click", () => {
-  setZoomAt(zoom * 1.15, canvas.width / 2, canvas.height / 2);
+  setZoomAt(zoom * 1.15, viewW / 2, viewH / 2);
 });
 document.getElementById("zoom-out")?.addEventListener("click", () => {
-  setZoomAt(zoom / 1.15, canvas.width / 2, canvas.height / 2);
+  setZoomAt(zoom / 1.15, viewW / 2, viewH / 2);
 });
 document.getElementById("zoom-fit")?.addEventListener("click", () => {
   fitChapterBoard();
@@ -2559,6 +2703,15 @@ document.getElementById("guide-back")?.addEventListener("click", () => {
 });
 document.getElementById("guide-close")?.addEventListener("click", () => closeGuide());
 
+// Startup runs last, after every module-level let/const above is initialised. It used to run near the top,
+// and setLocked -> draw -> ensureBoardFx read `boardFx` in its temporal dead zone: the editor threw on load
+// and sat on "Bridge offline" even with Minecraft connected.
+wireCardWindow();
+applyCardGeom();
+setLocked(true, "Waiting for Minecraft…");
+syncGateButtons();
+updateLinkStatus();
+renderChapterTree();
 window.addEventListener("resize", resize);
 resize();
 void syncFromMinecraft();

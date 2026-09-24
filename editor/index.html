@@ -2,57 +2,90 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Quest Queen Editor</title>
+    <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <div id="app" class="lens-author">
-      <header>
-        <div class="header-primary">
-          <span class="brand">QUEST QUEEN</span>
-          <button type="button" id="show-guide" title="Steps for the whole editor">HOW TO</button>
-          <span class="mode-group" role="group" aria-label="Tool mode">
-            <button type="button" id="mode-edit" class="mode" data-mode="edit">EDIT</button>
-            <button type="button" id="mode-link" class="mode" data-mode="link">LINK</button>
-            <button type="button" id="mode-view" class="mode active" data-mode="view">VIEW</button>
+      <header class="appbar">
+        <div class="appbar-row appbar-main">
+          <div class="brand">
+            <img src="/logo.png" alt="" width="28" height="28" />
+            <span class="brand-name">Quest Queen</span>
+            <span class="brand-sub">Editor</span>
+          </div>
+
+          <div class="toolbar-group" role="group" aria-label="Lens">
+            <span class="group-label">Lens</span>
+            <span class="segmented lens-group">
+              <button type="button" id="lens-author" class="lens active" data-lens="author">Author</button>
+              <button type="button" id="lens-player" class="lens" data-lens="player">Player</button>
+            </span>
+          </div>
+
+          <div class="toolbar-group" role="group" aria-label="Tool mode">
+            <span class="group-label">Tool</span>
+            <span class="segmented mode-group">
+              <button type="button" id="mode-view" class="mode active" data-mode="view" title="Look without changing anything">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5Z"/><circle cx="8" cy="8" r="2"/></svg>View
+              </button>
+              <button type="button" id="mode-edit" class="mode" data-mode="edit" title="Place and change quests">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2l3 3-8 8H3v-3l8-8Z"/></svg>Edit
+              </button>
+              <button type="button" id="mode-link" class="mode" data-mode="link" title="Connect quests">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 9.5l3-3M7 4.5l1-1a3 3 0 0 1 4.2 4.2l-1 1M9 11.5l-1 1a3 3 0 0 1-4.2-4.2l1-1"/></svg>Link
+              </button>
+            </span>
+          </div>
+
+          <span id="gate-group" class="toolbar-group gate-group" hidden>
+            <span class="group-label">Gate</span>
+            <span class="segmented">
+              <button id="gate-and" class="gate active" type="button" title="AND — every quest leading in must be finished">AND</button>
+              <button id="gate-or" class="gate" type="button" title="OR — any one quest leading in is enough">OR</button>
+              <button id="gate-xor" class="gate" type="button" title="XOR — the player picks exactly one path">XOR</button>
+            </span>
           </span>
-          <span class="lens-group" role="group" aria-label="Lens">
-            <button type="button" id="lens-author" class="lens active" data-lens="author">AUTHOR</button>
-            <button type="button" id="lens-player" class="lens" data-lens="player">PLAYER</button>
-          </span>
-          <span id="gate-group" class="gate-group" hidden>
-            <button id="gate-and" class="gate active" type="button" title="AND — every quest leading in must be finished">AND</button>
-            <button id="gate-or" class="gate" type="button" title="OR — any one quest leading in is enough">OR</button>
-            <button id="gate-xor" class="gate" type="button" title="XOR — the player picks exactly one path">XOR</button>
-          </span>
-          <span class="zoom-group" role="group" aria-label="Zoom">
-            <button type="button" id="zoom-out" title="Zoom out">−</button>
-            <span id="zoom-label">100%</span>
-            <button type="button" id="zoom-in" title="Zoom in">+</button>
-            <button type="button" id="zoom-fit" title="Fit chapter">FIT</button>
-          </span>
-          <span class="layout-group" role="group" aria-label="Layout assist">
-            <button type="button" id="layout-pack" title="Pack tiles into BFS columns from starts">PACK</button>
-            <button type="button" id="layout-align" title="Align / compact columns">ALIGN</button>
-            <button type="button" id="layout-spread" title="Spread selected row">SPREAD</button>
-          </span>
+
           <span id="link-confirm" class="link-confirm" hidden>
             <span id="link-confirm-label">link</span>
-            <button type="button" id="link-confirm-yes">CONFIRM</button>
-            <button type="button" id="link-confirm-no">CANCEL</button>
+            <button type="button" id="link-confirm-yes" class="btn btn-accent btn-sm">Confirm</button>
+            <button type="button" id="link-confirm-no" class="btn btn-ghost btn-sm">Cancel</button>
           </span>
-          <span id="link-status">View mode</span>
-          <input id="search" placeholder="SEARCH" />
-          <span id="pack-status" class="pack-chip">Waiting for Minecraft</span>
+
+          <div class="appbar-spacer"></div>
+
+          <label class="search-box" for="search">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+            <input id="search" type="search" placeholder="Search quests" autocomplete="off" />
+          </label>
+          <span id="pack-status" class="status-chip">Waiting for Minecraft</span>
+          <button type="button" id="show-guide" class="btn btn-ghost" title="Steps for the whole editor">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M6.2 6.2a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.4M8 11.6v.1"/></svg>How to
+          </button>
         </div>
-        <div class="header-secondary">
-          <button id="load-zip" class="secondary">LOAD</button>
-          <button id="save-world" class="secondary" title="Draft hot-reload into open world (not pack write)">SAVE TO WORLD</button>
-          <button id="export-zip" class="secondary" title="Export chapter ZIP backup">EXPORT ZIP</button>
-          <button id="write-pack" class="secondary" title="Writes chapter JSON into the pack datapack — NOT the same as Save to World">WRITE TO PACK</button>
-          <button id="template-blank" class="secondary">BLANK</button>
-          <button id="template-starter" class="secondary">STARTER</button>
-          <label class="grid-size secondary" for="grid-size">GRID
+
+        <div class="appbar-row appbar-sub">
+          <div class="toolbar-group" role="group" aria-label="Zoom">
+            <span class="segmented zoom-group">
+              <button type="button" id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
+              <span id="zoom-label">100%</span>
+              <button type="button" id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+            </span>
+            <button type="button" id="zoom-fit" class="btn btn-ghost btn-sm" title="Fit chapter">Fit</button>
+          </div>
+
+          <div class="toolbar-group layout-group" role="group" aria-label="Layout assist">
+            <span class="group-label">Layout</span>
+            <button type="button" id="layout-pack" class="btn btn-ghost btn-sm" title="Pack tiles into BFS columns from starts">Pack</button>
+            <button type="button" id="layout-align" class="btn btn-ghost btn-sm" title="Align / compact columns">Align</button>
+            <button type="button" id="layout-spread" class="btn btn-ghost btn-sm" title="Spread selected row">Spread</button>
+          </div>
+
+          <label class="toolbar-group grid-size" for="grid-size">
+            <span class="group-label">Grid</span>
             <select id="grid-size" title="Chapter grid size">
               <option value="12x10">12×10</option>
               <option value="16x16">16×16</option>
@@ -62,13 +95,30 @@
               <option value="custom">Custom…</option>
             </select>
           </label>
+
+          <span id="link-status" class="hint-text">View mode</span>
+
+          <div class="appbar-spacer"></div>
+
+          <div class="toolbar-group file-group" role="group" aria-label="Chapter files">
+            <button id="template-blank" class="btn btn-ghost btn-sm" type="button" title="Load the blank chapter template">Blank</button>
+            <button id="template-starter" class="btn btn-ghost btn-sm" type="button" title="Load the starter chapter template">Starter</button>
+            <span class="divider" aria-hidden="true"></span>
+            <button id="load-zip" class="btn btn-ghost btn-sm" type="button" title="Load chapters from a ZIP">Load ZIP</button>
+            <button id="export-zip" class="btn btn-ghost btn-sm" type="button" title="Export chapter ZIP backup">Export ZIP</button>
+            <button id="write-pack" class="btn btn-warn btn-sm" type="button" title="Writes chapter JSON into the pack datapack — not the same as Save to world">Write to pack</button>
+            <button id="save-world" class="btn btn-accent btn-sm" type="button" title="Hot-reload this chapter into the open world (not a pack write)">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h8l2 2v10H3V2Z"/><path d="M5 2v4h6V2M5 14v-4h6v4"/></svg>Save to world
+            </button>
+          </div>
         </div>
       </header>
+
       <main>
         <aside id="chapters" class="chapters">
-          <div class="chapters-head">
-            <span>CHAPTERS</span>
-            <button type="button" id="new-chapter">+</button>
+          <div class="panel-head chapters-head">
+            <span>Chapters</span>
+            <button type="button" id="new-chapter" class="icon-btn" title="New chapter" aria-label="New chapter">+</button>
           </div>
           <div id="chapter-tree"></div>
         </aside>
@@ -77,9 +127,9 @@
           <canvas id="minimap" width="180" height="120" title="Minimap — click to pan"></canvas>
         </div>
         <aside id="card" class="docked">
-          <div id="card-chrome" class="card-chrome">
-            <span id="card-title">INSPECTOR</span>
-            <button type="button" id="close-card" title="Clear selection">X</button>
+          <div id="card-chrome" class="panel-head card-chrome">
+            <span id="card-title">Inspector</span>
+            <button type="button" id="close-card" class="icon-btn" title="Clear selection" aria-label="Clear selection">×</button>
           </div>
           <div id="card-body" class="card-body"><p class="muted">Select a tile</p></div>
         </aside>
@@ -88,9 +138,9 @@
           <h2 id="guide-title"></h2>
           <div id="guide-body"></div>
           <div class="guide-actions">
-            <button type="button" id="guide-back">Back</button>
-            <button type="button" id="guide-next">Next</button>
-            <button type="button" id="guide-close">Close</button>
+            <button type="button" id="guide-back" class="btn btn-ghost btn-sm">Back</button>
+            <button type="button" id="guide-next" class="btn btn-accent btn-sm">Next</button>
+            <button type="button" id="guide-close" class="btn btn-ghost btn-sm">Close</button>
           </div>
         </div>
         <div id="gate-ask" class="gate-ask" hidden>
@@ -103,15 +153,18 @@
           </div>
           <p id="gate-ask-note" class="muted"></p>
           <div class="gate-ask-actions">
-            <button type="button" id="gate-ask-remove">Remove this link</button>
-            <button type="button" id="gate-ask-cancel">Cancel</button>
+            <button type="button" id="gate-ask-remove" class="btn btn-danger btn-sm">Remove this link</button>
+            <button type="button" id="gate-ask-cancel" class="btn btn-ghost btn-sm">Cancel</button>
           </div>
         </div>
         <div id="lock">
-          <h1>Waiting for Minecraft</h1>
-          <p>This editor reads items from the pack loaded in Minecraft. It cannot run by itself.</p>
-          <p>In game, as an operator, run <code>/questqueen editor</code></p>
-          <p id="lock-status">Bridge offline…</p>
+          <div class="lock-card">
+            <img src="/logo.png" alt="" width="56" height="56" />
+            <h1>Waiting for Minecraft</h1>
+            <p>This editor reads items from the pack loaded in Minecraft. It cannot run by itself.</p>
+            <p>In game, as an operator, run <code>/questqueen editor</code></p>
+            <p id="lock-status" class="lock-status">Bridge offline…</p>
+          </div>
         </div>
       </main>
       <input id="file-zip" type="file" accept=".zip" hidden />
