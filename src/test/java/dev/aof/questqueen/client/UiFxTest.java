@@ -88,7 +88,14 @@ class UiFxTest {
     @Test
     void ambientAnchorsAreStablePerPort() {
         // Same coordinates must give the same flow each frame, or arrows would flicker rather than travel.
-        assertEquals(UiFx.flowAt(120, 88), UiFx.flowAt(120, 88), 0f);
-        assertNotEquals(UiFx.flowAt(120, 88), UiFx.flowAt(121, 88));
+        // Pin the clock: with the wall clock the two reads could land in different milliseconds.
+        var saved = UiFx.clock;
+        UiFx.clock = () -> 1_000_000L;
+        try {
+            assertEquals(UiFx.flowAt(120, 88), UiFx.flowAt(120, 88), 0f);
+            assertNotEquals(UiFx.flowAt(120, 88), UiFx.flowAt(121, 88));
+        } finally {
+            UiFx.clock = saved;
+        }
     }
 }
