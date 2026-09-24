@@ -52,6 +52,14 @@ public final class QuestDefinitions {
     }
 
     public static void apply(QuestPack next) {
+        apply(next, true);
+    }
+
+    /**
+     * @param sendDefinitions false on the datapack reload path: {@link #onDatapackSync} sends the new pack to
+     *                        every player right after, and sending here too made each client download it twice
+     */
+    public static void apply(QuestPack next, boolean sendDefinitions) {
         pack = next;
         ProgressService.invalidateAll();
         TaskHooks.invalidateIndexes();
@@ -59,7 +67,9 @@ public final class QuestDefinitions {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
         if (server != null) {
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                QuestNetwork.sendDefinitions(player);
+                if (sendDefinitions) {
+                    QuestNetwork.sendDefinitions(player);
+                }
                 ProgressService.sync(player);
             }
         }

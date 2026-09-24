@@ -12,6 +12,7 @@ public class QuestReloadListener extends SimplePreparableReloadListener<QuestPac
 
     @Override
     protected void apply(QuestPack object, ResourceManager resourceManager, ProfilerFiller profiler) {
-        QuestDefinitions.apply(object);
+        // OnDatapackSyncEvent sends the definitions once the reload finishes.
+        QuestDefinitions.apply(object, false);
     }
 }

@@ -3,6 +3,7 @@ package dev.aof.questqueen.net;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import dev.aof.questqueen.QuestQueen;
+import dev.aof.questqueen.data.BookChrome;
 import dev.aof.questqueen.data.Chapter;
 import dev.aof.questqueen.data.QuestDefinitions;
 import dev.aof.questqueen.data.QuestPack;
@@ -44,6 +45,7 @@ public final class QuestNetwork {
         registrar.playToServer(SubmitTaskC2S.TYPE, SubmitTaskC2S.STREAM_CODEC, QuestNetwork::handleSubmit);
         registrar.playToServer(PinC2S.TYPE, PinC2S.STREAM_CODEC, QuestNetwork::handlePin);
         registrar.playToServer(AuthorSaveC2S.TYPE, AuthorSaveC2S.STREAM_CODEC, QuestNetwork::handleAuthorSave);
+        registrar.playToServer(AuthorChromeC2S.TYPE, AuthorChromeC2S.STREAM_CODEC, QuestNetwork::handleAuthorChrome);
         registrar.playToServer(ClaimChoiceC2S.TYPE, ClaimChoiceC2S.STREAM_CODEC, QuestNetwork::handleClaim);
         registrar.playToServer(ClaimRewardsC2S.TYPE, ClaimRewardsC2S.STREAM_CODEC, QuestNetwork::handleClaimRewards);
     }
@@ -87,6 +89,11 @@ public final class QuestNetwork {
                 tileId == null ? "" : tileId,
                 expanded,
                 chapter == null ? "" : chapter));
+    }
+
+    /** A definition transfer cut off by a disconnect must not be merged with the next server's chunks. */
+    public static void clearClientChunks() {
+        CLIENT_CHUNKS.clear();
     }
 
     public static void sendToServer(CustomPacketPayload payload) {
@@ -188,6 +195,32 @@ public final class QuestNetwork {
         });
     }
 
+    private static void handleAuthorChrome(AuthorChromeC2S payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer player) || !ProgressService.canAuthor(player)) {
+                return;
+            }
+            BookChrome chrome = payload.chrome();
+            try {
+                writeAuthoredChrome(player.server.getWorldPath(LevelResource.DATAPACK_DIR).resolve("questqueen_authored"), chrome);
+            } catch (Exception exception) {
+                // The live edit still applies; only the copy that survives /reload failed.
+                QuestQueen.LOGGER.error("Failed to write authored book chrome", exception);
+            }
+            QuestDefinitions.putChrome(chrome);
+        });
+    }
+
+    /**
+     * Writes the book chrome as {@code data/questqueen/questqueen/book.json} in the authored pack. World
+     * datapacks sit above mod resources, so this file replaces the jar's own book.json on the next reload.
+     */
+    static Path writeAuthoredChrome(Path root, BookChrome chrome) throws Exception {
+        Path file = root.resolve("data").resolve(QuestQueen.MODID).resolve("questqueen").resolve("book.json");
+        String json = BookChrome.CODEC.encodeStart(JsonOps.INSTANCE, chrome).getOrThrow(RuntimeException::new).toString();
+        return writeAuthoredJson(root, file, "book chrome", json);
+    }
+
     private static void writeAuthored(ServerPlayer player, Chapter chapter) throws Exception {
         writeAuthoredChapter(player.server.getWorldPath(LevelResource.DATAPACK_DIR).resolve("questqueen_authored"), chapter);
     }
@@ -208,6 +241,14 @@ public final class QuestNetwork {
      */
     static Path writeAuthoredChapter(Path root, Chapter chapter) throws Exception {
         Path file = authoredChapterFile(root, chapter.id());
+        String json = Chapter.CODEC.encodeStart(JsonOps.INSTANCE, chapter)
+                .getOrThrow(RuntimeException::new)
+                .toString();
+        return writeAuthoredJson(root, file, "authored chapter '" + chapter.id() + "'", json);
+    }
+
+    /** The containment-checked, rolled-back write shared by chapters and the book chrome. */
+    private static Path writeAuthoredJson(Path root, Path file, String what, String json) throws Exception {
         List<Path> created = new ArrayList<>();
         Path wroteMcmeta = null;
         boolean fileExisted = false;
@@ -216,11 +257,11 @@ public final class QuestNetwork {
             Path realRoot = root.toRealPath();
             Path realParent = file.getParent().toRealPath();
             if (!realParent.startsWith(realRoot)) {
-                throw new IOException("Refusing authored chapter '" + chapter.id() + "': " + realParent
+                throw new IOException("Refusing " + what + ": " + realParent
                         + " resolves outside " + realRoot + " — a link sits between the pack root and the file");
             }
             if (Files.isSymbolicLink(file)) {
-                throw new IOException("Refusing authored chapter '" + chapter.id() + "': " + file + " is a symbolic link");
+                throw new IOException("Refusing " + what + ": " + file + " is a symbolic link");
             }
             Path mcmeta = root.resolve("pack.mcmeta");
             if (!Files.exists(mcmeta)) {
@@ -234,9 +275,6 @@ public final class QuestNetwork {
                         """);
                 wroteMcmeta = mcmeta;
             }
-            String json = Chapter.CODEC.encodeStart(JsonOps.INSTANCE, chapter)
-                    .getOrThrow(RuntimeException::new)
-                    .toString();
             fileExisted = Files.exists(file);
             Files.writeString(file, json);
             return file;

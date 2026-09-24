@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.HexFormat;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -41,6 +42,11 @@ public final class EditorBridge {
     private static final AtomicReference<String> CATALOG = new AtomicReference<>("{\"items\":[]}");
     private static final AtomicReference<String> PACK = new AtomicReference<>("{\"chapters\":[],\"scrolls\":[]}");
     private static HttpServer server;
+    private static ExecutorService executor;
+    /** The pack PACK was last encoded from; re-encode only when the client receives a new one. */
+    private static Object encodedPack;
+    /** Largest chapter body the bridge forwards. AuthorSaveC2S carries the same bound. */
+    static final int MAX_CHAPTER_BYTES = AuthorSaveC2S.MAX_JSON_BYTES;
     private static boolean enabled;
     private static int ticks;
 
@@ -54,7 +60,6 @@ public final class EditorBridge {
                 return;
             }
             enabled = true;
-            sessionNonce = newNonce();
             return;
         }
         enabled = false;
@@ -75,8 +80,9 @@ public final class EditorBridge {
                 return;
             }
             ticks++;
-            if (ticks % 40 == 1) {
-                refreshSnapshots();
+            // The item catalog is fixed for the session; only the pack changes (reloads, saves).
+            if (ticks % 40 == 1 && ClientQuestState.pack != encodedPack) {
+                refreshPack();
             }
         } catch (Exception exception) {
             QuestQueen.LOGGER.error("Quest editor tick failed; disabling editor", exception);
@@ -91,13 +97,17 @@ public final class EditorBridge {
                 notifyPlayer("questqueen.editor.fail");
                 return false;
             }
+            // Mint the nonce before the socket opens: openUri below can load index.html before this method
+            // returns, and a page served without the nonce answers 403 on every save until reloaded.
+            sessionNonce = newNonce();
             HttpServer http = HttpServer.create(new InetSocketAddress("127.0.0.1", PORT), 0);
             http.createContext("/", EditorBridge::handle);
-            http.setExecutor(Executors.newSingleThreadExecutor(runnable -> {
+            executor = Executors.newSingleThreadExecutor(runnable -> {
                 Thread thread = new Thread(runnable, "questqueen-editor");
                 thread.setDaemon(true);
                 return thread;
-            }));
+            });
+            http.setExecutor(executor);
             http.start();
             server = http;
             String url = "http://127.0.0.1:" + PORT + "/";
@@ -117,12 +127,23 @@ public final class EditorBridge {
         try {
             CATALOG.set(PackCatalogJson.create());
             ItemIconPng.clear();
+            return refreshPack();
+        } catch (Exception exception) {
+            QuestQueen.LOGGER.error("Failed to build quest editor catalog", exception);
+            return false;
+        }
+    }
+
+    private static boolean refreshPack() {
+        try {
+            Object pack = ClientQuestState.pack;
             PACK.set(QuestPack.CODEC.encodeStart(JsonOps.INSTANCE, ClientQuestState.pack)
                     .getOrThrow(RuntimeException::new)
                     .toString());
+            encodedPack = pack;
             return true;
         } catch (Exception exception) {
-            QuestQueen.LOGGER.error("Failed to build quest editor catalog", exception);
+            QuestQueen.LOGGER.error("Failed to encode the quest pack for the editor", exception);
             return false;
         }
     }
@@ -145,6 +166,12 @@ public final class EditorBridge {
             server.stop(0);
             server = null;
         }
+        // HttpServer.stop does not shut down an executor it was handed.
+        if (executor != null) {
+            executor.shutdownNow();
+            executor = null;
+        }
+        encodedPack = null;
         // The nonce dies with the session it was minted for: a stale value can never be replayed,
         // and with no live session the write gate below fails closed.
         sessionNonce = null;
@@ -153,6 +180,13 @@ public final class EditorBridge {
     private static void handle(HttpExchange exchange) throws IOException {
         if (!loopback(exchange)) {
             write(exchange, 403, "text/plain", "loopback only");
+            return;
+        }
+        // A DNS-rebound page is same-origin with its own hostname, so its GETs carry no Origin header and
+        // pass the check below. The Host header still names the attacker's host; refuse anything that is
+        // not this bridge's own loopback address.
+        if (!hostAllowed(exchange.getRequestHeaders().getFirst("Host"))) {
+            write(exchange, 403, "text/plain", "host not allowed");
             return;
         }
         // QQ-2: loopback proves WHERE a request came from, not WHO sent it. A DNS-rebinding
@@ -240,7 +274,13 @@ public final class EditorBridge {
                     "{\"ok\":false,\"error\":\"not in an authoring session on the server\"}");
             return;
         }
-        String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        byte[] raw = exchange.getRequestBody().readNBytes(MAX_CHAPTER_BYTES + 1);
+        if (raw.length > MAX_CHAPTER_BYTES) {
+            write(exchange, 413, "application/json",
+                    "{\"ok\":false,\"error\":\"chapter is larger than " + MAX_CHAPTER_BYTES / 1024 + " KB\"}");
+            return;
+        }
+        String body = new String(raw, StandardCharsets.UTF_8);
         Chapter chapter;
         try {
             chapter = Chapter.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(body))
@@ -309,7 +349,9 @@ public final class EditorBridge {
                     + "if(s!=='GET'&&s!=='HEAD'&&s!=='OPTIONS'){try{"
                     + "o.headers=new Headers(o.headers||{});"
                     + "o.headers.set('" + NONCE_HEADER + "',window.__QQ_EDITOR_NONCE__);"
-                    + "}catch(e){}}}return f.call(this,i,o);};})();</script>";
+                    // try{} catch{} closes the if; one more brace here closed the function early and made
+                    // the whole tag a SyntaxError, so the wrapper never installed.
+                    + "}catch(e){}}return f.call(this,i,o);};})();</script>";
             int at = html.lastIndexOf("</head>");
             html = at >= 0 ? html.substring(0, at) + tag + html.substring(at) : tag + html;
             bytes = html.getBytes(StandardCharsets.UTF_8);
@@ -354,6 +396,15 @@ public final class EditorBridge {
      * rebinding produces, so resolving the Origin host would answer "allowed" to the attacker's
      * own name and the check would be decorative.
      */
+    /** Host header must be this bridge's own loopback authority; a missing header (HTTP/1.0 tools) is allowed. */
+    static boolean hostAllowed(String host) {
+        if (host == null || host.isBlank()) {
+            return true;
+        }
+        String h = host.trim().toLowerCase(java.util.Locale.ROOT);
+        return h.equals("127.0.0.1:" + PORT) || h.equals("localhost:" + PORT) || h.equals("[::1]:" + PORT);
+    }
+
     static boolean originAllowed(String origin) {
         if (origin == null || origin.isBlank()) {
             return true;

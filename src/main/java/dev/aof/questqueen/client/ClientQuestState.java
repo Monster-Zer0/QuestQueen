@@ -56,6 +56,12 @@ public final class ClientQuestState {
         return false;
     }
 
+    /** Drop everything learned from the server we are leaving. */
+    public static void reset() {
+        setPack(QuestPack.empty());
+        setProgress(ProgressSnapshot.empty());
+    }
+
     public static void setPack(QuestPack next) {
         pack = next;
         cachedChapterTreePack = null;
