@@ -39,5 +39,5 @@
   "questqueen.task.trigger": "DO",
 
   "questqueen.tag.any": "Any of %s items",
-  "questqueen.tag.hint": "Click: look one of them up in JEI"
+  "questqueen.tag.hint": "Click: look one of them up in %s"
 }

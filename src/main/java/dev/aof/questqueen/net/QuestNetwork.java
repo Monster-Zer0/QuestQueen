@@ -211,7 +211,10 @@ public final class QuestNetwork {
             }
             BookChrome chrome = payload.chrome();
             try {
-                writeAuthoredChrome(player.server.getWorldPath(LevelResource.DATAPACK_DIR).resolve("questqueen_authored"), chrome);
+                writeAuthoredChrome(
+                        player.server.getWorldPath(LevelResource.DATAPACK_DIR).resolve("questqueen_authored"),
+                        chrome,
+                        QuestDefinitions.chromeNamespace());
             } catch (Exception exception) {
                 // The live edit still applies; only the copy that survives /reload failed.
                 QuestQueen.LOGGER.error("Failed to write authored book chrome", exception);
@@ -221,13 +224,27 @@ public final class QuestNetwork {
     }
 
     /**
-     * Writes the book chrome as {@code data/questqueen/questqueen/book.json} in the authored pack. World
-     * datapacks sit above mod resources, so this file replaces the jar's own book.json on the next reload.
+     * Writes the book chrome as {@code data/<namespace>/questqueen/book.json} in the authored pack.
+     * The namespace is the one whose {@code book.json} is currently in force, so a reload replaces that
+     * file when this datapack outranks it. A higher pack that still supplies the same file stays in charge.
      */
     static Path writeAuthoredChrome(Path root, BookChrome chrome) throws Exception {
-        Path file = root.resolve("data").resolve(QuestQueen.MODID).resolve("questqueen").resolve("book.json");
+        return writeAuthoredChrome(root, chrome, QuestQueen.MODID);
+    }
+
+    static Path writeAuthoredChrome(Path root, BookChrome chrome, String namespace) throws Exception {
+        String ns = safeNamespace(namespace);
+        Path file = root.resolve("data").resolve(ns).resolve("questqueen").resolve("book.json");
         String json = BookChrome.CODEC.encodeStart(JsonOps.INSTANCE, chrome).getOrThrow(RuntimeException::new).toString();
         return writeAuthoredJson(root, file, "book chrome", json);
+    }
+
+    /** A resource namespace: no dots-as-parents, no slashes. Anything else falls back to this mod. */
+    private static String safeNamespace(String namespace) {
+        if (namespace == null || !namespace.matches("[a-z0-9_.-]+") || hasDotDotSegment(namespace)) {
+            return QuestQueen.MODID;
+        }
+        return namespace;
     }
 
     private static void writeAuthored(ServerPlayer player, Chapter chapter) throws Exception {

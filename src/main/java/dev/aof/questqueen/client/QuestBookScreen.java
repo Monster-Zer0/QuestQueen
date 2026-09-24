@@ -3730,11 +3730,11 @@ public class QuestBookScreen extends Screen {
             } else {
                 lines.add(hit.stack().getHoverName());
             }
-            if (JeiBridge.available()) {
+            if (RecipeViewer.available()) {
                 Optional<Task> task = taskAtIndex(hit.taskIndex());
                 boolean recipe = task.map(QuestBookScreen::opensRecipe).orElse(false);
                 String hint = hit.isTag()
-                        ? TaskVerbs.translate("questqueen.tag.hint", "Click: look one of them up in JEI")
+                        ? TaskVerbs.translate("questqueen.tag.hint", "Click: look one of them up in %s", RecipeViewer.label())
                         : (recipe ? "Click: how to make it" : "Click: where it comes from");
                 lines.add(Component.literal(hint).withStyle(ChatFormatting.DARK_GRAY));
             }
@@ -3762,7 +3762,7 @@ public class QuestBookScreen extends Screen {
                 .map(tile -> tile.tasks().get(taskIndex));
     }
 
-    /** Open the clicked task's target in JEI: recipes for "make/find", usages for everything else. */
+    /** Open the clicked task's target in the pack's recipe viewer: recipes for "make/find", usages otherwise. */
     private void openInJei(int taskIndex) {
         Optional<Task> task = taskAtIndex(taskIndex);
         if (task.isEmpty()) {
@@ -3772,11 +3772,12 @@ public class QuestBookScreen extends Screen {
         if (stack.isEmpty()) {
             return;
         }
-        if (!JeiBridge.show(stack, opensRecipe(task.get())) && minecraft != null && minecraft.player != null) {
+        if (!RecipeViewer.show(stack, opensRecipe(task.get())) && minecraft != null && minecraft.player != null) {
+            String name = RecipeViewer.label();
             minecraft.player.displayClientMessage(
-                    Component.literal(JeiBridge.present()
-                            ? "JEI could not open that item right now."
-                            : "Install JEI to look up how to make this."),
+                    Component.literal(RecipeViewer.loaded()
+                            ? name + " could not open that item right now."
+                            : "Install EMI, REI, or JEI to look up how to make this."),
                     true);
         }
     }
