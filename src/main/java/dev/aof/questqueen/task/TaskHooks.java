@@ -62,6 +62,9 @@ public final class TaskHooks {
     private static final int STRUCTURE_INTERVAL = 40;
     private static final int STRUCTURE_MOVE_THRESHOLD = 16;
 
+    /** Obtain and item_tag. Submit is a hand-in and is not in this list. */
+    static final List<String> COUNTED_INVENTORY_TYPES = List.of("obtain", "item_tag");
+
     private static volatile int packEpoch;
     private static final Map<UUID, PlayerTaskIndex> INDEX = new ConcurrentHashMap<>();
     private static final Map<UUID, BlockPos> LAST_STRUCTURE_POS = new ConcurrentHashMap<>();
@@ -97,10 +100,12 @@ public final class TaskHooks {
         if (tick % STRUCTURE_INTERVAL == 0) {
             scanStructures(player);
         }
+        if (inventoryScanRuns(tick, false)) {
+            scanInventory(player);
+        }
         if (tick % GENERAL_INTERVAL != 0) {
             return;
         }
-        scanInventory(player);
         scanLocation(player);
         scanStats(player);
         scanAdvancement(player);
@@ -128,7 +133,7 @@ public final class TaskHooks {
 
     @SubscribeEvent
     public static void onPickup(ItemEntityPickupEvent.Post event) {
-        if (event.getPlayer() instanceof ServerPlayer player) {
+        if (event.getPlayer() instanceof ServerPlayer player && inventoryScanRuns(player.tickCount, true)) {
             scanInventory(player);
         }
     }
@@ -274,24 +279,53 @@ public final class TaskHooks {
         }).orElse(false);
     }
 
+    /**
+     * True on the general tick poll, and on every pickup regardless of that poll.
+     * Pickup has already put the stack in the inventory, so the book can move before the next 20-tick scan.
+     */
+    static boolean inventoryScanRuns(int tickCount, boolean pickup) {
+        return pickup || tickCount % GENERAL_INTERVAL == 0;
+    }
+
+    /**
+     * Count stored for an open obtain or item_tag task: the live inventory total, clamped to the requirement.
+     * {@link ProgressService#setTaskValue} writes this and completes the task once it reaches the requirement.
+     * A finished task is not scanned again, so dropping items does not reopen it.
+     */
+    static int storedInventoryValue(int have, int required) {
+        if (have < 0 || required < 1) {
+            return 0;
+        }
+        return Math.min(have, required);
+    }
+
     private static void scanInventory(ServerPlayer player) {
-        forEachOfTypes(player, List.of("obtain", "item_tag"), (chapter, tile, index, task) -> {
-            if ("obtain".equals(task.type()) && task.itemId().isPresent()) {
-                BuiltInRegistries.ITEM.getOptional(task.itemId().get()).ifPresent(item -> {
-                    int have = countItem(player, item, null);
-                    if (have >= task.required()) {
-                        ProgressService.setCompleted(player, chapter.id(), tile.id(), index);
-                    }
-                });
+        forEachOfTypes(player, COUNTED_INVENTORY_TYPES, (chapter, tile, index, task) -> {
+            int have = countHeld(player, task);
+            if (have < 0) {
+                return;
             }
-            if ("item_tag".equals(task.type()) && task.tagId().isPresent()) {
-                TagKey<Item> tag = TagKey.create(Registries.ITEM, task.tagId().get());
-                int have = countItem(player, null, tag);
-                if (have >= task.required()) {
-                    ProgressService.setCompleted(player, chapter.id(), tile.id(), index);
-                }
-            }
+            // Absolute count. increment would add the same stacks again on the next scan.
+            ProgressService.setTaskValue(player, chapter.id(), tile.id(), index,
+                    storedInventoryValue(have, task.required()));
         });
+    }
+
+    /**
+     * Stacks in the player inventory that match this obtain or item_tag task.
+     *
+     * @return the count, or {@code -1} when the task names nothing countable
+     */
+    private static int countHeld(ServerPlayer player, Task task) {
+        if ("obtain".equals(task.type()) && task.itemId().isPresent()) {
+            Item item = BuiltInRegistries.ITEM.getOptional(task.itemId().get()).orElse(null);
+            return item == null ? -1 : countItem(player, item, null);
+        }
+        if ("item_tag".equals(task.type()) && task.tagId().isPresent()) {
+            TagKey<Item> tag = TagKey.create(Registries.ITEM, task.tagId().get());
+            return countItem(player, null, tag);
+        }
+        return -1;
     }
 
     private static void scanLocation(ServerPlayer player) {
