@@ -127,8 +127,10 @@ public class QuestBookScreen extends Screen {
     private double lastMx;
     private double lastMy;
     private EditBox search;
-    private final List<String> searchHits = new ArrayList<>();
+    private final List<SearchHit> searchHits = new ArrayList<>();
     private int searchIndex;
+    private static final int SEARCH_HIT_CAP = 12;
+    private static final int SEARCH_ROW_H = 14;
     private String linkFrom = "";
     private GateOp pendingGate = GateOp.AND;
     private final ItemPickerOverlay picker = new ItemPickerOverlay();
@@ -303,6 +305,10 @@ public class QuestBookScreen extends Screen {
 
     private record SidebarRow(ResourceLocation id, int y, int depth, boolean locked, boolean hasChildren,
                               boolean collapsed, int caretX) {
+    }
+
+    /** One typeahead row: quest in a listed chapter. */
+    private record SearchHit(ResourceLocation chapterId, String tileId, String title, String chapterTitle) {
     }
 
     private record PathArrow(String from, String to, int x, int y, boolean locked, int color) {
@@ -1241,16 +1247,106 @@ public class QuestBookScreen extends Screen {
             return;
         }
         String needle = value.toLowerCase(Locale.ROOT);
-        for (Tile tile : chapter.tiles()) {
-            if (tile.title().toLowerCase(Locale.ROOT).contains(needle) || tile.id().contains(needle)
-                    || tile.description().toLowerCase(Locale.ROOT).contains(needle)) {
-                searchHits.add(tile.id());
+        for (Chapter ch : ChapterTree.flatten(ClientQuestState.chapterTreeRoots())) {
+            if (!authoring && !ClientQuestState.isChapterListed(ch)) {
+                continue;
+            }
+            for (Tile tile : ch.tiles()) {
+                if (!matchesSearch(tile, needle)) {
+                    continue;
+                }
+                searchHits.add(new SearchHit(ch.id(), tile.id(), tile.title(), ch.title()));
+                if (searchHits.size() >= SEARCH_HIT_CAP) {
+                    return;
+                }
             }
         }
-        if (!searchHits.isEmpty()) {
-            fxSearchFlashAt = UiFx.nowMs();
-            fxSearchFlashId = searchHits.getFirst();
-            centerOn(searchHits.getFirst());
+    }
+
+    private static boolean matchesSearch(Tile tile, String needle) {
+        return tile.title().toLowerCase(Locale.ROOT).contains(needle)
+                || tile.id().toLowerCase(Locale.ROOT).contains(needle)
+                || tile.description().toLowerCase(Locale.ROOT).contains(needle);
+    }
+
+    private void selectSearchHit(SearchHit hit) {
+        openChapter(hit.chapterId(), hit.tileId());
+        fxSearchFlashAt = UiFx.nowMs();
+        fxSearchFlashId = hit.tileId();
+        searchHits.clear();
+        searchIndex = 0;
+        blurSearch();
+    }
+
+    private boolean searchDropdownOpen() {
+        return search != null && search.isFocused() && !logOpen && !searchHits.isEmpty();
+    }
+
+    private int searchDropdownX() {
+        return searchX() - 2;
+    }
+
+    private int searchDropdownY() {
+        return TOP_H;
+    }
+
+    private int searchDropdownW() {
+        return searchW() + 4;
+    }
+
+    private int searchDropdownH() {
+        return searchHits.size() * SEARCH_ROW_H + 4;
+    }
+
+    private boolean overSearchDropdown(double mouseX, double mouseY) {
+        return searchDropdownOpen()
+                && over(searchDropdownX(), searchDropdownY(), searchDropdownW(), searchDropdownH(), mouseX, mouseY);
+    }
+
+    private boolean clickSearchSuggestion(double mouseX, double mouseY) {
+        if (!searchDropdownOpen()) {
+            return false;
+        }
+        int x = searchDropdownX();
+        int y = searchDropdownY() + 2;
+        int w = searchDropdownW();
+        for (int i = 0; i < searchHits.size(); i++) {
+            if (over(x, y + i * SEARCH_ROW_H, w, SEARCH_ROW_H, mouseX, mouseY)) {
+                selectSearchHit(searchHits.get(i));
+                return true;
+            }
+        }
+        return overSearchDropdown(mouseX, mouseY);
+    }
+
+    private void drawSearchDropdown(GuiGraphics graphics, int mouseX, int mouseY) {
+        if (!searchDropdownOpen()) {
+            return;
+        }
+        int x = searchDropdownX();
+        int y = searchDropdownY();
+        int w = searchDropdownW();
+        int h = searchDropdownH();
+        MockChrome.box(graphics, x, y, w, h, QuestColors.CARD);
+        MockChrome.frame(graphics, x, y, w, h, QuestColors.SIDEBAR_EDGE);
+        int rowY = y + 2;
+        for (int i = 0; i < searchHits.size(); i++) {
+            SearchHit hit = searchHits.get(i);
+            boolean hot = i == searchIndex || over(x, rowY, w, SEARCH_ROW_H, mouseX, mouseY);
+            if (hot) {
+                MockChrome.box(graphics, x + 1, rowY, w - 2, SEARCH_ROW_H, QuestColors.SIDEBAR_ACTIVE);
+            }
+            String chapterLabel = hit.chapterTitle() == null ? "" : hit.chapterTitle();
+            int chapterMax = Math.max(0, (w - 12) / 2);
+            String chapterDrawn = ellipsize(chapterLabel, chapterMax);
+            int chapterW = chapterDrawn.isEmpty() ? 0 : font.width(chapterDrawn);
+            int titleMax = Math.max(8, w - 12 - (chapterW > 0 ? chapterW + 6 : 0));
+            String title = ellipsize(hit.title().isBlank() ? hit.tileId() : hit.title(), titleMax);
+            graphics.drawString(font, title, x + 4, rowY + 3, hot ? QuestColors.TEXT : QuestColors.SIDEBAR_TEXT, false);
+            if (!chapterDrawn.isEmpty()) {
+                graphics.drawString(font, chapterDrawn, x + w - 4 - chapterW, rowY + 3, QuestColors.MUTED, false);
+            }
+            rowY += SEARCH_ROW_H;
         }
     }
 
@@ -1368,6 +1464,13 @@ public class QuestBookScreen extends Screen {
             }
             drawChrome(graphics);
         drawChromeEditor(graphics);
+            if (!drawingLog()) {
+                var pose = graphics.pose();
+                pose.pushPose();
+                pose.translate(0, 0, 450);
+                drawSearchDropdown(graphics, mouseX, mouseY);
+                pose.popPose();
+            }
             if (modal != ModalKind.NONE) {
                 // Above modalPanel widget face (ImmediatelyFast can flush the card after the widget pass).
                 var pose = graphics.pose();
@@ -4250,6 +4353,9 @@ public class QuestBookScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (clickSearchSuggestion(mouseX, mouseY)) {
+            return true;
+        }
         blurSearchIfOutside(mouseX, mouseY);
         if (picker.open && picker.click(boardLeft() + 16, 40, (int) mouseX, (int) mouseY)) {
             return true;
@@ -4628,6 +4734,20 @@ public class QuestBookScreen extends Screen {
             blurSearch();
             return true;
         }
+        if (search != null && search.isFocused() && searchDropdownOpen()) {
+            if (keyCode == GLFW.GLFW_KEY_DOWN) {
+                searchIndex = (searchIndex + 1) % searchHits.size();
+                return true;
+            }
+            if (keyCode == GLFW.GLFW_KEY_UP) {
+                searchIndex = (searchIndex - 1 + searchHits.size()) % searchHits.size();
+                return true;
+            }
+            if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
+                selectSearchHit(searchHits.get(searchIndex));
+                return true;
+            }
+        }
         if (authoring && keyCode == GLFW.GLFW_KEY_ESCAPE) {
             if (!linkFrom.isEmpty()) {
                 linkFrom = "";
@@ -4644,11 +4764,6 @@ public class QuestBookScreen extends Screen {
         }
         if (authoring && keyCode == GLFW.GLFW_KEY_3) {
             pendingGate = GateOp.XOR;
-            return true;
-        }
-        if (keyCode == GLFW.GLFW_KEY_ENTER && !searchHits.isEmpty()) {
-            searchIndex = (searchIndex + 1) % searchHits.size();
-            centerOn(searchHits.get(searchIndex));
             return true;
         }
         if (authoring && keyCode == GLFW.GLFW_KEY_DELETE && !selectedId.isEmpty()) {
@@ -5688,7 +5803,8 @@ public class QuestBookScreen extends Screen {
     }
 
     private void blurSearchIfOutside(double mouseX, double mouseY) {
-        if (search == null || !search.isFocused() || search.isMouseOver(mouseX, mouseY)) {
+        if (search == null || !search.isFocused() || search.isMouseOver(mouseX, mouseY)
+                || overSearchDropdown(mouseX, mouseY)) {
             return;
         }
         blurSearch();
@@ -5701,6 +5817,8 @@ public class QuestBookScreen extends Screen {
         if (getFocused() == search) {
             setFocused(null);
         }
+        searchHits.clear();
+        searchIndex = 0;
     }
 
     private void drawSidebarTab(GuiGraphics graphics) {
@@ -6139,6 +6257,8 @@ public class QuestBookScreen extends Screen {
         com.google.gson.JsonObject out = new com.google.gson.JsonObject();
         out.addProperty("searchFocused", search != null && search.isFocused());
         out.addProperty("searchValue", search == null ? "" : search.getValue());
+        out.addProperty("searchHitCount", searchHits.size());
+        out.addProperty("searchIndex", searchIndex);
         BookChrome probeChrome = resolveChrome();
         out.addProperty("sidebarTitle", probeChrome.displayTitle());
         out.addProperty("sidebarTitleColor", probeChrome.titleColor());
