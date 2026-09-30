@@ -12,7 +12,11 @@ version = mod_version
 group = mod_group_id
 
 sourceSets {
-    dev
+    dev {
+        // Harness GameTests compile against the mod; the published jar still packages main only.
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
 }
 
 // Harness JSON is a second source set of this same mod, so runClient/runServer load it
@@ -51,6 +55,10 @@ runs {
         modSource project.sourceSets.main
         // Harness chapters live in src/dev/resources. Runs see them; the published jar does not.
         modSource project.sourceSets.dev
+        // Jar-in-jar supplies SQLite to the shipped mod; dev runs need it on the game classpath themselves.
+        dependencies {
+            runtime "org.xerial:sqlite-jdbc:${sqlite_version}"
+        }
     }
 
     client {
@@ -73,6 +81,13 @@ runs {
 
 configurations {
     runtimeClasspath.extendsFrom localRuntime
+}
+
+// The run classpath file lists absolute jar paths under the Gradle home. Without the home as an input, a file
+// written under another home (a sandbox cache, another user) stays UP-TO-DATE and runClient dies in
+// BootstrapLauncher with "No value present" because modlauncher is not on the boot layer.
+tasks.matching { it.name.startsWith('writeMinecraftClasspath') }.configureEach {
+    inputs.property('gradleUserHome', gradle.gradleUserHomeDir.absolutePath)
 }
 
 dependencies {
@@ -183,6 +198,13 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.named('test', Test).configure {
     useJUnitPlatform()
+    // Machine-specific fixture locations; tests that need them skip when they are absent.
+    ['qq.devInstance', 'skylore.chapters'].each { key ->
+        def value = providers.gradleProperty(key).orNull
+        if (value) {
+            systemProperty key, value
+        }
+    }
 }
 
 idea {

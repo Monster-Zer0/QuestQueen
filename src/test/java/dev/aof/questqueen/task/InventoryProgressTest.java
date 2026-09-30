@@ -9,10 +9,6 @@ import dev.aof.questqueen.progress.ProgressSnapshot;
 import net.minecraft.resources.ResourceLocation;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -28,7 +24,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>A player with 7 logs and 23 cobblestone used to read 0/16 and 0/32 until the stack hit the
  * requirement, because the scan called {@code setCompleted} and never the value write. The count
  * itself is still {@code countItem}; these tests pin what that count is stored as, when a scan runs,
- * and that submit is still a hand-in.
+ * and that submit is still a hand-in. The same behaviour on a real server — mock player, event handlers,
+ * SQLite — is {@code dev.aof.questqueen.gametest.TaskProgressGameTests} under {@code runGameTestServer}.
  */
 class InventoryProgressTest {
     @Test
@@ -90,6 +87,15 @@ class InventoryProgressTest {
     }
 
     @Test
+    void anUnchangedCountIsNotWrittenAgain() {
+        assertFalse(TaskHooks.inventoryWriteNeeded(7, 7), "a player standing still must not reach the database");
+        assertFalse(TaskHooks.inventoryWriteNeeded(0, 0), "an empty inventory with no stored row writes nothing");
+        assertTrue(TaskHooks.inventoryWriteNeeded(7, 9), "a pickup is written");
+        assertTrue(TaskHooks.inventoryWriteNeeded(7, 3), "a drop below the requirement is written");
+        assertTrue(TaskHooks.inventoryWriteNeeded(15, 16), "reaching the requirement is written, so it completes");
+    }
+
+    @Test
     void pickupUpdatesBetweenGeneralScans() {
         assertFalse(TaskHooks.inventoryScanRuns(1, false));
         assertFalse(TaskHooks.inventoryScanRuns(19, false));
@@ -130,24 +136,6 @@ class InventoryProgressTest {
         }
     }
 
-    @Test
-    void scanWritesTheValueAndSubmitStillConsumes() throws IOException {
-        String source = Files.readString(Path.of("src/main/java/dev/aof/questqueen/task/TaskHooks.java"),
-                StandardCharsets.UTF_8);
-        String scan = method(source, "void scanInventory(");
-        assertTrue(scan.contains("ProgressService.setTaskValue"), scan);
-        assertTrue(scan.contains("storedInventoryValue"), scan);
-        assertFalse(scan.contains("setCompleted"), "completion goes through setTaskValue");
-        String submit = method(source, "boolean trySubmit(");
-        assertTrue(submit.contains("\"submit\".equals(task.type())"), submit);
-        assertTrue(submit.contains("stack.shrink(take)"), submit);
-        assertTrue(submit.contains("ProgressService.setCompleted"), submit);
-        assertFalse(submit.contains("setTaskValue"), "hand-in must not take the inventory-count write");
-        String pickup = method(source, "void onPickup(");
-        assertTrue(pickup.contains("inventoryScanRuns"), pickup);
-        assertTrue(pickup.contains("scanInventory(player)"), pickup);
-    }
-
     /**
      * One open task row. A completed row ignores later scans, matching {@link TaskHooks#stillOpen}.
      */
@@ -162,24 +150,5 @@ class InventoryProgressTest {
             value = TaskHooks.storedInventoryValue(have, required);
             completed = value >= required;
         }
-    }
-
-    private static String method(String source, String signature) {
-        int start = source.indexOf(signature);
-        assertTrue(start >= 0, signature);
-        int brace = source.indexOf('{', start);
-        int depth = 0;
-        for (int i = brace; i < source.length(); i++) {
-            char c = source.charAt(i);
-            if (c == '{') {
-                depth++;
-            } else if (c == '}') {
-                depth--;
-                if (depth == 0) {
-                    return source.substring(brace, i + 1);
-                }
-            }
-        }
-        throw new AssertionError("unclosed " + signature);
     }
 }

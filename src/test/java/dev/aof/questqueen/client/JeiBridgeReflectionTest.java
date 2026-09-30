@@ -22,7 +22,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * when no JEI jar is present, so it stays valid on a machine without the pack.
  */
 class JeiBridgeReflectionTest {
-    private static final Path MODS = Path.of("G:\\Minecraft\\New folder\\Instances\\Skylore Dev 1.21\\mods");
+    /** The dev instance's mods folder; override with {@code -Pqq.devInstance=<instance dir>}. */
+    private static final Path MODS = Path.of(System.getProperty("qq.devInstance",
+            "G:\\Minecraft\\New folder\\Instances\\Skylore Dev 1.21")).resolve("mods");
 
     private static File findJeiJar() {
         if (!Files.isDirectory(MODS)) {

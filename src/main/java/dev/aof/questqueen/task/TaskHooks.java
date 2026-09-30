@@ -299,15 +299,29 @@ public final class TaskHooks {
         return Math.min(have, required);
     }
 
+    /**
+     * True when a scan has a count worth writing. The stored side comes from the cached snapshot, so an unchanged
+     * inventory costs no database access; {@link ProgressService#setTaskValue} reads SQLite twice before its own
+     * unchanged check, and the scan runs every second and on every pickup.
+     */
+    static boolean inventoryWriteNeeded(int stored, int next) {
+        return stored != next;
+    }
+
     private static void scanInventory(ServerPlayer player) {
+        ProgressSnapshot snap = ProgressService.snapshot(player);
         forEachOfTypes(player, COUNTED_INVENTORY_TYPES, (chapter, tile, index, task) -> {
             int have = countHeld(player, task);
             if (have < 0) {
                 return;
             }
+            int next = storedInventoryValue(have, task.required());
+            int stored = snap.value(ProgressSnapshot.questKey(chapter.id(), tile.id()), ProgressSnapshot.taskKey(index));
+            if (!inventoryWriteNeeded(stored, next)) {
+                return;
+            }
             // Absolute count. increment would add the same stacks again on the next scan.
-            ProgressService.setTaskValue(player, chapter.id(), tile.id(), index,
-                    storedInventoryValue(have, task.required()));
+            ProgressService.setTaskValue(player, chapter.id(), tile.id(), index, next);
         });
     }
 
