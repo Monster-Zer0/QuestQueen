@@ -38,8 +38,8 @@ class ClientQuestStateVisualTest {
 
         assertTrue(ClientQuestState.isXorClosed(chapter, blue));
         assertTrue(ClientQuestState.isFailed(chapter, blue));
-        assertEquals(TileVisual.FAILED, ClientQuestState.visual(chapter, blue, false, ""));
-        assertEquals(TileVisual.COMPLETED, ClientQuestState.visual(chapter, chapter.tile("red").orElseThrow(), false, ""));
+        assertEquals(TileVisual.FAILED, ClientQuestState.visual(chapter, blue));
+        assertEquals(TileVisual.COMPLETED, ClientQuestState.visual(chapter, chapter.tile("red").orElseThrow()));
     }
 
     @Test
@@ -52,7 +52,7 @@ class ClientQuestStateVisualTest {
 
         assertTrue(ClientQuestState.isXorClosed(chapter, blue));
         assertFalse(ClientQuestState.isFailed(chapter, blue));
-        assertEquals(TileVisual.CLOSED, ClientQuestState.visual(chapter, blue, false, ""));
+        assertEquals(TileVisual.CLOSED, ClientQuestState.visual(chapter, blue));
     }
 
     @Test

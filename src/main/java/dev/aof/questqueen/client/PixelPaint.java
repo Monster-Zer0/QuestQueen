@@ -30,19 +30,6 @@ public final class PixelPaint {
         return font.width(one(PX2));
     }
 
-    public static int barW(Font font) {
-        return font.width(one(H64));
-    }
-
-    public static int blockW(Font font) {
-        return font.width(BLOCK);
-    }
-
-    public static boolean barsUsable(Font font) {
-        int w = barW(font);
-        return w >= 50 && w <= 70;
-    }
-
     public static void fill(GuiGraphics graphics, Font font, int x, int y, int w, int h, int color) {
         if (w <= 0 || h <= 0 || !usable(font)) {
             return;

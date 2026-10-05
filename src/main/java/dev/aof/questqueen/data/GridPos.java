@@ -14,8 +14,4 @@ public record GridPos(int x, int y) {
         return (x == other.x) != (y == other.y);
     }
 
-    /** Shares an edge — up, down, left, or right. */
-    public boolean cardinalAdjacent(GridPos other) {
-        return Math.abs(x - other.x) + Math.abs(y - other.y) == 1;
-    }
 }

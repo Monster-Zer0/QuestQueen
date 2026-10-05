@@ -4,7 +4,6 @@ import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
 
 public final class MockChrome {
-    public static final int HEADER_H = 8;
     public static final int FRAME = 1;
     public static final int INK = 0xFF0F0A10;
 
@@ -97,11 +96,6 @@ public final class MockChrome {
         panel(graphics, x, y, w, h, face, edge, Math.min(72, w / 3));
     }
 
-    public static void plus(GuiGraphics graphics, int cx, int cy, int color) {
-        box(graphics, cx - 5, cy - 1, 11, 3, color);
-        box(graphics, cx - 1, cy - 5, 3, 11, color);
-    }
-
     /** Small pushpin glyph for the PIN / PINNED control. */
     public static void pinIcon(GuiGraphics graphics, int x, int y, int color) {
         // head
@@ -126,23 +120,6 @@ public final class MockChrome {
         return tagWhite();
     }
 
-    public static void cornerOrnaments(GuiGraphics graphics, int x, int y, int size, int color) {
-        int arm = 3;
-        int inset = 3;
-        int left = x + inset;
-        int right = x + size - inset - 1;
-        int top = y + inset;
-        int bottom = y + size - inset - 1;
-        box(graphics, left, top, arm, 1, color);
-        box(graphics, left, top, 1, arm, color);
-        box(graphics, right - arm + 1, top, arm, 1, color);
-        box(graphics, right, top, 1, arm, color);
-        box(graphics, left, bottom, arm, 1, color);
-        box(graphics, left, bottom - arm + 1, 1, arm, color);
-        box(graphics, right - arm + 1, bottom, arm, 1, color);
-        box(graphics, right, bottom - arm + 1, 1, arm, color);
-    }
-
     public static void expandIcon(GuiGraphics graphics, int x, int y, int color) {
         box(graphics, x + 1, y + 3, 4, 1, color);
         box(graphics, x + 1, y + 6, 4, 1, color);
@@ -156,97 +133,6 @@ public final class MockChrome {
         box(graphics, x + 5, y + 2, 1, 1, color);
     }
 
-    public static void linkElbow(GuiGraphics graphics, int x1, int y1, int x2, int y2, int color) {
-        if (x1 == x2) {
-            int top = Math.min(y1, y2);
-            int bot = Math.max(y1, y2);
-            box(graphics, x1, top, 1, bot - top + 1, color);
-        } else if (y1 == y2) {
-            int left = Math.min(x1, x2);
-            int right = Math.max(x1, x2);
-            box(graphics, left, y1, right - left + 1, 1, color);
-        } else {
-            int left = Math.min(x1, x2);
-            int right = Math.max(x1, x2);
-            box(graphics, left, y1, right - left + 1, 1, color);
-            int top = Math.min(y1, y2);
-            int bot = Math.max(y1, y2);
-            box(graphics, x2, top, 1, bot - top + 1, color);
-        }
-    }
-
-    public static void arrowWedge(GuiGraphics graphics, int cx, int cy, int dx, int dy, int color) {
-        paintPortWedge(graphics, cx, cy, dx, dy, color, false);
-    }
-
-    public static void arrowBarred(GuiGraphics graphics, int cx, int cy, int dx, int dy, int color) {
-        paintPortWedge(graphics, cx, cy, dx, dy, color, true);
-    }
-
-    /**
-     * Jerry mock border-port (Data pixel trace, native): diamond fused to edge midpoint.
-     * Depths by |ly| from center: 8,7,6,2,1 — bbox ~8×9, tip 1px, base ~8, shaft 0.
-     * Outward column lx=0 at tile edge.
-     */
-    static int portDepth(int ly) {
-        return switch (Math.abs(ly)) {
-            case 0 -> 8;
-            case 1 -> 7;
-            case 2 -> 6;
-            case 3 -> 2;
-            case 4 -> 1;
-            default -> 0;
-        };
-    }
-
-    /** Half-height of filled dart at outward column lx (inverse of portDepth). */
-    static int portHalf(int lx) {
-        // lx 0..7 → half such that depth(ly) covers this column
-        return switch (lx) {
-            case 0, 1, 2, 3, 4, 5 -> 2; // covered by |ly|<=2 (depth>=6)
-            case 6 -> 1;                 // |ly|<=1 (depth>=7)
-            case 7 -> 0;                 // |ly|==0 (depth 8)
-            default -> -1;
-        };
-    }
-
-    static boolean inPort(int lx, int ly) {
-        int depth = portDepth(ly);
-        return depth > 0 && lx >= 0 && lx < depth;
-    }
-
-    /** Outward span [lo,hi] inclusive at row ly — from edge (0) through tip. */
-    static int[] dartSpan(int ly) {
-        int depth = portDepth(ly);
-        if (depth <= 0) {
-            return new int[]{1, 0};
-        }
-        return new int[]{0, depth - 1};
-    }
-
-    static boolean dartFilled(int lx, int ly, boolean barred) {
-        return inPort(lx, ly);
-    }
-
-    static boolean barredInk(int lx, int ly) {
-        if (inPort(lx, ly)) {
-            return lx == 1;
-        }
-        return inPort(lx - 1, ly) || inPort(lx + 1, ly) || inPort(lx, ly - 1) || inPort(lx, ly + 1);
-    }
-
-    static int dartPixelCount(boolean barred) {
-        int n = 0;
-        for (int ly = -3; ly <= 3; ly++) {
-            for (int lx = -1; lx <= 3; lx++) {
-                if (dartFilled(lx, ly, barred) || (barred && barredInk(lx, ly))) {
-                    n++;
-                }
-            }
-        }
-        return n;
-    }
-
     private static void plotPort(GuiGraphics graphics, int cx, int cy, int adx, int ady, int lx, int ly, int color) {
         int wx;
         int wy;
@@ -258,34 +144,6 @@ public final class MockChrome {
             wy = cy + ady * lx;
         }
         box(graphics, wx, wy, 1, 1, color);
-    }
-
-    private static void paintPortWedge(GuiGraphics graphics, int cx, int cy, int dx, int dy, int color, boolean barred) {
-        int adx = Integer.signum(dx);
-        int ady = Integer.signum(dy);
-        if (adx == 0 && ady == 0) {
-            adx = 1;
-        }
-        // Solid mock wedge only — hue carries locked; barred ink dropped (Jerry/Worf).
-        for (int ly = -4; ly <= 4; ly++) {
-            int[] span = dartSpan(ly);
-            for (int lx = span[0]; lx <= span[1]; lx++) {
-                plotPort(graphics, cx, cy, adx, ady, lx, ly, color);
-            }
-        }
-    }
-
-    public static void arrowHead(GuiGraphics graphics, int cx, int cy, int dx, int dy, int color) {
-        arrowWedge(graphics, cx, cy, dx, dy, color);
-    }
-
-    public static void arrow(GuiGraphics graphics, int cx, int cy, int dx, int dy, int color) {
-        arrowHead(graphics, cx + dx * 2, cy + dy * 2, dx, dy, color);
-        if (dx != 0) {
-            box(graphics, cx - (dx > 0 ? 2 : 0), cy, 3, 1, color);
-        } else if (dy != 0) {
-            box(graphics, cx, cy - (dy > 0 ? 2 : 0), 1, 3, color);
-        }
     }
 
     public static void diamond(GuiGraphics graphics, int cx, int cy, int color) {
@@ -305,29 +163,6 @@ public final class MockChrome {
         box(graphics, left + 5, top + 1, 1, 2, color);
         box(graphics, left, top + 4, 8, 5, color);
         box(graphics, left + 3, top + 6, 2, 1, QuestColors.VOID);
-    }
-
-    public static void openPadlock(GuiGraphics graphics, int cx, int cy, int color) {
-        int left = cx - 4;
-        int top = cy - 5;
-        box(graphics, left - 1, top + 3, 10, 7, INK);
-        box(graphics, left + 1, top - 1, 1, 4, INK);
-        box(graphics, left + 1, top - 2, 5, 1, INK);
-        box(graphics, left + 6, top - 3, 1, 3, INK);
-        box(graphics, left, top + 4, 8, 5, color);
-        box(graphics, left + 3, top + 6, 2, 1, QuestColors.VOID);
-        box(graphics, left + 2, top + 1, 1, 3, color);
-        box(graphics, left + 2, top, 4, 1, color);
-        box(graphics, left + 6, top - 2, 1, 2, color);
-    }
-
-    public static void flowArrow(GuiGraphics graphics, int cx, int cy, int dx, int dy, int color) {
-        if (dx != 0) {
-            box(graphics, cx - 3, cy, 5, 1, color);
-        } else if (dy != 0) {
-            box(graphics, cx, cy - 3, 1, 5, color);
-        }
-        arrowHead(graphics, cx + dx * 3, cy + dy * 3, dx, dy, color);
     }
 
     public static void pathPadlock(GuiGraphics graphics, int cx, int cy, int color) {
