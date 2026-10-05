@@ -12,7 +12,12 @@ public final class QuestNpcApi {
     private QuestNpcApi() {
     }
 
+    /** Safe to call from any thread: the work runs on the server thread, where all progress writes happen. */
     public static void onTalked(ServerPlayer player, String npcId) {
+        ProgressService.onServerThread(player, () -> talked(player, npcId));
+    }
+
+    private static void talked(ServerPlayer player, String npcId) {
         for (Chapter chapter : QuestDefinitions.chapters()) {
             for (Tile tile : chapter.tiles()) {
                 ListWalker.forEachTask(chapter, tile, (index, task) -> {
@@ -25,7 +30,7 @@ public final class QuestNpcApi {
     }
 
     public static void grantScroll(ServerPlayer player, ResourceLocation scrollId) {
-        ProgressService.grantScroll(player, scrollId);
+        ProgressService.onServerThread(player, () -> ProgressService.grantScroll(player, scrollId));
     }
 
     public static void completeTrigger(ServerPlayer player, String triggerId) {
@@ -33,6 +38,10 @@ public final class QuestNpcApi {
     }
 
     public static void fireTrigger(ServerPlayer player, String triggerId) {
+        ProgressService.onServerThread(player, () -> trigger(player, triggerId));
+    }
+
+    private static void trigger(ServerPlayer player, String triggerId) {
         for (Chapter chapter : QuestDefinitions.chapters()) {
             for (Tile tile : chapter.tiles()) {
                 ListWalker.forEachTask(chapter, tile, (index, task) -> {

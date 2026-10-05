@@ -4,6 +4,10 @@ import dev.aof.questqueen.data.Chapter;
 import dev.aof.questqueen.data.GridPos;
 import dev.aof.questqueen.data.QuestDefinitions;
 import dev.aof.questqueen.data.Tile;
+import dev.aof.questqueen.data.reward.ChoiceReward;
+import dev.aof.questqueen.data.reward.ItemReward;
+import dev.aof.questqueen.data.reward.Reward;
+import dev.aof.questqueen.data.task.CheckmarkTask;
 import dev.aof.questqueen.data.task.ItemTagTask;
 import dev.aof.questqueen.data.task.KillTask;
 import dev.aof.questqueen.data.task.ObtainTask;
@@ -50,6 +54,10 @@ public final class TaskProgressGameTests {
     private static final String GATHER = "gather";
     private static final String TRIBUTE = "tribute";
     private static final String HUNT = "hunt";
+    private static final String PAYOUT = "payout";
+    private static final String PICK = "pick";
+    /** required_stage with no Progressive Stages installed: completable only by grant-all, never unlocked. */
+    private static final String SEALED = "sealed";
     private static final int LOGS = 0;
     private static final int COBBLE = 1;
     private static final int DIRT = 2;
@@ -67,7 +75,12 @@ public final class TaskProgressGameTests {
                         new ObtainTask(ResourceLocation.parse("minecraft:dirt"), 16))),
                 tile(TRIBUTE, 2, List.of(new SubmitTask(ResourceLocation.parse("minecraft:apple"), 1))),
                 tile(HUNT, 4, List.of(new KillTask(
-                        Optional.of(ResourceLocation.parse("minecraft:chicken")), Optional.empty(), 3)))),
+                        Optional.of(ResourceLocation.parse("minecraft:chicken")), Optional.empty(), 3))),
+                tile(PAYOUT, 6, List.of(new CheckmarkTask())).withRewards(List.of(item("minecraft:diamond", 2))),
+                tile(PICK, 8, List.of(new CheckmarkTask())).withRewards(List.of(choice())),
+                new Tile(SEALED, new GridPos(10, 0), SEALED, "", Optional.empty(), List.of(new CheckmarkTask()),
+                        List.of(choice()), List.of(), Optional.empty(), Optional.empty(),
+                        Optional.of("questqueen_gametest_never_granted"))),
                 List.of()));
     }
 
@@ -158,6 +171,53 @@ public final class TaskProgressGameTests {
         leave(player);
         expectValue(player, GATHER, LOGS, 7);
         helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, batch = BATCH)
+    public static void claimGrantsOnceAndRecordsTheClaim(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        check(TaskHooks.trySubmit(player, CHAPTER, PAYOUT, 0), "checkmark was refused");
+        check(ProgressService.claimTileRewards(player, CHAPTER, PAYOUT), "first claim was refused");
+        check(count(player, Items.DIAMOND) == 2, "claim must grant 2 diamonds, got " + count(player, Items.DIAMOND));
+        check(snapshot(player).taskCompleted(ProgressSnapshot.questKey(CHAPTER, PAYOUT), "claimed"),
+                "the claim must be recorded");
+        check(!ProgressService.claimTileRewards(player, CHAPTER, PAYOUT), "second claim must be refused");
+        check(count(player, Items.DIAMOND) == 2, "second claim granted again: " + count(player, Items.DIAMOND));
+        leave(player);
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, batch = BATCH)
+    public static void aChoiceIsPickedOnce(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        check(TaskHooks.trySubmit(player, CHAPTER, PICK, 0), "checkmark was refused");
+        ProgressService.claimChoice(player, CHAPTER, PICK, 1);
+        ProgressService.claimChoice(player, CHAPTER, PICK, 0);
+        check(count(player, Items.EMERALD) == 1, "option 1 must grant one emerald, got " + count(player, Items.EMERALD));
+        check(count(player, Items.DIAMOND) == 0, "a second pick must grant nothing");
+        leave(player);
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, batch = BATCH)
+    public static void aLockedChoiceCannotBePicked(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ProgressService.grantAll(player);
+        check(snapshot(player).tileCompleted(CHAPTER.toString(), SEALED), "grant-all should complete the sealed tile");
+        ProgressService.claimChoice(player, CHAPTER, SEALED, 0);
+        check(count(player, Items.DIAMOND) == 0, "a pick through a locked tile granted " + count(player, Items.DIAMOND));
+        check(!snapshot(player).taskCompleted(ProgressSnapshot.questKey(CHAPTER, SEALED), "claimed"),
+                "a refused pick must not burn the claim");
+        leave(player);
+        helper.succeed();
+    }
+
+    private static ItemReward item(String id, int count) {
+        return new ItemReward(ResourceLocation.parse(id), count);
+    }
+
+    private static Reward choice() {
+        return new ChoiceReward(List.of(item("minecraft:diamond", 1), item("minecraft:emerald", 1)));
     }
 
     private static Tile tile(String id, int x, List<Task> tasks) {

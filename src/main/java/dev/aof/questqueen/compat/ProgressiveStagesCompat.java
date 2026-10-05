@@ -171,7 +171,8 @@ public final class ProgressiveStagesCompat {
                 player = event.getClass().getMethod("player").invoke(event);
             }
             if (player instanceof ServerPlayer serverPlayer) {
-                ProgressService.sync(serverPlayer);
+                // Stage events are not guaranteed to fire on the server thread; progress reads SQLite.
+                ProgressService.onServerThread(serverPlayer, () -> ProgressService.sync(serverPlayer));
             }
         } catch (Throwable ignored) {
         }
