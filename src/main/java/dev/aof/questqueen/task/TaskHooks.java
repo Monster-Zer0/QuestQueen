@@ -308,10 +308,50 @@ public final class TaskHooks {
         return stored != next;
     }
 
+    /**
+     * Sum of the counts held by the team's online members. Progress rows are per team, so storing one member's
+     * own count made two members overwrite each other every scan (10, 0, 10, …). Every member computes the
+     * same total, so the stored value is stable. A negative entry means the task names nothing countable.
+     */
+    static int teamHeld(List<Integer> perMember) {
+        long total = 0;
+        for (int have : perMember) {
+            if (have < 0) {
+                return -1;
+            }
+            total += have;
+        }
+        return (int) Math.min(Integer.MAX_VALUE, total);
+    }
+
+    /** The scanning player plus every other online member of its team. A solo team skips the member query. */
+    private static List<ServerPlayer> inventoryHolders(ServerPlayer player, String teamId) {
+        if (teamId == null || teamId.startsWith("solo:")) {
+            return List.of(player);
+        }
+        List<ServerPlayer> holders = new ArrayList<>();
+        holders.add(player);
+        for (UUID member : TeamService.members(teamId)) {
+            if (member.equals(player.getUUID())) {
+                continue;
+            }
+            ServerPlayer online = player.server.getPlayerList().getPlayer(member);
+            if (online != null) {
+                holders.add(online);
+            }
+        }
+        return holders;
+    }
+
     private static void scanInventory(ServerPlayer player) {
         ProgressSnapshot snap = ProgressService.snapshot(player);
+        List<ServerPlayer> holders = inventoryHolders(player, snap.teamId());
         forEachOfTypes(player, COUNTED_INVENTORY_TYPES, (chapter, tile, index, task) -> {
-            int have = countHeld(player, task);
+            List<Integer> counts = new ArrayList<>(holders.size());
+            for (ServerPlayer holder : holders) {
+                counts.add(countHeld(holder, task));
+            }
+            int have = teamHeld(counts);
             if (have < 0) {
                 return;
             }

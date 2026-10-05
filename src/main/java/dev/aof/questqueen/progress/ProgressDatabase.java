@@ -16,6 +16,9 @@ import java.sql.Statement;
 
 public final class ProgressDatabase {
     private static Connection connection;
+    /** The server that opened the connection; its thread is the only one that should use it. */
+    private static MinecraftServer owner;
+    private static boolean warnedOffThread;
 
     private ProgressDatabase() {
     }
@@ -34,6 +37,13 @@ public final class ProgressDatabase {
         if (connection == null) {
             throw new IllegalStateException("Quest Queen database is not open");
         }
+        if (owner != null && !owner.isSameThread() && !warnedOffThread) {
+            // Not refused: a read still works. Logged once, because grantAll's manual-commit sweep on the
+            // server thread would take this caller's writes into its transaction.
+            warnedOffThread = true;
+            QuestQueen.LOGGER.warn("Quest database used off the server thread ({}); route it through"
+                    + " ProgressService.onServerThread", Thread.currentThread().getName(), new IllegalStateException());
+        }
         return connection;
     }
 
@@ -45,6 +55,7 @@ public final class ProgressDatabase {
             Files.createDirectories(folder);
             Path db = folder.resolve("progress.db");
             connection = DriverManager.getConnection("jdbc:sqlite:" + db.toAbsolutePath());
+            owner = server;
             try (Statement statement = connection.createStatement()) {
                 statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS teams (
@@ -107,5 +118,6 @@ public final class ProgressDatabase {
             }
             connection = null;
         }
+        owner = null;
     }
 }

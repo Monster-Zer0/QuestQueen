@@ -89,6 +89,20 @@ public final class ProgressService {
         }
     }
 
+    /**
+     * Runs {@code work} on the server thread: now when already there, otherwise queued. Progress shares one
+     * SQLite connection, and {@link #grantAll} holds it in manual-commit mode for a whole sweep, so a write
+     * from another thread could land inside (or be rolled back with) that transaction. Entry points that
+     * other mods can call from any thread go through here.
+     */
+    public static void onServerThread(ServerPlayer player, Runnable work) {
+        if (player.server.isSameThread()) {
+            work.run();
+        } else {
+            player.server.execute(work);
+        }
+    }
+
     public static boolean canAuthor(ServerPlayer player) {
         return EditorSessions.isEnabled(player);
     }
@@ -337,8 +351,11 @@ public final class ProgressService {
         if (!isCompleted(teamId, questId, "tile") || isCompleted(teamId, questId, "claimed")) {
             return false;
         }
-        grantTileRewards(player, tile.get(), true);
+        // Claimed before granting: a reward that throws must not leave the tile claimable again.
         writeProgress(teamId, questId, "claimed", 1, true);
+        grantTileRewards(player, chapterId, tile.get());
+        player.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.4F, 1.2F);
+        player.sendSystemMessage(Component.translatable("questqueen.rewards_claimed", tile.get().title()));
         noteMutation(player, teamId);
         syncTeam(player.server, teamId);
         return true;
@@ -369,13 +386,8 @@ public final class ProgressService {
                         || hasChoiceReward(tile)) {
                     continue;
                 }
-                for (Reward reward : tile.rewards()) {
-                    reward.grant(player);
-                }
-                for (ResourceLocation scroll : tile.scrolls()) {
-                    grantScroll(player, scroll, false);
-                }
                 writeProgress(teamId, questId, "claimed", 1, true);
+                grantTileRewards(player, chapterId, tile);
                 granted++;
             }
         } finally {
@@ -511,20 +523,34 @@ public final class ProgressService {
         }
     }
 
-    private static void grantTileRewards(ServerPlayer player, Tile tile, boolean announce) {
+    /** Every non-choice reward and scroll on a tile the caller has already marked claimed. */
+    private static void grantTileRewards(ServerPlayer player, ResourceLocation chapterId, Tile tile) {
         for (Reward reward : tile.rewards()) {
-            if (!announce && reward.noisy()) {
-                continue;
+            if (!(reward instanceof ChoiceReward)) {
+                grantGuarded(player.getGameProfile().getName(), chapterId, tile.id(), reward.type(),
+                        () -> reward.grant(player));
             }
-            reward.grant(player);
         }
         for (ResourceLocation scroll : tile.scrolls()) {
-            grantScroll(player, scroll, false);
+            grantGuarded(player.getGameProfile().getName(), chapterId, tile.id(), "scroll " + scroll,
+                    () -> grantScroll(player, scroll, false));
         }
-        if (announce) {
-            // Short XP ding instead of the advancement challenge fanfare.
-            player.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.4F, 1.2F);
-            player.sendSystemMessage(Component.translatable("questqueen.rewards_claimed", tile.title()));
+    }
+
+    /**
+     * One reward grant that cannot abort the rest. Callers write "claimed" first, so a failure here loses that
+     * one reward instead of leaving the tile claimable and granting the others again on the next click. The log
+     * line names the tile so an op can hand it out or run {@code /questqueen unclaim}.
+     */
+    static boolean grantGuarded(String playerName, ResourceLocation chapterId, String tileId, String what,
+                                Runnable grant) {
+        try {
+            grant.run();
+            return true;
+        } catch (RuntimeException exception) {
+            QuestQueen.LOGGER.error("Reward {} on {}/{} failed for {}; the tile stays claimed",
+                    what, chapterId, tileId, playerName, exception);
+            return false;
         }
     }
 
@@ -633,12 +659,14 @@ public final class ProgressService {
             return;
         }
         Optional<Tile> tile = chapter.get().tile(tileId);
-        if (tile.isEmpty() || !snapshot(player).tileCompleted(chapterId.toString(), tileId)) {
+        // Same gate as CLAIM and CLAIM ALL: no pick through a still-locked tile.
+        if (tile.isEmpty() || !snapshot(player).tileCompleted(chapterId.toString(), tileId)
+                || !isUnlocked(player, chapter.get(), tile.get())) {
             return;
         }
         String teamId = TeamService.ensureSolo(player);
         String questId = ProgressSnapshot.questKey(chapterId, tileId);
-        if (isCompleted(teamId, questId, "choice")) {
+        if (isCompleted(teamId, questId, "choice") || isCompleted(teamId, questId, "claimed")) {
             return;
         }
         for (dev.aof.questqueen.data.reward.Reward reward : tile.get().rewards()) {
@@ -649,18 +677,13 @@ public final class ProgressService {
                 if (option < 0 || option >= choice.options().size()) {
                     return;
                 }
-                // Sibling non-choice rewards (loot / xp / item / …) grant with the pick — one settle.
-                for (dev.aof.questqueen.data.reward.Reward other : tile.get().rewards()) {
-                    if (!(other instanceof ChoiceReward)) {
-                        other.grant(player);
-                    }
-                }
-                for (ResourceLocation scroll : tile.get().scrolls()) {
-                    grantScroll(player, scroll, false);
-                }
-                choice.grantOption(player, option);
+                // Claimed before granting, as in claimTileRewards: a throwing reward must not reopen the pick.
                 writeProgress(teamId, questId, "choice", option, true);
                 writeProgress(teamId, questId, "claimed", 1, true);
+                // Sibling non-choice rewards (loot / xp / item / …) grant with the pick — one settle.
+                grantTileRewards(player, chapterId, tile.get());
+                grantGuarded(player.getGameProfile().getName(), chapterId, tileId, "choice option " + option,
+                        () -> choice.grantOption(player, option));
                 noteMutation(player, teamId);
                 syncTeam(player.server, teamId);
                 player.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.4F, 1.2F);

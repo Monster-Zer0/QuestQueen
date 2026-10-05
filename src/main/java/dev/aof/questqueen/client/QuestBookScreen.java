@@ -1262,7 +1262,8 @@ public class QuestBookScreen extends Screen {
                 continue;
             }
             for (Tile tile : ch.tiles()) {
-                if (!matchesSearch(tile, needle)) {
+                // A hidden_until tile is not drawn on the board; listing it here gave away its title.
+                if (!matchesSearch(tile, needle) || (!authoring && ClientQuestState.isConcealed(ch, tile))) {
                     continue;
                 }
                 searchHits.add(new SearchHit(ch.id(), tile.id(), tile.title(), ch.title()));
