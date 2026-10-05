@@ -59,7 +59,7 @@ public final class ProgressService {
     @SubscribeEvent
     public static void onLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            TeamService.ensureSolo(player);
+            TeamService.current(player);
             invalidatePlayer(player.getUUID());
             syncNow(player);
         }
@@ -103,8 +103,23 @@ public final class ProgressService {
         }
     }
 
+    /**
+     * The editor session is switched on by an op, but it used to outlive a de-op until logout. Saved chapters can
+     * carry command rewards that run at permission level 2, so the level is checked on every use.
+     */
     public static boolean canAuthor(ServerPlayer player) {
-        return EditorSessions.isEnabled(player);
+        return EditorSessions.isEnabled(player) && player.hasPermissions(2);
+    }
+
+    /**
+     * Re-sync a player whose team changed since their snapshot was built (an FTB party join or leave). Writes
+     * already go to the new team; this refreshes what the book shows. Called from the general tick poll.
+     */
+    public static void refreshTeam(ServerPlayer player) {
+        ProgressSnapshot cached = SNAPSHOT_CACHE.get(player.getUUID());
+        if (cached != null && !cached.teamId().equals(TeamService.current(player))) {
+            syncNow(player);
+        }
     }
 
     /** Drop all cached snapshots (datapack reload / pack mutate). */
@@ -127,7 +142,7 @@ public final class ProgressService {
     }
 
     private static ProgressSnapshot buildSnapshot(ServerPlayer player) {
-        String teamId = TeamService.ensureSolo(player);
+        String teamId = TeamService.current(player);
         Map<String, Integer> values = new HashMap<>();
         Set<String> completedTasks = new HashSet<>();
         Set<String> completedTiles = new HashSet<>();
@@ -231,7 +246,7 @@ public final class ProgressService {
             return 0;
         }
         Task task = tile.get().tasks().get(taskIndex);
-        String teamId = TeamService.ensureSolo(player);
+        String teamId = TeamService.current(player);
         String questId = ProgressSnapshot.questKey(chapterId, tileId);
         String taskId = ProgressSnapshot.taskKey(taskIndex);
         int current = readValue(teamId, questId, taskId);
@@ -266,7 +281,7 @@ public final class ProgressService {
             return 0;
         }
         Task task = tile.get().tasks().get(taskIndex);
-        String teamId = TeamService.ensureSolo(player);
+        String teamId = TeamService.current(player);
         String questId = ProgressSnapshot.questKey(chapterId, tileId);
         String taskId = ProgressSnapshot.taskKey(taskIndex);
         if (isCompleted(teamId, questId, taskId)) {
@@ -299,7 +314,7 @@ public final class ProgressService {
         if (!isUnlocked(player, chapter.get(), tile.get())) {
             return false;
         }
-        String teamId = TeamService.ensureSolo(player);
+        String teamId = TeamService.current(player);
         String questId = ProgressSnapshot.questKey(chapterId, tileId);
         String taskId = ProgressSnapshot.taskKey(taskIndex);
         if (isCompleted(teamId, questId, taskId)) {
@@ -326,7 +341,7 @@ public final class ProgressService {
         if (!isUnlocked(player, chapter.get(), tile.get())) {
             return false;
         }
-        return !isCompleted(TeamService.ensureSolo(player), ProgressSnapshot.questKey(chapterId, tileId),
+        return !isCompleted(TeamService.current(player), ProgressSnapshot.questKey(chapterId, tileId),
                 ProgressSnapshot.taskKey(taskIndex));
     }
 
@@ -346,7 +361,7 @@ public final class ProgressService {
         if (hasChoiceReward(tile.get())) {
             return false;
         }
-        String teamId = TeamService.ensureSolo(player);
+        String teamId = TeamService.current(player);
         String questId = ProgressSnapshot.questKey(chapterId, tileId);
         if (!isCompleted(teamId, questId, "tile") || isCompleted(teamId, questId, "claimed")) {
             return false;
@@ -376,7 +391,7 @@ public final class ProgressService {
         if (tiles.isEmpty()) {
             return 0;
         }
-        String teamId = TeamService.ensureSolo(player);
+        String teamId = TeamService.current(player);
         int granted = 0;
         SUSPEND_SYNC.set(true);
         try {
@@ -410,7 +425,7 @@ public final class ProgressService {
         if (chapter.isEmpty() || chapter.get().tile(tileId).isEmpty()) {
             return false;
         }
-        String teamId = TeamService.ensureSolo(player);
+        String teamId = TeamService.current(player);
         String questId = ProgressSnapshot.questKey(chapterId, tileId);
         deleteProgress(teamId, questId, "claimed");
         deleteProgress(teamId, questId, "choice");
@@ -424,7 +439,7 @@ public final class ProgressService {
      * Returns how many tiles were newly completed.
      */
     public static int grantAll(ServerPlayer player) {
-        String teamId = TeamService.ensureSolo(player);
+        String teamId = TeamService.current(player);
         int granted = 0;
         var connection = ProgressDatabase.get();
         try {
@@ -567,7 +582,7 @@ public final class ProgressService {
         if (tile.isEmpty()) {
             return false;
         }
-        String teamId = TeamService.ensureSolo(player);
+        String teamId = TeamService.current(player);
         String questId = ProgressSnapshot.questKey(chapterId, tileId);
         deleteProgress(teamId, questId, "tile");
         for (int i = 0; i < tile.get().tasks().size(); i++) {
@@ -664,7 +679,7 @@ public final class ProgressService {
                 || !isUnlocked(player, chapter.get(), tile.get())) {
             return;
         }
-        String teamId = TeamService.ensureSolo(player);
+        String teamId = TeamService.current(player);
         String questId = ProgressSnapshot.questKey(chapterId, tileId);
         if (isCompleted(teamId, questId, "choice") || isCompleted(teamId, questId, "claimed")) {
             return;
@@ -693,7 +708,7 @@ public final class ProgressService {
     }
 
     public static void reset(ServerPlayer player) {
-        String teamId = TeamService.ensureSolo(player);
+        String teamId = TeamService.current(player);
         try (PreparedStatement progress = ProgressDatabase.get().prepareStatement("DELETE FROM progress WHERE team_id = ?");
              PreparedStatement scrolls = ProgressDatabase.get().prepareStatement("DELETE FROM scrolls WHERE player_uuid = ?");
              PreparedStatement pins = ProgressDatabase.get().prepareStatement("DELETE FROM pins WHERE player_uuid = ?")) {
@@ -710,7 +725,8 @@ public final class ProgressService {
         // team_flags back `trigger` gates; leaving them behind made reset a no-op for those quests.
         TeamService.clearFlags(teamId);
         PENDING_TEAM_SYNC.remove(teamId);
-        syncNow(player);
+        // Every teammate's book showed the wiped progress until their next write; refresh them all now.
+        flushTeamSync(player.server, teamId);
     }
 
     public static boolean isUnlocked(ServerPlayer player, Chapter chapter, Tile tile) {
@@ -759,12 +775,12 @@ public final class ProgressService {
                 Objective objective = player.getScoreboard().getObjective(condition.id());
                 yield objective != null && player.getScoreboard().getOrCreatePlayerScore(ScoreHolder.forNameOnly(player.getScoreboardName()), objective).get() > 0;
             }
-            case "team_flag" -> TeamService.hasFlag(TeamService.ensureSolo(player), condition.id());
+            case "team_flag" -> TeamService.hasFlag(TeamService.current(player), condition.id());
             case "quest_complete" -> completedTiles.contains(condition.id());
             case "chapter_complete" -> ChapterCompletion.fullyComplete(
                     condition.id(), QuestDefinitions.chapters(), completedTiles);
             case "trigger" -> completedTiles.contains(condition.id())
-                    || TeamService.hasFlag(TeamService.ensureSolo(player), "trigger:" + condition.id());
+                    || TeamService.hasFlag(TeamService.current(player), "trigger:" + condition.id());
             case "stage", "progressivestages" ->
                     dev.aof.questqueen.compat.ProgressiveStagesCompat.hasStage(player, condition.id());
             default -> false;
@@ -776,7 +792,7 @@ public final class ProgressService {
     }
 
     private static void maybeCompleteTile(ServerPlayer player, Chapter chapter, Tile tile) {
-        String teamId = TeamService.ensureSolo(player);
+        String teamId = TeamService.current(player);
         // DB was just written; drop cache so tileComplete sees fresh completedTasks.
         invalidatePlayer(player.getUUID());
         Set<String> completedTasks = snapshot(player).completedTasks();

@@ -39,12 +39,6 @@ class VerbSurfaceAgreementTest {
      * its number, so moving code around cannot smuggle a new leak in behind an exemption.
      */
     private static final Set<String> DELIBERATE = Set.of(
-            // The EDIT MODE author mock's TYPE field chip, under the comment "Mock-style field chips:
-            // TYPE | COUNT | TARGET". It shows the raw JSON field value deliberately.
-            // OPEN QUESTION for Troi (player-facing effect) and Worf: does this surface reach players? If it
-            // does, it takes the shared verb and this exemption is deleted rather than renewed.
-            "dev/aof/questqueen/client/QuestBookScreen.java::drawOutlinedButton(graphics, x + 10, taskY, 72, 14, "
-                    + "task.type().toUpperCase(Locale.ROOT), QuestColors.EDIT);",
             // Reward.type() is a REWARD type, not a task type; the enum name is its own player-facing label.
             "dev/aof/questqueen/data/reward/Reward.java::return type().toUpperCase(Locale.ROOT);");
 

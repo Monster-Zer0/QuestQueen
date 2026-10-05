@@ -66,10 +66,6 @@ public record Chapter(
         return tiles.stream().filter(tile -> tile.id().equals(tileId)).findFirst();
     }
 
-    public boolean inBounds(int x, int y) {
-        return x >= 0 && y >= 0 && x < gridWidth && y < gridHeight;
-    }
-
     public Chapter withTiles(java.util.List<Tile> newTiles) {
         return copy(newTiles, links, gridWidth, gridHeight, parent, order, icon, unlock, hideUntilUnlocked, theme, background, intro);
     }
@@ -119,10 +115,6 @@ public record Chapter(
         return new Chapter(id, title, newTiles, newLinks, width, height, newParent, newOrder, newIcon, newUnlock, hide, newTheme, newBackground, newIntro);
     }
 
-    public boolean hasLink(String from, String to) {
-        return links.stream().anyMatch(link -> link.from().equals(from) && link.to().equals(to));
-    }
-
     public Optional<Link> link(String from, String to) {
         return links.stream().filter(link -> link.from().equals(from) && link.to().equals(to)).findFirst();
     }
@@ -146,39 +138,8 @@ public record Chapter(
         return withLinks(next);
     }
 
-    public Chapter removeLink(String from, String to) {
-        return withLinks(links.stream()
-                .filter(link -> !(link.from().equals(from) && link.to().equals(to)))
-                .toList());
-    }
-
     public Chapter setLinkOp(String from, String to, GateOp op) {
         return upsertLink(from, to, op);
-    }
-
-    public Chapter replaceTile(Tile replacement) {
-        java.util.List<Tile> next = new java.util.ArrayList<>();
-        boolean found = false;
-        for (Tile tile : tiles) {
-            if (tile.id().equals(replacement.id())) {
-                next.add(replacement);
-                found = true;
-            } else {
-                next.add(tile);
-            }
-        }
-        if (!found) {
-            next.add(replacement);
-        }
-        return withTiles(next);
-    }
-
-    public Chapter removeTile(String tileId) {
-        java.util.List<Tile> nextTiles = tiles.stream().filter(tile -> !tile.id().equals(tileId)).toList();
-        java.util.List<Link> nextLinks = links.stream()
-                .filter(link -> !link.from().equals(tileId) && !link.to().equals(tileId))
-                .toList();
-        return copy(nextTiles, nextLinks, gridWidth, gridHeight, parent, order, icon, unlock, hideUntilUnlocked, theme, background, intro);
     }
 
     public static Chapter blank(ResourceLocation id) {

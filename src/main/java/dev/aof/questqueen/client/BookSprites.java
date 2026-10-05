@@ -8,7 +8,6 @@ import net.minecraft.resources.ResourceLocation;
 public final class BookSprites {
     public static final ResourceLocation VOID = QuestQueen.id("backdrop/void");
     public static final ResourceLocation SIDEBAR = QuestQueen.id("panel/sidebar");
-    public static final ResourceLocation HIGHLIGHT = QuestQueen.id("panel/highlight");
     public static final ResourceLocation INSPECT = QuestQueen.id("panel/inspect");
     public static final ResourceLocation CELL = QuestQueen.id("tile/cell");
     public static final ResourceLocation LOCKED = QuestQueen.id("tile/locked");
@@ -19,21 +18,8 @@ public final class BookSprites {
     public static final ResourceLocation FAILED = QuestQueen.id("tile/failed");
     public static final ResourceLocation CLOSED = QuestQueen.id("tile/closed");
     public static final ResourceLocation PORT = QuestQueen.id("icon/port");
-    public static final ResourceLocation PLUS = QuestQueen.id("icon/plus");
 
     private BookSprites() {
-    }
-
-    public static ResourceLocation tileOf(TileVisual visual) {
-        return switch (visual) {
-            case CURRENT -> CURRENT;
-            case NEW -> NEW;
-            case EDIT -> EDIT;
-            case COMPLETED -> COMPLETED;
-            case FAILED -> FAILED;
-            case CLOSED -> CLOSED;
-            case LOCKED -> LOCKED;
-        };
     }
 
     public static ResourceLocation headerOf(TileVisual visual) {
@@ -105,27 +91,10 @@ public final class BookSprites {
         graphics.blitSprite(sprite, x, y, w, h);
     }
 
-    public static void tint(GuiGraphics graphics, ResourceLocation sprite, int x, int y, int w, int h, int argb) {
-        if (w <= 0 || h <= 0) {
-            return;
-        }
-        float a = ((argb >>> 24) & 0xFF) / 255f;
-        float r = ((argb >> 16) & 0xFF) / 255f;
-        float g = ((argb >> 8) & 0xFF) / 255f;
-        float b = (argb & 0xFF) / 255f;
-        graphics.setColor(r, g, b, a <= 0f ? 1f : a);
-        graphics.blitSprite(sprite, x, y, w, h);
-        graphics.setColor(1f, 1f, 1f, 1f);
-    }
-
     public static void panel(GuiGraphics graphics, int x, int y, int w, int h, int accent) {
         blit(graphics, INSPECT, x, y, w, h);
         blit(graphics, headerOfColor(accent), x, y, w, 10);
         blit(graphics, frameOfColor(accent), x, y, w, h);
     }
 
-    public static void button(GuiGraphics graphics, int x, int y, int w, int h, int accent) {
-        blit(graphics, INSPECT, x, y, w, h);
-        blit(graphics, frameOfColor(accent), x, y, w, h);
-    }
 }

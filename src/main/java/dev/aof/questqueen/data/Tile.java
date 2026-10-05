@@ -54,10 +54,6 @@ public record Tile(
         return new Tile(id, pos, title, newDescription, icon, tasks, rewards, scrolls, target, hiddenUntil, requiredStage);
     }
 
-    public Tile withIcon(Optional<Icon> newIcon) {
-        return new Tile(id, pos, title, description, newIcon, tasks, rewards, scrolls, target, hiddenUntil, requiredStage);
-    }
-
     public Tile withTasks(List<Task> newTasks) {
         return new Tile(id, pos, title, description, icon, newTasks, rewards, scrolls, target, hiddenUntil, requiredStage);
     }

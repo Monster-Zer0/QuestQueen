@@ -94,6 +94,10 @@ public final class TaskHooks {
             return;
         }
         int tick = player.tickCount;
+        if (tick % GENERAL_INTERVAL == 0) {
+            // Before any scan, so they all read the team the player is in now (an FTB party join or leave).
+            ProgressService.refreshTeam(player);
+        }
         if (tick % OBSERVATION_INTERVAL == 0) {
             scanObservation(player);
         }
@@ -170,7 +174,7 @@ public final class TaskHooks {
         // a gate this advancement opens is seen now, not after the next unrelated progress write.
         // Recipe unlocks are advancements too and arrive in bursts; no gate is written against them.
         if (!id.getPath().startsWith("recipes/")) {
-            ProgressService.syncTeam(player.server, TeamService.ensureSolo(player));
+            ProgressService.syncTeam(player.server, TeamService.current(player));
         }
         forEachOfTypes(player, List.of("advancement"), (chapter, tile, index, task) -> {
             if (id.equals(task.advancementId().orElse(null))) {
@@ -324,9 +328,9 @@ public final class TaskHooks {
         return (int) Math.min(Integer.MAX_VALUE, total);
     }
 
-    /** The scanning player plus every other online member of its team. A solo team skips the member query. */
+    /** The scanning player plus every other online member of its team (its FTB party, when it is in one). */
     private static List<ServerPlayer> inventoryHolders(ServerPlayer player, String teamId) {
-        if (teamId == null || teamId.startsWith("solo:")) {
+        if (teamId == null) {
             return List.of(player);
         }
         List<ServerPlayer> holders = new ArrayList<>();

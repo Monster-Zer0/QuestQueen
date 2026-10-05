@@ -15,19 +15,43 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 public final class ItemIconPng {
     private static final Map<String, byte[]> CACHE = new ConcurrentHashMap<>();
     private static final byte[] EMPTY = emptyPng();
+    private static final long RENDER_TIMEOUT_SECONDS = 5;
 
     private ItemIconPng() {
     }
 
+    /**
+     * Called from the editor's HTTP thread. Item models and sprite pixels belong to the render thread, and a
+     * resource reload (F3+T) frees the sprite images, so reading them here could touch freed native memory.
+     * The render runs on the client thread instead; this thread only waits for it.
+     */
     public static byte[] pngFor(String id) {
         if (id == null || id.isBlank()) {
             return EMPTY;
         }
-        return CACHE.computeIfAbsent(id, ItemIconPng::render);
+        byte[] cached = CACHE.get(id);
+        if (cached != null) {
+            return cached;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        byte[] png;
+        if (minecraft.isSameThread()) {
+            png = render(id);
+        } else {
+            try {
+                png = minecraft.submit(() -> render(id)).get(RENDER_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            } catch (Exception exception) {
+                // A paused or closing client: answer blank now and let the next request try again.
+                return EMPTY;
+            }
+        }
+        CACHE.put(id, png);
+        return png;
     }
 
     public static void clear() {

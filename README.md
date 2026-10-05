@@ -1,6 +1,6 @@
 # Quest Queen
 
-A NeoForge 1.21.1 quest book: pixel-grid chapters from datapack JSON, server-side SQLite team progress, and a browser quest editor.
+A NeoForge 1.21.1 quest book: pixel-grid chapters from datapack JSON, server-side SQLite progress shared through FTB Teams parties when installed, and a browser quest editor.
 
 ## Run
 

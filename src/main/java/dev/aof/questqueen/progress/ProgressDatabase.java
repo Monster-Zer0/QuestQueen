@@ -56,6 +56,7 @@ public final class ProgressDatabase {
             Path db = folder.resolve("progress.db");
             connection = DriverManager.getConnection("jdbc:sqlite:" + db.toAbsolutePath());
             owner = server;
+            TeamService.resetSession();
             try (Statement statement = connection.createStatement()) {
                 statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS teams (

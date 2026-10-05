@@ -60,6 +60,9 @@ public final class ClientQuestState {
     public static void reset() {
         setPack(QuestPack.empty());
         setProgress(ProgressSnapshot.empty());
+        // Game times from the world we are leaving mean nothing in the next one: a lower clock there kept
+        // tiles flagged NEW for good.
+        NEW_SINCE.clear();
     }
 
     public static void setPack(QuestPack next) {
@@ -122,7 +125,7 @@ public final class ClientQuestState {
         if (tileOpt.isEmpty()) {
             return;
         }
-        TileVisual visual = visual(ch, tileOpt.get(), false, tileOpt.get().id());
+        TileVisual visual = visual(ch, tileOpt.get());
         if (visual == TileVisual.COMPLETED || visual == TileVisual.FAILED) {
             QuestNetwork.sendToServer(new PinC2S(ch.id(), tileOpt.get().id(), true));
         }
@@ -248,10 +251,7 @@ public final class ClientQuestState {
         return owned;
     }
 
-    public static TileVisual visual(Chapter chapter, Tile tile, boolean authoring, String selectedId) {
-        if (authoring && tile.id().equals(selectedId)) {
-            return TileVisual.EDIT;
-        }
+    public static TileVisual visual(Chapter chapter, Tile tile) {
         if (progress.tileCompleted(chapter.id().toString(), tile.id())) {
             return TileVisual.COMPLETED;
         }
@@ -263,7 +263,7 @@ public final class ClientQuestState {
             return TileVisual.CLOSED;
         }
         // Prefer gate/start logic over the revealed sync set so the book stays usable if progress is empty.
-        boolean open = authoring || isUnlocked(chapter, tile) || progress.revealed(chapter.id().toString(), tile.id());
+        boolean open = isUnlocked(chapter, tile) || progress.revealed(chapter.id().toString(), tile.id());
         if (!open) {
             return TileVisual.LOCKED;
         }
@@ -502,8 +502,10 @@ public final class ClientQuestState {
 
     public static int remainingOnPath(Chapter chapter) {
         int remaining = 0;
+        // Once per call: this used to rebuild the whole path for every tile in the chapter.
+        Set<String> path = pathHighlight(chapter);
         for (Tile tile : chapter.tiles()) {
-            if (!pathHighlight(chapter).contains(tile.id())) {
+            if (!path.contains(tile.id())) {
                 continue;
             }
             for (int i = 0; i < tile.tasks().size(); i++) {
