@@ -64,6 +64,25 @@ class InventoryProgressTest {
     }
 
     @Test
+    void teamMembersStoreTheSameSummedCount() {
+        // One shared row, two members scanning in turn: 10 logs and 0 logs used to flip it 10, 0, 10.
+        Row logs = new Row();
+        int total = TaskHooks.teamHeld(List.of(10, 0));
+        logs.scan(total, 16);
+        assertEquals(10, logs.value);
+        logs.scan(TaskHooks.teamHeld(List.of(10, 0)), 16);
+        assertEquals(10, logs.value, "the second member's scan must not overwrite the first");
+        logs.scan(TaskHooks.teamHeld(List.of(10, 6)), 16);
+        assertTrue(logs.completed, "stacks held across the team complete the task together");
+    }
+
+    @Test
+    void anUncountableTaskStaysUncountableForATeam() {
+        assertEquals(-1, TaskHooks.teamHeld(List.of(-1, -1)));
+        assertEquals(7, TaskHooks.teamHeld(List.of(7)));
+    }
+
+    @Test
     void extraStacksClampAtTheRequirement() {
         assertEquals(16, TaskHooks.storedInventoryValue(27, 16));
         assertEquals(0, TaskHooks.storedInventoryValue(0, 16));
