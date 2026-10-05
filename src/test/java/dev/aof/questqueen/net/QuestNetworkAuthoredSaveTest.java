@@ -43,9 +43,9 @@ import static org.junit.jupiter.api.Assertions.fail;
  * BEFORE/AFTER INVENTORY of the whole case tree rather than by targeted assertions: a targeted
  * assertion cannot see the entry nobody thought of.
  *
- * <p>The link cases are created with {@code mklink /J}. If junctions cannot be created the
- * suite FAILS LOUDLY — never skips — because a security test that can skip is a control whose
- * regression is invisible in a clean-looking tally (Worf R3).
+ * <p>The link cases are created with {@code mklink /J} on Windows and a directory symlink elsewhere.
+ * If the link cannot be created the suite FAILS LOUDLY — never skips — because a security test that
+ * can skip is a control whose regression is invisible in a clean-looking tally (Worf R3).
  */
 class QuestNetworkAuthoredSaveTest {
 
@@ -69,10 +69,21 @@ class QuestNetworkAuthoredSaveTest {
     }
 
     /**
-     * Creates a directory junction, or FAILS. Skipping would hide the W-1 regression this file
-     * exists to pin: on a host without junction support the suite must be red, not quietly green.
+     * Creates a directory link, or FAILS. Skipping would hide the W-1 regression this file exists to
+     * pin: on a host without link support the suite must be red, not quietly green. Windows gets a
+     * junction, the case {@code isSymbolicLink} cannot see; other hosts get the symlink that is their
+     * equivalent escape.
      */
     private static void createJunction(Path link, Path target) throws Exception {
+        if (!System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).startsWith("windows")) {
+            try {
+                Files.createSymbolicLink(link, target);
+            } catch (IOException | UnsupportedOperationException error) {
+                fail("could not create symlink " + link + " -> " + target + " (" + error + "). This suite does"
+                        + " NOT skip the link cases: without them the W-1 link regression is undetectable (Worf R3).");
+            }
+            return;
+        }
         Process process = new ProcessBuilder("cmd", "/c", "mklink", "/J", link.toString(), target.toString())
                 .redirectErrorStream(true)
                 .start();

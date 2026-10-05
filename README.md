@@ -8,6 +8,10 @@ A NeoForge 1.21.1 quest book: pixel-grid chapters from datapack JSON, server-sid
 gradlew runClient
 ```
 
+If `runClient` exits at once with `NoSuchElementException: No value present` in `BootstrapLauncher`, the run classpath file lists jars under a Gradle home that is gone. The build now rewrites that file whenever the Gradle home changes; on an older checkout, run `gradlew writeMinecraftClasspathClient --rerun`.
+
+Machine-specific test fixtures are optional Gradle properties: `-Pqq.devInstance=<instance dir>` (JEI API drift check) and `-Pskylore.chapters=<chapters dir>` (caption corpus). Tests that need them skip when they are absent.
+
 Open the book with **J**. JourneyMap also defaults to J, so rebind one of them in a pack that has both. With no pack chapters loaded, the book opens on the built-in Feature Showcase.
 
 ## Editor

@@ -63,16 +63,26 @@ public final class QuestNetwork {
             int end = Math.min(bytes.length, start + CHUNK);
             byte[] slice = new byte[end - start];
             System.arraycopy(bytes, start, slice, 0, slice.length);
-            PacketDistributor.sendToPlayer(player, new DefinitionChunkS2C(session, i, total, slice));
+            send(player, new DefinitionChunkS2C(session, i, total, slice));
         }
     }
 
     public static void sendProgress(ServerPlayer player, ProgressSnapshot snapshot) {
-        PacketDistributor.sendToPlayer(player, ProgressS2C.of(snapshot));
+        send(player, ProgressS2C.of(snapshot));
     }
 
     public static void sendEditorSession(ServerPlayer player, boolean enabled) {
-        PacketDistributor.sendToPlayer(player, new EditorSessionS2C(enabled));
+        send(player, new EditorSessionS2C(enabled));
+    }
+
+    /**
+     * NeoForge throws when a payload goes to a connection that never negotiated its channel (a mock or
+     * fake player), and that throw would abort the login or progress write that triggered the send.
+     */
+    private static void send(ServerPlayer player, CustomPacketPayload payload) {
+        if (player.connection != null && player.connection.hasChannel(payload)) {
+            PacketDistributor.sendToPlayer(player, payload);
+        }
     }
 
     /** Legacy shape: no chapter change. Kept so existing callers keep working. */
@@ -86,7 +96,7 @@ public final class QuestNetwork {
      *                (18 of them collide across chapters), so a derived chapter is ambiguous.
      */
     public static void sendOpenBook(ServerPlayer player, String tileId, boolean expanded, String chapter) {
-        PacketDistributor.sendToPlayer(player, new OpenBookS2C(
+        send(player, new OpenBookS2C(
                 tileId == null ? "" : tileId,
                 expanded,
                 chapter == null ? "" : chapter));
