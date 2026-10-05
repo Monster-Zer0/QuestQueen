@@ -653,7 +653,10 @@ public class QuestBookScreen extends Screen {
         super.removed();
         if (minecraft != null && bookScaleApplied) {
             bookScaleApplied = false;
-            minecraft.resizeDisplay();
+            // Scale only — never resizeDisplay(). That always destroys/recreates the main
+            // framebuffer (new depth texture id), which breaks Iris + Distant Horizons depth
+            // reconnect so LOD terrain draws on top of the world until something else fixes it.
+            restorePlayerGuiScale();
         }
     }
 
@@ -668,6 +671,13 @@ public class QuestBookScreen extends Screen {
         this.width = window.getGuiScaledWidth();
         this.height = window.getGuiScaledHeight();
         bookScaleApplied = true;
+    }
+
+    /** Mirror the scale half of Minecraft.resizeDisplay without touching the framebuffer. */
+    private void restorePlayerGuiScale() {
+        Window window = minecraft.getWindow();
+        int scale = window.calculateScale(minecraft.options.guiScale().get(), minecraft.isEnforceUnicode());
+        window.setGuiScale(scale);
     }
 
     /** Chunky integer scale: 64px tiles stay readable like the mock (never drop to scale 1 on a 720p+ window). */
