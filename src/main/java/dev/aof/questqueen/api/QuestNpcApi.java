@@ -52,7 +52,7 @@ public final class QuestNpcApi {
             }
         }
         ProgressService.extra(player, new dev.aof.questqueen.data.GateCondition("trigger", triggerId));
-        String teamId = dev.aof.questqueen.progress.TeamService.ensureSolo(player);
+        String teamId = dev.aof.questqueen.progress.TeamService.current(player);
         dev.aof.questqueen.progress.TeamService.setFlag(teamId, "trigger:" + triggerId);
         // The flag is team-wide, so every member's cached gates are now stale, not only the firing player's.
         ProgressService.syncTeam(player.server, teamId);

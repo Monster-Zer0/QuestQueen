@@ -34,6 +34,14 @@ A pixel-grid quest book with datapack chapters, team progress, and a browser que
     ordering="NONE"
     side="BOTH"
 
+# Quest progress follows FTB Teams parties when installed; without it every player is their own team.
+[[dependencies.${mod_id}]]
+    modId="ftbteams"
+    type="optional"
+    versionRange="[2101.1,)"
+    ordering="NONE"
+    side="BOTH"
+
 [[dependencies.${mod_id}]]
     modId="jei"
     type="optional"

@@ -45,8 +45,21 @@ class QuestQueenCommandsPermissionTest {
     }
 
     @Test
+    void resetAndEditorNeedAnOp() {
+        for (String child : new String[]{"reset", "editor", "grant", "unclaim"}) {
+            assertFalse(node(child).canUse(sourceAt(0)), child + " must be refused at permission level 0");
+        }
+    }
+
+    @Test
+    void teamHasNoSubcommandsLeft() {
+        assertTrue(node("team").getChildren().isEmpty(),
+                "invite/accept/create/leave are gone; parties come from FTB Teams");
+    }
+
+    @Test
     void playerFacingSubcommandsStayOpen() {
-        assertTrue(node("team").canUse(sourceAt(0)), "team management is for every player");
+        assertTrue(node("team").canUse(sourceAt(0)), "the team pointer to FTB Teams is for every player");
         assertTrue(node("book").canUse(sourceAt(0)), "opening the book is for every player");
     }
 }

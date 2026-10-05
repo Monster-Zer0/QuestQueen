@@ -13,6 +13,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import dev.aof.questqueen.QuestVersion;
 import dev.aof.questqueen.api.QuestNpcApi;
+import dev.aof.questqueen.compat.FtbTeamsCompat;
 import dev.aof.questqueen.data.QuestDefinitions;
 import dev.aof.questqueen.net.QuestNetwork;
 import dev.aof.questqueen.progress.EditorSessions;
@@ -52,50 +53,14 @@ public final class QuestQueenCommands {
     /** The whole command tree; split from the event so tests can build it and read its permission gates. */
     static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("questqueen")
+                // Teams come from FTB Teams. Quest Queen's own invite/accept teams are gone; this only says where to look.
                 .then(Commands.literal("team")
-                        .then(Commands.literal("create")
-                                .then(Commands.argument("name", StringArgumentType.string())
-                                        .executes(ctx -> {
-                                            ServerPlayer player = ctx.getSource().getPlayerOrException();
-                                            String id = TeamService.create(player, StringArgumentType.getString(ctx, "name"));
-                                            ProgressService.sync(player);
-                                            ctx.getSource().sendSuccess(() -> Component.literal("Created team " + id), true);
-                                            return 1;
-                                        })))
-                        .then(Commands.literal("invite")
-                                .then(Commands.argument("player", EntityArgument.player())
-                                        .executes(ctx -> {
-                                            ServerPlayer player = ctx.getSource().getPlayerOrException();
-                                            ServerPlayer target = EntityArgument.getPlayer(ctx, "player");
-                                            String team = TeamService.ensureSolo(player);
-                                            TeamService.invite(team, target.getUUID());
-                                            target.sendSystemMessage(Component.literal("Quest team invite from " + player.getGameProfile().getName() + ". Use /questqueen team accept"));
-                                            ctx.getSource().sendSuccess(() -> Component.literal("Invited " + target.getGameProfile().getName()), true);
-                                            return 1;
-                                        })))
-                        .then(Commands.literal("accept")
-                                .executes(ctx -> {
-                                    ServerPlayer player = ctx.getSource().getPlayerOrException();
-                                    return TeamService.accept(player).map(teamId -> {
-                                        // The team just gained a member; existing members still carry a
-                                        // snapshot built from the old roster, so sync the whole team.
-                                        ProgressService.invalidatePlayer(player.getUUID());
-                                        ProgressService.syncTeam(player.server, teamId);
-                                        ctx.getSource().sendSuccess(() -> Component.literal("Joined " + teamId), true);
-                                        return 1;
-                                    }).orElseGet(() -> {
-                                        ctx.getSource().sendFailure(Component.literal("No pending invite"));
-                                        return 0;
-                                    });
-                                }))
-                        .then(Commands.literal("leave")
-                                .executes(ctx -> {
-                                    ServerPlayer player = ctx.getSource().getPlayerOrException();
-                                    TeamService.leave(player, true);
-                                    ProgressService.sync(player);
-                                    ctx.getSource().sendSuccess(() -> Component.literal("Left team"), true);
-                                    return 1;
-                                })))
+                        .executes(ctx -> {
+                            ctx.getSource().sendSuccess(() -> Component.literal(FtbTeamsCompat.present()
+                                    ? "Quest progress is shared with your FTB team. Use /ftbteams party to form one."
+                                    : "Quest progress is per player. Install FTB Teams to share it with a party."), false);
+                            return 1;
+                        }))
                 // trigger/dialog complete quests and set team flags, so they are for command blocks, functions and
                 // NPC mods (all level 2), not for a survival player typing them into chat.
                 .then(Commands.literal("trigger")
@@ -199,12 +164,9 @@ public final class QuestQueenCommands {
                 .then(Commands.literal("reset")
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.argument("player", EntityArgument.player())
-                                .executes(ctx -> {
-                                    ServerPlayer target = EntityArgument.getPlayer(ctx, "player");
-                                    ProgressService.reset(target);
-                                    ctx.getSource().sendSuccess(() -> Component.literal("Reset quests for " + target.getGameProfile().getName()), true);
-                                    return 1;
-                                })))
+                                .executes(ctx -> reset(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"), false))
+                                .then(Commands.literal("team")
+                                        .executes(ctx -> reset(ctx.getSource(), EntityArgument.getPlayer(ctx, "player"), true)))))
                 .then(Commands.literal("editor")
                         .requires(source -> source.hasPermission(2))
                         .executes(ctx -> toggleEditor(ctx.getSource().getPlayerOrException()))
@@ -350,11 +312,33 @@ public final class QuestQueenCommands {
             source.sendFailure(Component.literal("grant-all needs a player"));
             return 0;
         }
-        if (!source.hasPermission(2) && !player.isCreative()) {
-            source.sendFailure(Component.literal("grant-all requires creative mode or permission 2"));
+        // Op only. Creative used to be enough, and completed tiles can then be claimed, which runs the pack's
+        // command rewards at permission level 2.
+        if (!source.hasPermission(2)) {
+            source.sendFailure(Component.literal("grant-all requires permission 2"));
             return 0;
         }
         return grantAllTarget(source, player);
+    }
+
+    /**
+     * Progress is stored per team, so resetting one player of a shared team resets everyone in it. That needs the
+     * explicit {@code team} form; the plain form refuses and says who else would lose progress.
+     */
+    private static int reset(CommandSourceStack source, ServerPlayer target, boolean wholeTeam) {
+        String teamId = TeamService.current(target);
+        int others = (int) TeamService.members(teamId).stream().filter(id -> !id.equals(target.getUUID())).count();
+        String name = target.getGameProfile().getName();
+        if (others > 0 && !wholeTeam) {
+            source.sendFailure(Component.literal(name + " shares quest progress with " + others
+                    + " other player(s). Run /questqueen reset " + name + " team to reset the whole team."));
+            return 0;
+        }
+        ProgressService.reset(target);
+        source.sendSuccess(() -> Component.literal(others > 0
+                ? "Reset quests for " + name + "'s team (" + (others + 1) + " players)"
+                : "Reset quests for " + name), true);
+        return 1;
     }
 
     private static int grantAllTarget(CommandSourceStack source, ServerPlayer target) {

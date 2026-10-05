@@ -14,7 +14,10 @@ import dev.aof.questqueen.data.task.ObtainTask;
 import dev.aof.questqueen.data.task.SubmitTask;
 import dev.aof.questqueen.data.task.Task;
 import dev.aof.questqueen.progress.ProgressService;
+import dev.aof.questqueen.compat.FtbTeamsCompat;
+import dev.aof.questqueen.progress.ProgressDatabase;
 import dev.aof.questqueen.progress.ProgressSnapshot;
+import dev.aof.questqueen.progress.TeamService;
 import dev.aof.questqueen.task.TaskHooks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.BeforeBatch;
@@ -35,6 +38,10 @@ import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
+import java.lang.reflect.Method;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -171,6 +178,107 @@ public final class TaskProgressGameTests {
         leave(player);
         expectValue(player, GATHER, LOGS, 7);
         helper.succeed();
+    }
+
+    /** Progress kept under a pre-1.1.208 Quest Queen team moves to wherever the player plays now. */
+    @GameTest(template = TEMPLATE, batch = BATCH)
+    public static void legacyTeamProgressMovesToThePlayer(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        String legacy = "team:" + java.util.UUID.randomUUID();
+        sql("INSERT INTO progress(team_id, quest_id, task_id, value, completed) VALUES(?, ?, ?, 5, 0)",
+                legacy, ProgressSnapshot.questKey(CHAPTER, GATHER), ProgressSnapshot.taskKey(LOGS));
+        sql("INSERT INTO team_members(team_id, player_uuid, role) VALUES(?, ?, 'member')",
+                legacy, player.getUUID().toString());
+        TeamService.resetSession();
+        expectValue(player, GATHER, LOGS, 5);
+        check(rows("SELECT 1 FROM progress WHERE team_id = ?", legacy) == 0, "the legacy rows were copied, not moved");
+        check(rows("SELECT 1 FROM team_members WHERE player_uuid = ?", player.getUUID().toString()) == 0,
+                "the legacy membership must be dropped so the move runs once");
+        leave(player);
+        helper.succeed();
+    }
+
+    /** A guest invited the old way sat in solo:<host>. That progress is the host's and must stay put. */
+    @GameTest(template = TEMPLATE, batch = BATCH)
+    public static void aGuestNeverTakesTheHostsSoloProgress(GameTestHelper helper) {
+        ServerPlayer guest = helper.makeMockServerPlayerInLevel();
+        String hostSolo = "solo:" + java.util.UUID.randomUUID();
+        sql("INSERT INTO progress(team_id, quest_id, task_id, value, completed) VALUES(?, ?, ?, 9, 0)",
+                hostSolo, ProgressSnapshot.questKey(CHAPTER, GATHER), ProgressSnapshot.taskKey(LOGS));
+        sql("INSERT INTO team_members(team_id, player_uuid, role) VALUES(?, ?, 'member')",
+                hostSolo, guest.getUUID().toString());
+        TeamService.resetSession();
+        expectValue(guest, GATHER, LOGS, 0);
+        check(rows("SELECT 1 FROM progress WHERE team_id = ?", hostSolo) == 1, "the host's progress moved");
+        leave(guest);
+        helper.succeed();
+    }
+
+    /** Only with FTB Teams loaded: two players in one party store one summed count. */
+    @GameTest(template = TEMPLATE, batch = BATCH)
+    public static void anFtbPartySharesOneInventoryCount(GameTestHelper helper) {
+        if (!FtbTeamsCompat.present()) {
+            helper.succeed();
+            return;
+        }
+        ServerPlayer host = helper.makeMockServerPlayerInLevel();
+        ServerPlayer guest = helper.makeMockServerPlayerInLevel();
+        formParty(host, guest);
+        String team = TeamService.current(host);
+        check(team.startsWith(FtbTeamsCompat.PREFIX), "host is not on an FTB team: " + team);
+        check(team.equals(TeamService.current(guest)), "guest is not on the host's party");
+        give(host, Items.OAK_LOG, 10);
+        scan(host);
+        scan(guest);
+        expectValue(host, GATHER, LOGS, 10);
+        expectValue(guest, GATHER, LOGS, 10);
+        give(guest, Items.OAK_LOG, 6);
+        scan(guest);
+        expectCompleted(host, GATHER, LOGS);
+        leave(guest);
+        leave(host);
+        helper.succeed();
+    }
+
+    /** FTB Teams is not on the compile classpath; drive its party API by reflection. */
+    private static void formParty(ServerPlayer host, ServerPlayer guest) {
+        try {
+            Object api = Class.forName("dev.ftb.mods.ftbteams.api.FTBTeamsAPI").getMethod("api").invoke(null);
+            Object manager = api.getClass().getMethod("getManager").invoke(api);
+            Object party = manager.getClass().getMethod("createParty", ServerPlayer.class, String.class)
+                    .invoke(manager, host, "qq_gametest_" + host.getUUID().toString().substring(0, 8));
+            Method invite = party.getClass().getMethod("invite", ServerPlayer.class, Collection.class);
+            invite.invoke(party, host, List.of(guest.getGameProfile()));
+            party.getClass().getMethod("join", ServerPlayer.class).invoke(party, guest);
+        } catch (ReflectiveOperationException exception) {
+            throw new GameTestAssertException("could not form an FTB party: " + exception.getCause());
+        }
+    }
+
+    private static void sql(String statement, String... args) {
+        try (PreparedStatement prepared = ProgressDatabase.get().prepareStatement(statement)) {
+            for (int i = 0; i < args.length; i++) {
+                prepared.setString(i + 1, args[i]);
+            }
+            prepared.executeUpdate();
+        } catch (java.sql.SQLException exception) {
+            throw new GameTestAssertException(exception.toString());
+        }
+    }
+
+    private static int rows(String query, String arg) {
+        try (PreparedStatement prepared = ProgressDatabase.get().prepareStatement(query)) {
+            prepared.setString(1, arg);
+            int count = 0;
+            try (ResultSet result = prepared.executeQuery()) {
+                while (result.next()) {
+                    count++;
+                }
+            }
+            return count;
+        } catch (java.sql.SQLException exception) {
+            throw new GameTestAssertException(exception.toString());
+        }
     }
 
     @GameTest(template = TEMPLATE, batch = BATCH)
