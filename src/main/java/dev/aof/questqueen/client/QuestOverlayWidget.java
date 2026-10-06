@@ -13,7 +13,11 @@ import net.minecraft.network.chat.Component;
  * fills inside this widget pass stay visible.
  */
 public final class QuestOverlayWidget extends AbstractWidget {
-    public record Chip(int x, int y, int w, int h, int color) {
+    /** A button face. {@code outline} draws a 1px frame instead of a fill (PIN, CLAIMED). */
+    public record Chip(int x, int y, int w, int h, int color, boolean outline) {
+        public Chip(int x, int y, int w, int h, int color) {
+            this(x, y, w, h, color, false);
+        }
     }
 
     private boolean shown;
@@ -24,6 +28,9 @@ public final class QuestOverlayWidget extends AbstractWidget {
     private boolean pluses;
     private boolean closeX = true;
     private boolean dimBackdrop;
+    /** Ledger chrome: hairline frame in {@link #frameColor} plus a state rail, instead of the corner tab. */
+    private boolean rail;
+    private int frameColor = QuestColors.SIDEBAR_EDGE;
     private int dimLeft;
     private List<Chip> chips = List.of();
     /** Enter/exit motion: alpha in [0,1] and a small Y settle (geometry only — hue untouched). */
@@ -73,6 +80,12 @@ public final class QuestOverlayWidget extends AbstractWidget {
         visible = shown;
     }
 
+    /** Switch to the ledger chrome (the inspect card); the modal keeps the tabbed panel. */
+    public void setRail(boolean rail, int frameColor) {
+        this.rail = rail;
+        this.frameColor = frameColor;
+    }
+
     public void setDimLeft(int dimLeft) {
         this.dimLeft = Math.max(0, dimLeft);
     }
@@ -105,7 +118,9 @@ public final class QuestOverlayWidget extends AbstractWidget {
         int h = getHeight();
         int faceA = UiFx.scaleAlpha(face, fxAlpha);
         int edgeA = UiFx.scaleAlpha(edge, fxAlpha);
-        if (headerBar) {
+        if (rail) {
+            MockChrome.railPanel(graphics, x, y, w, h, faceA, UiFx.scaleAlpha(frameColor, fxAlpha), edgeA);
+        } else if (headerBar) {
             MockChrome.panel(graphics, x, y, w, h, faceA, edgeA, headerW);
         } else {
             MockChrome.box(graphics, x, y, w, h, faceA);
@@ -114,14 +129,20 @@ public final class QuestOverlayWidget extends AbstractWidget {
             }
         }
         if (closeX) {
-            MockChrome.closeX(graphics, x + w - 12, y + 3, UiFx.scaleAlpha(MockChrome.tagWhite(), fxAlpha));
+            int xInk = rail ? QuestColors.MUTED : MockChrome.tagWhite();
+            MockChrome.closeX(graphics, x + w - 12, y + 3, UiFx.scaleAlpha(xInk, fxAlpha));
         }
         if (pluses) {
             // Mock: small crosses on the exterior bottom-left / bottom-right frame corners.
             MockChrome.bottomCornerPluses(graphics, x, y, w, h, edgeA);
         }
         for (Chip chip : chips) {
-            MockChrome.box(graphics, chip.x, chip.y + fxOffsetY, chip.w, chip.h, UiFx.scaleAlpha(chip.color, fxAlpha));
+            int chipColor = UiFx.scaleAlpha(chip.color, fxAlpha);
+            if (chip.outline) {
+                MockChrome.frame(graphics, chip.x, chip.y + fxOffsetY, chip.w, chip.h, chipColor);
+            } else {
+                MockChrome.box(graphics, chip.x, chip.y + fxOffsetY, chip.w, chip.h, chipColor);
+            }
         }
         pose.popPose();
     }

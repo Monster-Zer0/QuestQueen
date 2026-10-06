@@ -223,7 +223,6 @@ public class QuestBookScreen extends Screen {
     private boolean fxPinFlashPinned;
     private long fxSearchFlashAt = -1L;
     private String fxSearchFlashId = "";
-    private final Map<String, Float> fxTaskFill = new HashMap<>();
 
     private static final long FLARE_MS = 620L;
     private static final long PIP_MS = 900L;
@@ -239,7 +238,6 @@ public class QuestBookScreen extends Screen {
     private static final long SIDEBAR_REVEAL_MS = 250L;
     private static final long LOG_DRAWER_MS = 220L;
     private static final long PIN_FLASH_MS = 320L;
-    private static final long TASK_FILL_MS = 300L;
     /** Target icons painted on the inspect card this frame: drives their tooltip and the JEI click. */
     private final List<TaskIconHit> taskIconHits = new ArrayList<>();
     /** Cap on task rows drawn on the inspect card; matches the authoring cap. */
@@ -259,6 +257,15 @@ public class QuestBookScreen extends Screen {
     /** Left inset of the icon strip, and the vertical inset that centres an 8px mosaic in a 12px row. */
     static final int STRIP_X = 10;
     private static final int MOSAIC_INSET_Y = 4;
+    /** Left and right inset of card content; the 3px state rail sits inside the left inset. */
+    static final int CARD_PAD = 10;
+    /** The footer row's 16px reward icons start this far above the card bottom; buttons sit 2px lower. */
+    static final int FOOTER_FROM_BOTTOM = 18;
+    /** Card height below the last body line: the rule over the tasks, the footer rule and the footer row. */
+    static final int FOOTER_RESERVE = 38;
+    /** Horizontal gap between reward slots, and between buttons. */
+    static final int REWARD_GAP = 6;
+    static final int BUTTON_GAP = 4;
     /** Task rows actually drawn on the last card paint, after the space budget was applied. */
     private int drawnTaskRows;
     /** Body-line budget the last card paint used, reported by the probe. */
@@ -270,6 +277,75 @@ public class QuestBookScreen extends Screen {
     private int claimAllScroll;
 
     private enum ModalKind { NONE, GOTCHA, XOR, CLAIM_ALL }
+
+    /**
+     * Where the card footer puts things: reward slots left to right from the content inset, buttons right-aligned
+     * (primary action rightmost, then TAKE A / TAKE B, then PIN). The draw, the click handler, the reward tooltips
+     * and the claim surface all read this one layout, so they cannot drift apart.
+     *
+     * @param slotX     left x of each reward slot that fits
+     * @param overflowX x of the {@code +N} chip when some slots did not fit, else -1
+     */
+    record FooterLayout(int[] slotX, int overflowX, int actionX, int choiceAX, int choiceBX, int pinX, int limit) {
+        int shown() {
+            return slotX.length;
+        }
+    }
+
+    /**
+     * Pure footer layout. A width of 0 means that button is absent. Reward slots stop before the leftmost button
+     * (keeping {@link #REWARD_GAP}); when they do not all fit, room is kept for an {@code overflowW} chip.
+     */
+    static FooterLayout footerLayout(int x, int w, int[] slotW, int actionW, int choiceW, int pinW, int overflowW) {
+        int right = x + w - CARD_PAD;
+        int cursor = right;
+        int actionX = right;
+        int choiceAX = right;
+        int choiceBX = right;
+        int pinX = right;
+        boolean anyButton = false;
+        if (actionW > 0) {
+            actionX = cursor - actionW;
+            cursor = actionX - BUTTON_GAP;
+            anyButton = true;
+        }
+        if (choiceW > 0) {
+            choiceBX = cursor - choiceW;
+            choiceAX = choiceBX - BUTTON_GAP - choiceW;
+            cursor = choiceAX - BUTTON_GAP;
+            anyButton = true;
+        }
+        if (pinW > 0) {
+            pinX = cursor - pinW;
+            cursor = pinX - BUTTON_GAP;
+            anyButton = true;
+        }
+        int limit = anyButton ? cursor + BUTTON_GAP - REWARD_GAP : right;
+        int start = x + CARD_PAD;
+        int total = 0;
+        for (int i = 0; i < slotW.length; i++) {
+            total += slotW[i] + (i > 0 ? REWARD_GAP : 0);
+        }
+        int count;
+        if (start + total <= limit) {
+            count = slotW.length;
+        } else {
+            count = 0;
+            int sx = start;
+            while (count < slotW.length && sx + slotW[count] + REWARD_GAP + overflowW <= limit) {
+                sx += slotW[count] + REWARD_GAP;
+                count++;
+            }
+        }
+        int[] xs = new int[count];
+        int sx = start;
+        for (int i = 0; i < count; i++) {
+            xs[i] = sx;
+            sx += slotW[i] + REWARD_GAP;
+        }
+        int overflowX = count < slotW.length ? sx : -1;
+        return new FooterLayout(xs, overflowX, actionX, choiceAX, choiceBX, pinX, limit);
+    }
 
     private record SidebarRow(ResourceLocation id, int y, int depth, boolean locked, boolean hasChildren,
                               boolean collapsed, int caretX) {
@@ -1095,9 +1171,9 @@ public class QuestBookScreen extends Screen {
                 PlayBar bar = playBar(selected, cx, cy, cw, ch);
                 List<QuestOverlayWidget.Chip> chips = new ArrayList<>();
                 if (bar.action()) {
-                    chips.add(new QuestOverlayWidget.Chip(bar.actionX(), bar.y(), bar.actionW(), 12, QuestColors.CURRENT));
+                    chips.add(new QuestOverlayWidget.Chip(bar.actionX(), bar.y(), bar.actionW(), 12, actionColor(bar)));
                 } else if (bar.claimedBadge()) {
-                    chips.add(new QuestOverlayWidget.Chip(bar.actionX(), bar.y(), bar.actionW(), 12, QuestColors.COMPLETED));
+                    chips.add(new QuestOverlayWidget.Chip(bar.actionX(), bar.y(), bar.actionW(), 12, QuestColors.COMPLETED, true));
                 }
                 if (bar.choice()) {
                     int choiceW = bar.choiceW();
@@ -1109,23 +1185,22 @@ public class QuestBookScreen extends Screen {
                     chips.add(new QuestOverlayWidget.Chip(bar.choiceBX(), bar.y(), choiceW, 12, QuestColors.EDIT));
                 }
                 if (bar.pin()) {
-                    int pinColor = bar.pinned() ? QuestColors.EDIT : QuestColors.CURRENT;
+                    // PIN is an outline in the card's state colour; PINNED fills, so the active state reads at once.
+                    int pinColor = bar.pinned() ? QuestColors.EDIT : accent;
+                    boolean outline = !bar.pinned();
                     if (UiFx.enabled() && fxPinFlashAt >= 0L) {
                         float flash = 1f - UiFx.progress(fxPinFlashAt, PIN_FLASH_MS);
                         pinColor = UiFx.withAlpha(QuestColors.EDIT, 0.55f + 0.45f * flash);
+                        outline = false;
                     }
-                    chips.add(new QuestOverlayWidget.Chip(bar.pinX(), bar.y(), bar.pinW(), 12, pinColor));
+                    chips.add(new QuestOverlayWidget.Chip(bar.pinX(), bar.y(), bar.pinW(), 12, pinColor, outline));
                 }
                 inspectChips = chips;
-            } else {
-                inspectChips = List.of(
-                        new QuestOverlayWidget.Chip(cx + 10, cy + ch - 16, 52, 12, QuestColors.EDIT),
-                        new QuestOverlayWidget.Chip(cx + 66, cy + ch - 16, 52, 12, QuestColors.NEW),
-                        new QuestOverlayWidget.Chip(cx + 122, cy + ch - 16, 52, 12, QuestColors.PORT_RED)
-                );
             }
         }
         inspectPanel.sync(showInspect, cx, cy, cw, ch, QuestColors.CARD, accent, true, inspectHeaderW, pluses, inspectChips);
+        // Ledger chrome: hairline frame and a state rail instead of the filled corner tab.
+        inspectPanel.setRail(true, QuestColors.SIDEBAR_EDGE);
         inspectPanel.setFx(inspectFxAlpha(), inspectFxOffsetY());
         boolean showModal = modal != ModalKind.NONE;
         List<QuestOverlayWidget.Chip> modalChips = List.of();
@@ -2342,7 +2417,6 @@ public class QuestBookScreen extends Screen {
             fxPipAt.clear();
             fxWasUnlocked.clear();
             fxUnlockBaselineReady = false;
-            fxTaskFill.clear();
         }
     }
 
@@ -2954,8 +3028,8 @@ public class QuestBookScreen extends Screen {
         int x = cardX();
         int y = cardY();
         String header = headerLabel(visual, tile);
-        // Tag text (close X is drawn by overlay widget). Inset with panel status tab (FRAME).
-        tinyString(graphics, header, x + 4 + MockChrome.FRAME, y + 2 + MockChrome.FRAME, MockChrome.tagInk(color));
+        // State word in the state colour, where the corner tab used to be (close X is drawn by the overlay).
+        tinyString(graphics, header, x + CARD_PAD, y + 4, color);
 
 
         // Play inspector: mock compact card — title, body, then objective + rewards footer.
@@ -2986,32 +3060,32 @@ public class QuestBookScreen extends Screen {
 
 
         String questId = chapter.id() + "/" + tile.id();
-        // Keep REWARDS/icons below body: when cursor wins, leave an 8px band for the label
-        // (footY-6) so title/body never paint through REWARDS.
-        int footY = Math.max(cursor + 8, y + h - 40);
         taskIconHits.clear();
         // Reset every frame: a tile with no tasks (or none drawn) must not leave the previous tile's count
         // behind, or the click handler would offer rows that are not on screen.
         drawnTaskRows = 0;
+        int footerRuleY = y + h - FOOTER_FROM_BOTTOM - 5;
         if (taskSlots > 0) {
             int shownTasks = taskSlots;
-            int blockTop = Math.max(y + 16, y + h - 42 - shownTasks * 12);
+            int blockTop = taskBlockTop(y, h, shownTasks);
             drawnTaskRows = shownTasks;
+            MockChrome.box(graphics, x + CARD_PAD, blockTop - 4, w - CARD_PAD * 2, 1, QuestColors.SIDEBAR_EDGE);
             int rowY = blockTop;
-            tinyString(graphics, "TASK", x + 10, rowY - 9, QuestColors.MUTED);
-            boolean claimed = ClientQuestState.rewardsClaimed(chapter, tile);
+            int countRight = x + w - CARD_PAD;
+            boolean tileDone = ClientQuestState.progress.tileCompleted(chapter.id().toString(), tile.id());
             for (int i = 0; i < shownTasks; i++) {
                 Task task = tile.tasks().get(i);
                 final int thisRowY = rowY;
-                boolean done = ClientQuestState.progress.taskCompleted(questId, Integer.toString(i));
-                String label = ClientQuestState.taskProgressLabel(chapter, tile, i);
+                boolean done = tileDone || ClientQuestState.progress.taskCompleted(questId, Integer.toString(i));
+                String verb = ClientQuestState.taskVerb(task, tile);
+                String count = ClientQuestState.taskCount(chapter, tile, i);
                 // A tag task accepts ANY member of a tag — minecraft:logs is 199 items — so drawing one
                 // representative icon reads as "bring me oak logs" and hides the task from a player whose
                 // tree is a different mod's. Draw a small mosaic of up to six members plus a "+N" chip, the
                 // way JEI/EMI render a tag ingredient. The strip yields to the label, never the other way
                 // round, so a long verb can never be ellipsized to make room for icons.
                 List<Item> tagItems = taskTagItems(task);
-                int naturalLabel = font.width(label);
+                int naturalLabel = font.width(verb);
                 int stripBudget = labelStripBudget(x, w, naturalLabel);
                 int icons = mosaicIcons(tagItems.size(), stripBudget);
                 int overflow = mosaicOverflow(tagItems.size(), icons);
@@ -3038,10 +3112,6 @@ public class QuestBookScreen extends Screen {
                         tinyString(graphics, "+" + overflow, x + STRIP_X + span + 1, stripY + 1, QuestColors.MUTED);
                         span += overflowChipSpan(overflow);
                     }
-                    if (task.required() > 1) {
-                        // Count badge sits on the strip's own baseline, matching the single-icon convention.
-                        drawCountOver(graphics, task.required(), x + STRIP_X + 1, stripY + 5);
-                    }
                     List<ItemStack> faces = tagItems.subList(0, icons).stream()
                             .map(item -> new ItemStack(item, 1))
                             .toList();
@@ -3054,10 +3124,6 @@ public class QuestBookScreen extends Screen {
                     ItemStack stack = taskStack(task);
                     if (!stack.isEmpty()) {
                         graphics.renderItem(stack, x + STRIP_X, thisRowY);
-                        // Count badge for "get N", matching the reward icon convention.
-                        if (task.required() > 1) {
-                            drawRewardCountOver(graphics, stack, x + STRIP_X, thisRowY);
-                        }
                         taskIconHits.add(new TaskIconHit(x + STRIP_X, thisRowY, 16, 16, i, List.of(stack), 0));
                     } else {
                         // No concrete item (kill/raid/stat/...): fall back to the tile icon on the first row.
@@ -3071,67 +3137,57 @@ public class QuestBookScreen extends Screen {
                     }
                     textX = x + (stack.isEmpty() && i > 0 ? STRIP_X : 28);
                 }
-                // Keep the label clear of the SUBMIT/DONE pill on the right. The floor is the sidebar
-                // label minimum: ellipsize() returns "" below it, so a smaller floor would silently
-                // delete the label instead of trimming it.
-                int labelW = Math.max(SIDEBAR_LABEL_MIN, (x + w - LABEL_RIGHT_MARGIN) - textX);
-                pixel(graphics, Component.literal(ellipsize(label, labelW)), textX, thisRowY + 4,
-                        claimed || done ? QuestColors.CURRENT : QuestColors.TEXT);
-                if (task.required() > 1) {
-                    drawTaskFill(graphics, questId, i, task.required(), textX, thisRowY + 12, Math.min(labelW, 64));
+                // Ledger row: verb, dotted leader, count flush right. The verb yields to the count, never the
+                // other way round. The floor is the sidebar label minimum: ellipsize() returns "" below it.
+                int ink = done ? QuestColors.CURRENT : QuestColors.TEXT;
+                int countW = count.isEmpty() ? 0 : font.width(count);
+                int countX = countRight - countW;
+                int labelW = Math.max(SIDEBAR_LABEL_MIN, countX - 6 - textX);
+                String shownVerb = ellipsize(verb, labelW);
+                pixel(graphics, Component.literal(shownVerb), textX, thisRowY + 4, ink);
+                if (countW > 0) {
+                    int leaderFrom = textX + font.width(shownVerb) + 3;
+                    MockChrome.dottedLine(graphics, leaderFrom, countX - 3, thisRowY + 11,
+                            done ? UiFx.withAlpha(QuestColors.CURRENT, 0.45f) : QuestColors.CELL_LINE);
+                    pixel(graphics, Component.literal(count), countX, thisRowY + 4, ink);
                 }
                 rowY += 12;
             }
         }
-        if (!tile.rewards().isEmpty()) {
-            List<ItemStack> faces = collectRewardFaces(tile);
-            int show = Math.max(1, Math.min(faces.size(), 6));
-            int rowW = show * 17;
-            // "REWARDS" shares its band with the last task label, and the band does not move with the row
-            // count, so the collision is purely horizontal. Test the actual extents rather than whether the
-            // task block was truncated — the old test hid the caption on most cards and still overprinted
-            // on the wide ones.
-            int captionX = x + w - Math.max(48, rowW + 10);
-            int lastRowY = y + h - 54;
-            // The caption is ~21px wide at 0.5 scale and the label is clipped to end at x+w-74, so they can
-            // only overprint in the window between. Suppress just that overlap instead of the whole caption.
-            boolean captionCollides = drawnTaskRows > 0
-                    && captionX < x + w - 72
-                    && captionX + 22 > x + w - 74 - 60;
-            if (!captionCollides) {
-                tinyString(graphics, "REWARDS", captionX, footY - 6, QuestColors.MUTED);
-            }
-            if (faces.isEmpty()) {
-                ItemStack one = rewardFace(tile.rewards().getFirst());
-                graphics.renderItem(one, x + w - 26, footY);
-                drawRewardCountOver(graphics, one, x + w - 26, footY);
-            } else {
-                for (int i = 0; i < show; i++) {
-                    ItemStack face = faces.get(show - 1 - i);
-                    int ox = x + w - 12 - 16 - i * 17;
-                    graphics.renderItem(face, ox, footY);
-                    drawRewardCountOver(graphics, face, ox, footY);
-                }
+        PlayBar bar = playBar(tile, x, y, w, h);
+        List<RewardSlot> slots = footerSlots(tile);
+        if (!slots.isEmpty() || bar.action() || bar.claimedBadge() || bar.choice() || bar.pin()) {
+            MockChrome.box(graphics, x + CARD_PAD, footerRuleY, w - CARD_PAD * 2, 1, QuestColors.SIDEBAR_EDGE);
+        }
+        FooterLayout layout = bar.layout();
+        int iconY = y + h - FOOTER_FROM_BOTTOM;
+        for (int i = 0; i < layout.shown(); i++) {
+            RewardSlot slot = slots.get(i);
+            int sx = layout.slotX()[i];
+            graphics.renderItem(slot.face(), sx, iconY);
+            String n = rewardCountText(slot.reward());
+            if (!n.isEmpty()) {
+                pixel(graphics, Component.literal(n), sx + 18, iconY + 4, QuestColors.TEXT);
             }
         }
-        PlayBar bar = playBar(tile, x, y, w, h);
+        if (layout.overflowX() >= 0) {
+            pixel(graphics, Component.literal("+" + (slots.size() - layout.shown())), layout.overflowX(), iconY + 4,
+                    QuestColors.MUTED);
+        }
         if (bar.action()) {
             drawButtonLabel(graphics, bar.actionX(), bar.y(), bar.actionW(), 12, bar.actionLabel());
             // Breathing highlight while there is something to claim/turn in, so the one actionable
             // button on the card draws the eye. Alpha only — the button colour stays semantic.
             if (UiFx.enabled()) {
                 float breath = UiFx.wave(1900L, 0L);
-                int halo = UiFx.withAlpha(QuestColors.CURRENT, 0.18f + 0.32f * breath);
+                int halo = UiFx.withAlpha(actionColor(bar), 0.18f + 0.32f * breath);
                 MockChrome.box(graphics, bar.actionX() - 1, bar.y() - 1, bar.actionW() + 2, 1, halo);
                 MockChrome.box(graphics, bar.actionX() - 1, bar.y() + 12, bar.actionW() + 2, 1, halo);
                 MockChrome.box(graphics, bar.actionX() - 1, bar.y() - 1, 1, 13, halo);
                 MockChrome.box(graphics, bar.actionX() + bar.actionW(), bar.y() - 1, 1, 13, halo);
             }
-            if ("CLAIM".equals(bar.actionLabel())) {
-                drawClaimBracket(graphics, bar.actionX(), bar.y(), bar.actionW(), 12);
-            }
         } else if (bar.claimedBadge()) {
-            drawButtonLabel(graphics, bar.actionX(), bar.y(), bar.actionW(), 12, "CLAIMED");
+            drawButtonLabel(graphics, bar.actionX(), bar.y(), bar.actionW(), 12, "CLAIMED", QuestColors.COMPLETED);
         }
         if (bar.choice()) {
             if (UiFx.enabled() && fxChoiceAt >= 0L && fxChoiceTileId.equals(tile.id())) {
@@ -3145,8 +3201,41 @@ public class QuestBookScreen extends Screen {
             drawButtonLabel(graphics, bar.choiceBX(), bar.y(), bar.choiceW(), 12, "TAKE B");
         }
         if (bar.pin()) {
-            drawPinButton(graphics, bar);
+            drawPinButton(graphics, bar, borderColor(ClientQuestState.visual(chapter, tile)));
         }
+    }
+
+    /** Fill colour of the primary button: CLAIM takes the COMPLETED colour, SUBMIT the CURRENT one. */
+    private static int actionColor(PlayBar bar) {
+        return "CLAIM".equals(bar.actionLabel()) ? QuestColors.COMPLETED : QuestColors.CURRENT;
+    }
+
+    /** Count shown beside a reward icon: the reward's own amount (XP points, stack size), blank for one. */
+    static String rewardCountText(Reward reward) {
+        return reward == null || reward.count() <= 1 ? "" : Integer.toString(reward.count());
+    }
+
+    /** Reward slots for the footer; a reward set with no item faces still shows the first reward's face. */
+    private List<RewardSlot> footerSlots(Tile tile) {
+        List<RewardSlot> slots = collectRewardSlots(tile);
+        if (slots.isEmpty() && tile != null && !tile.rewards().isEmpty()) {
+            ItemStack one = rewardFace(tile.rewards().getFirst());
+            if (!one.isEmpty()) {
+                slots.add(new RewardSlot(tile.rewards().getFirst(), one));
+            }
+        }
+        return slots;
+    }
+
+    /** Pixel width one footer reward slot takes: the 16px icon plus its count text. */
+    private int rewardSlotWidth(RewardSlot slot) {
+        String n = rewardCountText(slot.reward());
+        return 16 + (n.isEmpty() ? 0 : 2 + font.width(n));
+    }
+
+    /** Top of the task block: rows stack up from just above the footer rule (4px gap under the rule over them). */
+    static int taskBlockTop(int y, int h, int rows) {
+        return y + h - FOOTER_FROM_BOTTOM - 5 - 4 - rows * 12;
     }
 
     /**
@@ -3155,28 +3244,7 @@ public class QuestBookScreen extends Screen {
      * stops the body being needlessly truncated on the common single-task quest. {@code BODY_RESERVED_PX} is
      * the title block, the reward row, the action bar and the 10px TASK caption.
      */
-    private static final int BODY_RESERVED_PX = 20 + 4 + 36 + 18 + 10;
-
-    private void drawTaskFill(GuiGraphics graphics, String questId, int taskIndex, int required, int x, int y, int maxW) {
-        int need = Math.max(1, required);
-        int value = ClientQuestState.progress.value(questId, Integer.toString(taskIndex));
-        float target = UiFx.clamp01(value / (float) need);
-        String key = questId + "/" + taskIndex;
-        float shown = fxTaskFill.getOrDefault(key, target);
-        if (UiFx.enabled()) {
-            // Approach the live value each frame so SUBMIT ticks feel continuous rather than stepped.
-            shown = UiFx.lerp(shown, target, UiFx.clamp01(16f / TASK_FILL_MS));
-        } else {
-            shown = target;
-        }
-        fxTaskFill.put(key, shown);
-        int trackW = Math.max(8, maxW);
-        int fillW = Math.max(0, Math.round(trackW * shown));
-        MockChrome.box(graphics, x, y, trackW, 1, UiFx.withAlpha(QuestColors.MUTED, 0.35f));
-        if (fillW > 0) {
-            MockChrome.box(graphics, x, y, fillW, 1, UiFx.withAlpha(QuestColors.CURRENT, 0.85f));
-        }
-    }
+    private static final int BODY_RESERVED_PX = 20 + 4 + FOOTER_RESERVE;
 
     private void drawInspectTooltips(GuiGraphics graphics, int mouseX, int mouseY) {
         chapter.tile(inspectTileId()).ifPresent(tile -> {
@@ -3271,26 +3339,13 @@ public class QuestBookScreen extends Screen {
         int y = cardY();
         int w = cardW();
         int h = cardH();
-        int footY = inspectFootY(tile, x, y, w, h);
-        List<RewardSlot> slots = collectRewardSlots(tile);
-        if (slots.isEmpty()) {
-            if (tile.rewards().isEmpty()) {
-                return false;
-            }
-            Reward first = tile.rewards().getFirst();
-            ItemStack one = rewardFace(first);
-            if (one.isEmpty() || !over(x + w - 26, footY, 16, 16, mouseX, mouseY)) {
-                return false;
-            }
-            showRewardHover(graphics, first, one, mouseX, mouseY, x + w - 26, footY, y);
-            return true;
-        }
-        int show = Math.max(1, Math.min(slots.size(), 6));
-        for (int i = 0; i < show; i++) {
-            RewardSlot slot = slots.get(show - 1 - i);
-            int ox = x + w - 12 - 16 - i * 17;
-            if (over(ox, footY, 16, 16, mouseX, mouseY)) {
-                showRewardHover(graphics, slot.reward(), slot.face(), mouseX, mouseY, ox, footY, y);
+        int iconY = inspectFootY(tile, x, y, w, h);
+        List<RewardSlot> slots = footerSlots(tile);
+        FooterLayout layout = playBar(tile, x, y, w, h).layout();
+        for (int i = 0; i < layout.shown(); i++) {
+            int ox = layout.slotX()[i];
+            if (over(ox, iconY, 16, 16, mouseX, mouseY)) {
+                showRewardHover(graphics, slots.get(i).reward(), slots.get(i).face(), mouseX, mouseY, ox, iconY, y);
                 return true;
             }
         }
@@ -3319,13 +3374,13 @@ public class QuestBookScreen extends Screen {
         boolean tileDone = ClientQuestState.progress.tileCompleted(chapter.id().toString(), tile.id());
         Component tip = Component.translatable(
                 tileDone ? "questqueen.done.claim_tooltip" : "questqueen.done.tooltip");
-        int rewardLeft = x + w - 8;
-        if (!tile.rewards().isEmpty()) {
-            int show = Math.max(1, Math.min(collectRewardSlots(tile).size(), 6));
-            rewardLeft = x + w - 12 - show * 17 - 6;
+        int wrap = Math.max(80, Math.min(160, w - CARD_PAD * 2));
+        int tipW = 0;
+        for (FormattedCharSequence line : font.split(tip, wrap)) {
+            tipW = Math.max(tipW, font.width(line));
         }
-        int wrap = Math.max(80, Math.min(160, rewardLeft - bar.actionX() - 6));
-        drawCompactTooltip(graphics, tip, wrap, bar.actionX(), y + 14, bar.y());
+        int tx = Math.max(x + CARD_PAD, bar.actionX() + bar.actionW() - tipW);
+        drawCompactTooltip(graphics, tip, wrap, tx, y + 14, bar.y());
     }
 
     private void drawCompactTooltip(GuiGraphics graphics, Component tip, int wrap, int tx, int minY, int anchorY) {
@@ -3363,38 +3418,19 @@ public class QuestBookScreen extends Screen {
                 return false;
             }
         }
-        int footY = inspectFootY(tile, x, y, w, h);
-        if (!tile.tasks().isEmpty() && over(x + 28, footY - 2, Math.max(56, w / 2 - 34), 18, mouseX, mouseY)) {
-            return true;
+        // The reward strip claims too: clicking what you are about to receive is the obvious gesture.
+        FooterLayout layout = playBar(tile, x, y, w, h).layout();
+        if (layout.shown() == 0) {
+            return false;
         }
-        if (!tile.rewards().isEmpty()) {
-            int show = Math.max(1, Math.min(collectRewardFaces(tile).size(), 6));
-            int rowW = show * 17 + 8;
-            return over(x + w - 12 - rowW, footY - 2, rowW, 18, mouseX, mouseY);
-        }
-        return false;
+        int left = layout.slotX()[0];
+        int right = layout.overflowX() >= 0 ? layout.overflowX() + 12 : layout.limit();
+        return over(left, inspectFootY(tile, x, y, w, h) - 1, Math.max(16, right - left), 18, mouseX, mouseY);
     }
 
-    /**
-     * Y of the reward footer / claim band for the inspect card. Must mirror {@link #drawCardPlay} exactly,
-     * including the body line cap, or the claim surface and reward tooltips sit at a different height than
-     * the icons they belong to. Title case matters too: the draw uses {@code toUpperCase}, which wraps
-     * wider than the raw title.
-     */
+    /** Y of the footer's reward icons. The footer is pinned to the card bottom, as the draw puts it. */
     private int inspectFootY(Tile tile, int x, int y, int w, int h) {
-        String title = tile.title().isBlank() ? tile.id() : tile.title();
-        String upper = title.toUpperCase(Locale.ROOT);
-        int titlePush = 14 + wrapLineCount(upper, w - 20) * 10;
-        int cursorAfterTitle = y + titlePush;
-        int taskSlots = cardTaskSlots(tile, cursorAfterTitle, y, h);
-        int bodyLines = drawWrappedLineCount(inspectBody(tile), w - 20,
-                bodyLineBudget(h, taskSlots, titlePush));
-        return Math.max(y + titlePush + 4 + bodyLines * 10 + 6 + 8, y + h - 40);
-    }
-
-    /** Wrapped line count after the {@code maxLines} cap used by {@link #drawWrapped}. */
-    private int drawWrappedLineCount(String text, int max, int maxLines) {
-        return Math.min(Math.max(1, wrapLines(text, max).size()), Math.max(1, maxLines));
+        return y + h - FOOTER_FROM_BOTTOM;
     }
 
     /**
@@ -3406,12 +3442,12 @@ public class QuestBookScreen extends Screen {
             return 0;
         }
         return Math.min(Math.min(tile.tasks().size(), MAX_TASK_ROWS),
-                Math.max(0, (y + h - 42 - Math.max(cursorAfterTitle + 2, y + 16)) / 12));
+                Math.max(0, (taskBlockTop(y, h, 0) - 4 - Math.max(cursorAfterTitle + 2, y + 16)) / 12));
     }
 
-    private void drawPinButton(GuiGraphics graphics, PlayBar bar) {
+    private void drawPinButton(GuiGraphics graphics, PlayBar bar, int accent) {
         boolean pinned = bar.pinned();
-        int ink = pinned ? MockChrome.INK : QuestColors.TEXT;
+        int ink = pinned ? MockChrome.INK : (accent == 0 ? QuestColors.TEXT : accent);
         if (UiFx.enabled() && fxPinFlashAt >= 0L) {
             float flash = 1f - UiFx.progress(fxPinFlashAt, PIN_FLASH_MS);
             ink = UiFx.withAlpha(QuestColors.EDIT, 0.45f + 0.55f * flash);
@@ -3429,7 +3465,7 @@ public class QuestBookScreen extends Screen {
 
     private record PlayBar(boolean action, boolean choice, boolean pin, boolean pinned, String actionLabel, boolean claimedBadge,
                            int y, int actionX, int actionW,
-                           int choiceAX, int choiceBX, int choiceW, int pinX, int pinW) {
+                           int choiceAX, int choiceBX, int choiceW, int pinX, int pinW, FooterLayout layout) {
     }
 
     private boolean inspectPinned() {
@@ -3456,7 +3492,9 @@ public class QuestBookScreen extends Screen {
 
     private PlayBar playBar(Tile tile, int x, int y, int w, int h) {
         if (!tileInteractive(tile)) {
-            return new PlayBar(false, false, false, false, "", false, y + h - 16, x + 10, 0, x + 10, x + 14, 0, x + 10, 0);
+            FooterLayout layout = footerLayout(x, w, rewardSlotWidths(tile), 0, 0, 0, overflowWidth(tile));
+            return new PlayBar(false, false, false, false, "", false, y + h - 16, x + w - CARD_PAD, 0,
+                    x + w - CARD_PAD, x + w - CARD_PAD, 0, x + w - CARD_PAD, 0, layout);
         }
         String questId = chapter.id() + "/" + tile.id();
         boolean tileDone = ClientQuestState.progress.tileCompleted(chapter.id().toString(), tile.id());
@@ -3483,17 +3521,26 @@ public class QuestBookScreen extends Screen {
         boolean claimedBadge = tileDone && hasLoot && rewardsClaimed && !pendingChoice;
         boolean pinned = isPinnedTile(tile);
         boolean pin = pinAllowed(tile) || pinned;
-        int actionW = pillW(claimedBadge && !action ? "CLAIMED" : label);
-        int choiceW = pillW("TAKE A");
-        int pinW = pillW(pinned ? "PINNED" : "PIN") + 10;
-        int pinX = x + 10;
-        if (action || claimedBadge) {
-            pinX = x + 12 + actionW;
-        } else if (choice) {
-            pinX = x + 16 + choiceW * 2;
+        int actionW = action || claimedBadge ? pillW(claimedBadge && !action ? "CLAIMED" : label) : 0;
+        int choiceW = choice ? pillW("TAKE A") : 0;
+        int pinW = pin ? pillW(pinned ? "PINNED" : "PIN") + 10 : 0;
+        FooterLayout layout = footerLayout(x, w, rewardSlotWidths(tile), actionW, choiceW, pinW, overflowWidth(tile));
+        return new PlayBar(action, choice, pin, pinned, label, claimedBadge, y + h - 16, layout.actionX(), actionW,
+                layout.choiceAX(), layout.choiceBX(), choiceW, layout.pinX(), pinW, layout);
+    }
+
+    private int[] rewardSlotWidths(Tile tile) {
+        List<RewardSlot> slots = footerSlots(tile);
+        int[] widths = new int[slots.size()];
+        for (int i = 0; i < widths.length; i++) {
+            widths[i] = rewardSlotWidth(slots.get(i));
         }
-        return new PlayBar(action, choice, pin, pinned, label, claimedBadge, y + h - 16, x + 10, actionW, x + 10, x + 14 + choiceW, choiceW, pinX,
-                pinW);
+        return widths;
+    }
+
+    /** Width of the {@code +N} chip shown when some rewards do not fit beside the buttons. */
+    private int overflowWidth(Tile tile) {
+        return font.width("+" + Math.max(1, footerSlots(tile).size()));
     }
 
     private void drawLog(GuiGraphics graphics) {
@@ -4039,10 +4086,10 @@ public class QuestBookScreen extends Screen {
         int y = cardY();
         int w = cardW();
         int h = cardH();
-        int footY = inspectFootY(tile, x, y, w, h);
+        PlayBar bar = playBar(tile, x, y, w, h);
         fxClaimSparkAt = UiFx.nowMs();
-        fxClaimSparkX = x + w - 20;
-        fxClaimSparkY = footY + 8;
+        fxClaimSparkX = bar.actionX() + bar.actionW() / 2;
+        fxClaimSparkY = bar.y() + 6;
     }
 
     private boolean handleCardClick(Tile tile, int x, int y, int w, int h, double mouseX, double mouseY) {
@@ -4142,7 +4189,7 @@ public class QuestBookScreen extends Screen {
      */
     private static int bodyLineBudget(int h, int taskRows, int titlePush) {
         int ideal = (h - BODY_RESERVED_PX - Math.max(0, taskRows) * 12) / 10;
-        int byTitle = (h - 68 - Math.max(0, titlePush) - Math.max(0, taskRows) * 12) / 10;
+        int byTitle = (h - FOOTER_RESERVE - 4 - Math.max(0, titlePush) - Math.max(0, taskRows) * 12) / 10;
         return Math.max(2, Math.min(Math.max(0, ideal), Math.max(0, byTitle)));
     }
 
@@ -4158,8 +4205,7 @@ public class QuestBookScreen extends Screen {
         // One 12px row per task, so a multi-item quest gets room for its icons instead of overlapping
         // the play bar.
         int taskRows = Math.min(tile.tasks().size(), MAX_TASK_ROWS);
-        int tasksBlock = taskRows == 0 ? 0 : 10 + taskRows * 12;
-        int natural = 20 + titleLines * 10 + 4 + bodyLines * 10 + 36 + 18 + tasksBlock;
+        int natural = 14 + titleLines * 10 + 4 + bodyLines * 10 + 4 + FOOTER_RESERVE + taskRows * 12;
         int h = Math.min(214, Math.max(88, natural));
         // Scale the height with the width on a narrow GUI so the card stays proportionate and on-screen.
         return Math.max(72, Math.round(h * cardScale()));
@@ -4389,15 +4435,6 @@ public class QuestBookScreen extends Screen {
     /** Screen pixels the {@code +N} chip needs, including the gap that separates it from the strip. */
     private int overflowChipSpan(int overflow) {
         return (font.width("+" + overflow) + 1) / 2 + 2;
-    }
-
-    /** A count badge drawn over an icon, kept above the item so the digits stay readable. */
-    private void drawCountOver(GuiGraphics graphics, int count, int ix, int iy) {
-        var pose = graphics.pose();
-        pose.pushPose();
-        pose.translate(0, 0, 200);
-        tinyString(graphics, count + "x", ix, iy, QuestColors.TEXT);
-        pose.popPose();
     }
 
     /**

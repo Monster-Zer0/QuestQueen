@@ -445,6 +445,27 @@ public final class ClientQuestState {
         return verb + " " + value + "/" + need;
     }
 
+    /**
+     * The count column of a task row on the quest card: {@code DONE} once the task (or its tile) is finished,
+     * {@code value/need} while a counted task is open, and blank for an open one-shot task (nothing to count).
+     */
+    public static String taskCount(Chapter chapter, Tile tile, int taskIndex) {
+        if (taskIndex < 0 || taskIndex >= tile.tasks().size()) {
+            return "";
+        }
+        String questId = chapter.id() + "/" + tile.id();
+        if (progress.tileCompleted(chapter.id().toString(), tile.id())
+                || progress.taskCompleted(questId, Integer.toString(taskIndex))) {
+            return "DONE";
+        }
+        int need = Math.max(1, tile.tasks().get(taskIndex).required());
+        if (need <= 1) {
+            return "";
+        }
+        int value = Math.max(0, Math.min(need, progress.value(questId, Integer.toString(taskIndex))));
+        return value + "/" + need;
+    }
+
     public static boolean rewardsClaimed(Chapter chapter, Tile tile) {
         String questId = chapter.id() + "/" + tile.id();
         if (progress.taskCompleted(questId, "claimed")) {
