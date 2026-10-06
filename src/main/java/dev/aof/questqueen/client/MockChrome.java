@@ -92,6 +92,22 @@ public final class MockChrome {
         }
     }
 
+    /** Ledger card chrome: face, a hairline frame, and a 3px rail down the left edge in the state colour. */
+    public static void railPanel(GuiGraphics graphics, int x, int y, int w, int h, int face, int frame, int rail) {
+        box(graphics, x, y, w, h, face);
+        frame(graphics, x, y, w, h, frame);
+        if (rail != 0) {
+            box(graphics, x, y, 3, h, rail);
+        }
+    }
+
+    /** One-pixel dots every other pixel from {@code x1} to {@code x2}: the leader between a task and its count. */
+    public static void dottedLine(GuiGraphics graphics, int x1, int x2, int y, int color) {
+        for (int x = x1 + (x1 & 1); x < x2; x += 2) {
+            box(graphics, x, y, 1, 1, color);
+        }
+    }
+
     public static void panel(GuiGraphics graphics, int x, int y, int w, int h, int face, int edge) {
         panel(graphics, x, y, w, h, face, edge, Math.min(72, w / 3));
     }
