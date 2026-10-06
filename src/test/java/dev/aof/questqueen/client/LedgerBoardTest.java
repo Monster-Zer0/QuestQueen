@@ -76,6 +76,23 @@ class LedgerBoardTest {
     }
 
     @Test
+    void cardLeaderDotsLightUpWithEachTasksProgress() {
+        Tile t = tile("find", List.of(new ObtainTask(ResourceLocation.parse("minecraft:dirt"), 16), new CheckmarkTask()), List.of());
+        Chapter chapter = new Chapter(CH, "Ledger", List.of(t), List.of());
+        String q = CH + "/find";
+        progress(Map.of(q + "/0", 8), Set.of(), Set.of());
+        assertEquals(0.5f, ClientQuestState.taskFraction(chapter, t, 0), 1e-6, "8/16 lights half the dots");
+        assertEquals(0f, ClientQuestState.taskFraction(chapter, t, 1), 1e-6);
+        progress(Map.of(q + "/0", 40), Set.of(q + "/1"), Set.of());
+        assertEquals(1f, ClientQuestState.taskFraction(chapter, t, 0), 1e-6, "overshoot is capped");
+        assertEquals(1f, ClientQuestState.taskFraction(chapter, t, 1), 1e-6);
+        assertEquals(150, QuestBookScreen.leaderSplit(100, 200, 0.5f));
+        assertEquals(100, QuestBookScreen.leaderSplit(100, 200, 0f));
+        assertEquals(200, QuestBookScreen.leaderSplit(100, 200, 1f));
+        assertEquals(100, QuestBookScreen.leaderSplit(100, 90, 0.5f), "no room, nothing lit");
+    }
+
+    @Test
     void aSingleCountedTaskShowsItsOwnCountAndAOneShotShowsNone() {
         Tile counted = tile("logs", List.of(new ObtainTask(ResourceLocation.parse("minecraft:oak_log"), 16)), List.of());
         Tile oneShot = tile("tick", List.of(new CheckmarkTask()), List.of());

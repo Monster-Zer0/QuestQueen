@@ -228,6 +228,8 @@ public class QuestBookScreen extends Screen {
     /** When this book was opened: the sidebar progress bars sweep in from it, one row after another. */
     private final long fxSidebarFillAt = UiFx.nowMs();
     private final Map<String, BarTween> sidebarBars = new HashMap<>();
+    /** Lit share of each card task row's dotted leader, keyed {@code questId/taskIndex}. */
+    private final Map<String, BarTween> cardLeaders = new HashMap<>();
     /** Last claimable count drawn per chapter, so a drop can pop the badge. */
     private final Map<String, Integer> fxBadgeCount = new HashMap<>();
     private final Map<String, Long> fxBadgePopAt = new HashMap<>();
@@ -3217,7 +3219,9 @@ public class QuestBookScreen extends Screen {
             MockChrome.box(graphics, x + CARD_PAD, blockTop - 4, w - CARD_PAD * 2, 1, QuestColors.SIDEBAR_EDGE);
             int rowY = blockTop;
             int countRight = x + w - CARD_PAD;
-            boolean tileDone = ClientQuestState.progress.tileCompleted(chapter.id().toString(), tile.id());
+            int stateColor = borderColor(ClientQuestState.visual(chapter, tile));
+            int leaderLit = stateColor == 0 ? QuestColors.CURRENT : stateColor;
+            boolean tileDone =ClientQuestState.progress.tileCompleted(chapter.id().toString(), tile.id());
             for (int i = 0; i < shownTasks; i++) {
                 Task task = tile.tasks().get(i);
                 final int thisRowY = rowY;
@@ -3292,8 +3296,18 @@ public class QuestBookScreen extends Screen {
                 pixel(graphics, Component.literal(shownVerb), textX, thisRowY + 4, ink);
                 if (countW > 0) {
                     int leaderFrom = textX + font.width(shownVerb) + 3;
-                    MockChrome.dottedLine(graphics, leaderFrom, countX - 3, thisRowY + 11,
-                            done ? UiFx.withAlpha(QuestColors.CURRENT, 0.45f) : QuestColors.CELL_LINE);
+                    int leaderTo = countX - 3;
+                    if (done) {
+                        MockChrome.dottedLine(graphics, leaderFrom, leaderTo, thisRowY + 11,
+                                UiFx.withAlpha(QuestColors.CURRENT, 0.45f));
+                    } else {
+                        // The leader doubles as a progress bar: dots light up from the verb toward the count.
+                        BarTween dots = cardLeaders.computeIfAbsent(questId + "/" + i, k -> new BarTween());
+                        dots.retarget(ClientQuestState.taskFraction(chapter, tile, i), UiFx.nowMs());
+                        int lit = leaderSplit(leaderFrom, leaderTo, dots.value(UiFx.nowMs()));
+                        MockChrome.dottedLine(graphics, leaderFrom, lit, thisRowY + 11, leaderLit);
+                        MockChrome.dottedLine(graphics, lit, leaderTo, thisRowY + 11, QuestColors.CELL_LINE);
+                    }
                     pixel(graphics, Component.literal(count), countX, thisRowY + 4, ink);
                 }
                 rowY += 12;
@@ -3358,7 +3372,15 @@ public class QuestBookScreen extends Screen {
         }
     }
 
-    /** Fill colour of the primary button: CLAIM takes the COMPLETED colour, SUBMIT the CURRENT one. */
+    /** Where the lit dots of a leader from {@code from} to {@code to} end at progress {@code fraction}. */
+    static int leaderSplit(int from, int to, float fraction) {
+        if (to <= from) {
+            return from;
+        }
+        return from + Math.round((to - from) * UiFx.clamp01(fraction));
+    }
+
+    /** Fill colour of the primary button:CLAIM takes the COMPLETED colour, SUBMIT the CURRENT one. */
     private static int actionColor(PlayBar bar) {
         return "CLAIM".equals(bar.actionLabel()) ? QuestColors.COMPLETED : QuestColors.CURRENT;
     }
