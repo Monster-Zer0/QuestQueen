@@ -339,6 +339,56 @@ public final class ClientQuestState {
         return incomplete;
     }
 
+    /**
+     * A quest that {@code from} leads to. {@code alsoNeeds} names the other unfinished quests an AND gate still
+     * waits on, so it is empty when finishing {@code from} is enough; {@code open} is true once the quest is
+     * already reachable.
+     */
+    public record Unlock(Tile tile, List<String> alsoNeeds, boolean open) {
+    }
+
+    /**
+     * Quests {@code tile} unlocks, in link order. Hidden quests stay hidden, and a NOT child is left out because
+     * finishing {@code tile} closes it instead of opening it.
+     */
+    public static List<Unlock> unlocks(Chapter chapter, Tile tile) {
+        List<Unlock> out = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        String chapterId = chapter.id().toString();
+        for (Link link : chapter.links()) {
+            if (!link.from().equals(tile.id()) || link.to().equals(tile.id()) || !seen.add(link.to())) {
+                continue;
+            }
+            Optional<Tile> found = chapter.tile(link.to());
+            if (found.isEmpty() || isConcealed(chapter, found.get())) {
+                continue;
+            }
+            Tile child = found.get();
+            // The child's first inbound edge carries its op, as GateEvaluator reads it.
+            GateOp op = chapter.links().stream().filter(in -> in.to().equals(child.id())).findFirst()
+                    .map(in -> in.gate().op()).orElse(GateOp.AND);
+            if (op == GateOp.NOT) {
+                continue;
+            }
+            List<String> alsoNeeds = new ArrayList<>();
+            if (op == GateOp.AND) {
+                Set<String> named = new HashSet<>();
+                for (Link in : chapter.links()) {
+                    if (!in.to().equals(child.id()) || in.from().equals(tile.id())
+                            || progress.tileCompleted(chapterId, in.from()) || !named.add(in.from())) {
+                        continue;
+                    }
+                    alsoNeeds.add(chapter.tile(in.from())
+                            .map(parent -> isConcealed(chapter, parent) ? "a hidden quest"
+                                    : parent.title().isBlank() ? parent.id() : parent.title())
+                            .orElse(in.from()));
+                }
+            }
+            out.add(new Unlock(child, List.copyOf(alsoNeeds), visual(chapter, child) != TileVisual.LOCKED));
+        }
+        return out;
+    }
+
     public static boolean needsXorChoice(Chapter chapter, Tile tile) {
         if (!progress.tileCompleted(chapter.id().toString(), tile.id())) {
             return false;

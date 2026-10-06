@@ -260,6 +260,8 @@ public class QuestBookScreen extends Screen {
     private static final long PIN_FLASH_MS = 320L;
     /** Target icons painted on the inspect card this frame: drives their tooltip and the JEI click. */
     private final List<TaskIconHit> taskIconHits = new ArrayList<>();
+    /** UNLOCKS chips painted on the inspect card this frame. */
+    private final List<UnlockHit> unlockHits = new ArrayList<>();
     /** Cap on task rows drawn on the inspect card; matches the authoring cap. */
     private static final int MAX_TASK_ROWS = 6;
     /** Most tag members drawn as a mosaic in one task row; the rest become the {@code +N} chip. */
@@ -283,6 +285,10 @@ public class QuestBookScreen extends Screen {
     static final int FOOTER_FROM_BOTTOM = 18;
     /** Card height below the last body line: the rule over the tasks, the footer rule and the footer row. */
     static final int FOOTER_RESERVE = 38;
+    /** Height the UNLOCKS row adds above the footer rule: a 12px chip row and the rule over it, 4px each side. */
+    static final int UNLOCKS_LIFT = 20;
+    /** Widest a chip's quest name may draw before it is ellipsized. */
+    static final int UNLOCK_LABEL_MAX = 64;
     /** Horizontal gap between reward slots, and between buttons. */
     static final int REWARD_GAP = 6;
     static final int BUTTON_GAP = 4;
@@ -385,6 +391,13 @@ public class QuestBookScreen extends Screen {
      * (touching {@code ItemStack.EMPTY} runs its static initialiser, which needs the game registries).
      */
     private record LogRow(int y, String text, int color, Optional<ItemStack> stack, int inset) {
+    }
+
+    /** An UNLOCKS chip painted on the inspect card this frame: drives its tooltip and the jump to that quest. */
+    private record UnlockHit(int x, int y, int w, int h, ClientQuestState.Unlock unlock) {
+        boolean over(double mouseX, double mouseY) {
+            return mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
+        }
     }
 
     /**
@@ -1345,15 +1358,20 @@ public class QuestBookScreen extends Screen {
     }
 
     private void selectSearchHit(SearchHit hit) {
-        openChapter(hit.chapterId(), hit.tileId());
-        fxSearchFlashAt = UiFx.nowMs();
-        fxSearchFlashId = hit.tileId();
         searchHits.clear();
         searchIndex = 0;
         blurSearch();
+        goToTile(hit.chapterId(), hit.tileId());
+    }
+
+    /** Pan to a quest and flash it, as a search hit or an UNLOCKS chip does. */
+    private void goToTile(ResourceLocation chapterId, String tileId) {
+        openChapter(chapterId, tileId);
+        fxSearchFlashAt = UiFx.nowMs();
+        fxSearchFlashId = tileId;
         // Land the way a board click would: a locked quest shows the lock cue, a closed fork shows nothing,
         // and neither opens its card.
-        chapter.tile(hit.tileId()).ifPresent(tile -> {
+        chapter.tile(tileId).ifPresent(tile -> {
             TileVisual visual = ClientQuestState.visual(chapter, tile);
             if (visual == TileVisual.LOCKED || visual == TileVisual.CLOSED) {
                 expanded = false;
@@ -3199,8 +3217,10 @@ public class QuestBookScreen extends Screen {
         int titlePush = cursor - y;
         // Rows we intend to show, never more than fit above the action bar. Computed from the shared helper
         // so the body budget, the draw and inspectFootY cannot drift apart.
-        int taskSlots = cardTaskSlots(tile, cursor, y, h);
-        lastBodyBudget = bodyLineBudget(h, taskSlots, titlePush);
+        List<ClientQuestState.Unlock> unlocks = ClientQuestState.unlocks(chapter, tile);
+        int lift = unlocks.isEmpty() ? 0 : UNLOCKS_LIFT;
+        int taskSlots = cardTaskSlots(tile, cursor, y, h, lift);
+        lastBodyBudget = bodyLineBudget(h, taskSlots, titlePush, lift);
         cursor = drawWrapped(graphics, body, x + 10, cursor + 4, w - 20, QuestColors.MUTED,
                 lastBodyBudget) + 6;
         // Jerry: no Rewards: prose — counts live on icons as Nx
@@ -3214,7 +3234,7 @@ public class QuestBookScreen extends Screen {
         int footerRuleY = y + h - FOOTER_FROM_BOTTOM - 5;
         if (taskSlots > 0) {
             int shownTasks = taskSlots;
-            int blockTop = taskBlockTop(y, h, shownTasks);
+            int blockTop = taskBlockTop(y, h, shownTasks, lift);
             drawnTaskRows = shownTasks;
             MockChrome.box(graphics, x + CARD_PAD, blockTop - 4, w - CARD_PAD * 2, 1, QuestColors.SIDEBAR_EDGE);
             int rowY = blockTop;
@@ -3313,6 +3333,10 @@ public class QuestBookScreen extends Screen {
                 rowY += 12;
             }
         }
+        unlockHits.clear();
+        if (!unlocks.isEmpty()) {
+            drawUnlocksRow(graphics, unlocks, x, y, w, h);
+        }
         PlayBar bar = playBar(tile, x, y, w, h);
         List<RewardSlot> slots = footerSlots(tile);
         if (!slots.isEmpty() || bar.action() || bar.claimedBadge() || bar.choice() || bar.pin()) {
@@ -3372,6 +3396,84 @@ public class QuestBookScreen extends Screen {
         }
     }
 
+    /**
+     * The UNLOCKS row: a caption, then one chip per quest this one leads to, with a {@code +N} for any that do
+     * not fit. A chip whose quest still waits on other quests is drawn dim with a dotted frame.
+     */
+    private void drawUnlocksRow(GuiGraphics graphics, List<ClientQuestState.Unlock> unlocks, int x, int y, int w,
+                                int h) {
+        int rowY = unlocksRowY(y, h);
+        MockChrome.box(graphics, x + CARD_PAD, rowY - 4, w - CARD_PAD * 2, 1, QuestColors.SIDEBAR_EDGE);
+        String caption = "UNLOCKS";
+        tinyString(graphics, caption, x + CARD_PAD, rowY + 4, QuestColors.MUTED);
+        int cx = x + CARD_PAD + Math.round(font.width(caption) * 0.6f) + 4;
+        int right = x + w - CARD_PAD;
+        for (int i = 0; i < unlocks.size(); i++) {
+            ClientQuestState.Unlock unlock = unlocks.get(i);
+            int left = unlocks.size() - i - 1;
+            int reserve = left > 0 ? 3 + font.width("+" + left) : 0;
+            String name = unlock.tile().title().isBlank() ? unlock.tile().id() : unlock.tile().title();
+            String label = ellipsize(name, Math.min(UNLOCK_LABEL_MAX, right - reserve - cx - 15));
+            if (label.isEmpty()) {
+                pixel(graphics, Component.literal("+" + (unlocks.size() - i)), cx, rowY + 2, QuestColors.MUTED);
+                return;
+            }
+            int chipW = 15 + font.width(label);
+            boolean waiting = !unlock.open() && !unlock.alsoNeeds().isEmpty();
+            int ink = waiting ? QuestColors.LOCKED_TEXT : QuestColors.TEXT;
+            if (waiting) {
+                MockChrome.dottedFrame(graphics, cx, rowY, chipW, 12, QuestColors.LOCKED_TEXT);
+            } else {
+                MockChrome.frame(graphics, cx, rowY, chipW, 12, QuestColors.SIDEBAR_EDGE);
+            }
+            drawTileIconSmall(graphics, unlock.tile(), cx + 2, rowY + 2, ink);
+            pixel(graphics, Component.literal(label), cx + 12, rowY + 2, ink);
+            unlockHits.add(new UnlockHit(cx, rowY, chipW, 12, unlock));
+            cx += chipW + 3;
+        }
+    }
+
+    /** A tile's icon at 8px, as the chip draws it; a tile with no icon draws nothing. */
+    private void drawTileIconSmall(GuiGraphics graphics, Tile tile, int x, int y, int color) {
+        Optional<String> glyph = tile.icon().flatMap(Icon::glyphId);
+        if (glyph.isPresent()) {
+            QuestGlyphs.draw(graphics, glyph.get(), x, y, 8, color);
+            return;
+        }
+        tile.icon().flatMap(Icon::item).flatMap(BuiltInRegistries.ITEM::getOptional).ifPresent(item -> {
+            var pose = graphics.pose();
+            pose.pushPose();
+            pose.translate(x, y, 0f);
+            pose.scale(0.5f, 0.5f, 1f);
+            graphics.renderItem(new ItemStack(item), 0, 0);
+            pose.popPose();
+        });
+    }
+
+    /** Tooltip over an UNLOCKS chip: the quest's full name, what else it waits on, and the click hint. */
+    private boolean drawUnlockTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
+        for (UnlockHit hit : unlockHits) {
+            if (!hit.over(mouseX, mouseY)) {
+                continue;
+            }
+            Tile target = hit.unlock().tile();
+            List<Component> lines = new ArrayList<>();
+            lines.add(Component.literal(target.title().isBlank() ? target.id() : target.title()));
+            if (hit.unlock().open()) {
+                lines.add(Component.literal("Already open").withStyle(ChatFormatting.GRAY));
+            } else if (hit.unlock().alsoNeeds().isEmpty()) {
+                lines.add(Component.literal("Opens when this quest is done").withStyle(ChatFormatting.GRAY));
+            } else {
+                lines.add(Component.literal("Also needs: " + String.join(", ", hit.unlock().alsoNeeds()))
+                        .withStyle(ChatFormatting.GRAY));
+            }
+            lines.add(Component.literal("Click: go to quest").withStyle(ChatFormatting.DARK_GRAY));
+            graphics.renderTooltip(font, lines, Optional.empty(), mouseX, mouseY);
+            return true;
+        }
+        return false;
+    }
+
     /** Where the lit dots of a leader from {@code from} to {@code to} end at progress {@code fraction}. */
     static int leaderSplit(int from, int to, float fraction) {
         if (to <= from) {
@@ -3410,7 +3512,22 @@ public class QuestBookScreen extends Screen {
 
     /** Top of the task block: rows stack up from just above the footer rule (4px gap under the rule over them). */
     static int taskBlockTop(int y, int h, int rows) {
-        return y + h - FOOTER_FROM_BOTTOM - 5 - 4 - rows * 12;
+        return taskBlockTop(y, h, rows, 0);
+    }
+
+    /** As above, with the block lifted by {@code lift} px to clear the UNLOCKS row. */
+    static int taskBlockTop(int y, int h, int rows, int lift) {
+        return y + h - FOOTER_FROM_BOTTOM - 5 - 4 - lift - rows * 12;
+    }
+
+    /** Top of the UNLOCKS chip row: just above the footer rule, with the same 4px gap the task rows keep. */
+    static int unlocksRowY(int y, int h) {
+        return y + h - FOOTER_FROM_BOTTOM - 5 - 4 - 12;
+    }
+
+    /** Extra card height the UNLOCKS row takes for {@code tile}: none when it leads nowhere visible. */
+    private int unlocksLift(Tile tile) {
+        return ClientQuestState.unlocks(chapter, tile).isEmpty() ? 0 : UNLOCKS_LIFT;
     }
 
     /**
@@ -3424,6 +3541,9 @@ public class QuestBookScreen extends Screen {
     private void drawInspectTooltips(GuiGraphics graphics, int mouseX, int mouseY) {
         chapter.tile(inspectTileId()).ifPresent(tile -> {
             if (drawTaskItemTooltip(graphics, mouseX, mouseY)) {
+                return;
+            }
+            if (drawUnlockTooltip(graphics, mouseX, mouseY)) {
                 return;
             }
             if (drawRewardItemTooltip(graphics, tile, mouseX, mouseY)) {
@@ -3612,12 +3732,12 @@ public class QuestBookScreen extends Screen {
      * Task rows the card will actually draw: bounded by the task count, {@link #MAX_TASK_ROWS}, and the
      * space left above the action bar. Shared by the body budget and the draw so they cannot drift.
      */
-    private static int cardTaskSlots(Tile tile, int cursorAfterTitle, int y, int h) {
+    private static int cardTaskSlots(Tile tile, int cursorAfterTitle, int y, int h, int lift) {
         if (tile.tasks().isEmpty()) {
             return 0;
         }
         return Math.min(Math.min(tile.tasks().size(), MAX_TASK_ROWS),
-                Math.max(0, (taskBlockTop(y, h, 0) - 4 - Math.max(cursorAfterTitle + 2, y + 16)) / 12));
+                Math.max(0, (taskBlockTop(y, h, 0, lift) - 4 - Math.max(cursorAfterTitle + 2, y + 16)) / 12));
     }
 
     private void drawPinButton(GuiGraphics graphics, PlayBar bar, int accent) {
@@ -4336,6 +4456,12 @@ public class QuestBookScreen extends Screen {
                 return true;
             }
         }
+        for (UnlockHit hit : unlockHits) {
+            if (hit.over(mouseX, mouseY)) {
+                goToTile(chapter.id(), hit.unlock().tile().id());
+                return true;
+            }
+        }
         PlayBar bar = playBar(tile, x, y, w, h);
         if (bar.action() && over(bar.actionX(), bar.y(), bar.actionW(), 12, mouseX, mouseY)) {
             clickDone(tile);
@@ -4421,9 +4547,9 @@ public class QuestBookScreen extends Screen {
      * Body lines that fit between the title and the footer. Accounts for the rows actually drawn and for a
      * tall title, so the last body line can never land on the task block or the action bar.
      */
-    private static int bodyLineBudget(int h, int taskRows, int titlePush) {
-        int ideal = (h - BODY_RESERVED_PX - Math.max(0, taskRows) * 12) / 10;
-        int byTitle = (h - FOOTER_RESERVE - 4 - Math.max(0, titlePush) - Math.max(0, taskRows) * 12) / 10;
+    private static int bodyLineBudget(int h, int taskRows, int titlePush, int lift) {
+        int ideal = (h - BODY_RESERVED_PX - lift - Math.max(0, taskRows) * 12) / 10;
+        int byTitle = (h - FOOTER_RESERVE - 4 - lift - Math.max(0, titlePush) - Math.max(0, taskRows) * 12) / 10;
         return Math.max(2, Math.min(Math.max(0, ideal), Math.max(0, byTitle)));
     }
 
@@ -4439,7 +4565,8 @@ public class QuestBookScreen extends Screen {
         // One 12px row per task, so a multi-item quest gets room for its icons instead of overlapping
         // the play bar.
         int taskRows = Math.min(tile.tasks().size(), MAX_TASK_ROWS);
-        int natural = 14 + titleLines * 10 + 4 + bodyLines * 10 + 4 + FOOTER_RESERVE + taskRows * 12;
+        int natural = 14 + titleLines * 10 + 4 + bodyLines * 10 + 4 + FOOTER_RESERVE + taskRows * 12
+                + unlocksLift(tile);
         int h = Math.min(214, Math.max(88, natural));
         // Scale the height with the width on a narrow GUI so the card stays proportionate and on-screen.
         return Math.max(72, Math.round(h * cardScale()));
