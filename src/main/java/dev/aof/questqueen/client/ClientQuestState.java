@@ -466,6 +466,145 @@ public final class ClientQuestState {
         return value + "/" + need;
     }
 
+    /**
+     * How far through its tasks a quest is, 0..1, for the board tile's progress bar. Each task weighs its own
+     * {@code required} count, so a 16-log task outweighs a one-shot. A finished task (or tile) counts in full.
+     */
+    public static float taskFraction(Chapter chapter, Tile tile) {
+        if (tile.tasks().isEmpty()) {
+            return progress.tileCompleted(chapter.id().toString(), tile.id()) ? 1f : 0f;
+        }
+        String questId = chapter.id() + "/" + tile.id();
+        boolean tileDone = progress.tileCompleted(chapter.id().toString(), tile.id());
+        long have = 0;
+        long need = 0;
+        for (int i = 0; i < tile.tasks().size(); i++) {
+            int required = Math.max(1, tile.tasks().get(i).required());
+            need += required;
+            if (tileDone || progress.taskCompleted(questId, Integer.toString(i))) {
+                have += required;
+            } else {
+                have += Math.max(0, Math.min(required, progress.value(questId, Integer.toString(i))));
+            }
+        }
+        return need <= 0 ? 0f : have / (float) need;
+    }
+
+    /**
+     * Count shown on a board tile: the one counted task's {@code value/need}, or tasks done over tasks for a
+     * quest with several. Blank when there is nothing to count (a single one-shot task).
+     */
+    public static String tileCountText(Chapter chapter, Tile tile) {
+        int tasks = tile.tasks().size();
+        if (tasks == 0) {
+            return "";
+        }
+        if (tasks == 1) {
+            String count = taskCount(chapter, tile, 0);
+            return "DONE".equals(count) ? "" : count;
+        }
+        String questId = chapter.id() + "/" + tile.id();
+        int done = 0;
+        for (int i = 0; i < tasks; i++) {
+            if (progress.taskCompleted(questId, Integer.toString(i))) {
+                done++;
+            }
+        }
+        return done + "/" + tasks;
+    }
+
+    /**
+     * Finished with rewards still waiting: CLAIM, or TAKE A / TAKE B on a choice quest. The same test the card's
+     * footer makes, so a tile shows the claim cue exactly when its card shows the button.
+     */
+    public static boolean claimable(Chapter chapter, Tile tile) {
+        if (!progress.tileCompleted(chapter.id().toString(), tile.id())) {
+            return false;
+        }
+        if (tile.rewards().isEmpty() && tile.scrolls().isEmpty()) {
+            return false;
+        }
+        String questId = chapter.id() + "/" + tile.id();
+        boolean hasChoice = tile.rewards().stream()
+                .anyMatch(reward -> reward instanceof dev.aof.questqueen.data.reward.ChoiceReward);
+        if (hasChoice && !progress.taskCompleted(questId, "choice")) {
+            return true;
+        }
+        return !hasChoice && !progress.taskCompleted(questId, "claimed");
+    }
+
+    /**
+     * Sidebar numbers for one chapter.
+     *
+     * @param done      completed quests
+     * @param total     quests the player can see (hidden-until quests stay out until revealed)
+     * @param claimable completed quests with rewards still to claim
+     */
+    public record ChapterStats(int done, int total, int claimable) {
+        public static final ChapterStats EMPTY = new ChapterStats(0, 0, 0);
+
+        public float fraction() {
+            return total <= 0 ? 0f : done / (float) total;
+        }
+
+        public boolean complete() {
+            return total > 0 && done >= total;
+        }
+    }
+
+    private static final java.util.Map<ResourceLocation, ChapterStats> STATS = new java.util.HashMap<>();
+    private static ProgressSnapshot statsProgress;
+    private static QuestPack statsPack;
+
+    /** Cached per progress snapshot and pack: the sidebar asks for every row every frame. */
+    public static ChapterStats chapterStats(Chapter chapter) {
+        if (chapter == null) {
+            return ChapterStats.EMPTY;
+        }
+        if (statsProgress != progress || statsPack != pack) {
+            STATS.clear();
+            statsProgress = progress;
+            statsPack = pack;
+        }
+        return STATS.computeIfAbsent(chapter.id(), id -> computeStats(chapter));
+    }
+
+    private static ChapterStats computeStats(Chapter chapter) {
+        int done = 0;
+        int total = 0;
+        int claimable = 0;
+        for (Tile tile : chapter.tiles()) {
+            if (isConcealed(chapter, tile)) {
+                continue;
+            }
+            total++;
+            if (progress.tileCompleted(chapter.id().toString(), tile.id())) {
+                done++;
+            }
+            if (claimable(chapter, tile)) {
+                claimable++;
+            }
+        }
+        return new ChapterStats(done, total, claimable);
+    }
+
+    /** Book-wide numbers over the chapters the sidebar lists. */
+    public static ChapterStats bookStats() {
+        int done = 0;
+        int total = 0;
+        int claimable = 0;
+        for (Chapter chapter : pack.chapters()) {
+            if (!isChapterListed(chapter) || isIntroChapter(chapter)) {
+                continue;
+            }
+            ChapterStats stats = chapterStats(chapter);
+            done += stats.done();
+            total += stats.total();
+            claimable += stats.claimable();
+        }
+        return new ChapterStats(done, total, claimable);
+    }
+
     public static boolean rewardsClaimed(Chapter chapter, Tile tile) {
         String questId = chapter.id() + "/" + tile.id();
         if (progress.taskCompleted(questId, "claimed")) {
