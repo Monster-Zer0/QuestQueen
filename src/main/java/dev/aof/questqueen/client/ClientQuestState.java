@@ -490,6 +490,21 @@ public final class ClientQuestState {
         return need <= 0 ? 0f : have / (float) need;
     }
 
+    /** One task's progress, 0..1: {@code value/need}, full once the task or its tile is done. */
+    public static float taskFraction(Chapter chapter, Tile tile, int taskIndex) {
+        if (taskIndex < 0 || taskIndex >= tile.tasks().size()) {
+            return 0f;
+        }
+        String questId = chapter.id() + "/" + tile.id();
+        if (progress.tileCompleted(chapter.id().toString(), tile.id())
+                || progress.taskCompleted(questId, Integer.toString(taskIndex))) {
+            return 1f;
+        }
+        int need = Math.max(1, tile.tasks().get(taskIndex).required());
+        int value = Math.max(0, Math.min(need, progress.value(questId, Integer.toString(taskIndex))));
+        return value / (float) need;
+    }
+
     /**
      * Count shown on a board tile: the one counted task's {@code value/need}, or tasks done over tasks for a
      * quest with several. Blank when there is nothing to count (a single one-shot task).
