@@ -54,6 +54,28 @@ public final class QuestTileWidget extends AbstractWidget {
     /** Soft breathing selection halo (alpha only). */
     private boolean selectionHalo;
 
+    /** Ledger footer: the count text and bar of an open quest, or the CLAIM cue of a finished one. */
+    private String countText = "";
+    private boolean showBar;
+    private final BarTween bar = new BarTween();
+    private boolean claimable;
+    /** Seeds the claim glint's phase so a row of ready tiles does not flash in step. */
+    private int shineSeed;
+    private boolean decorSet;
+    /** When a LOCKED tile opened while the book was showing it; MIN_VALUE when no reveal is running. */
+    private long unlockAt = Long.MIN_VALUE;
+    /** Hover lift, eased toward 1 while the pointer is over the tile and back to 0 after. */
+    private float lift;
+    private long liftFrameMs = Long.MIN_VALUE;
+
+    /** Locked tiles draw their content at this alpha; the reveal eases it up to 1. */
+    static final float LOCKED_ALPHA = 0.6f;
+    /** The reveal waits for the gate pip to run down the arrow before the tile opens. */
+    static final long UNLOCK_DELAY_MS = 450L;
+    static final long UNLOCK_MS = 500L;
+    static final long LIFT_MS = 120L;
+    static final long SHINE_PERIOD_MS = 3000L;
+
     public QuestTileWidget(int x, int y, int size, int face, int edge, int headerW) {
         super(x, y, size, size, Component.empty());
         this.face = face;
@@ -79,6 +101,10 @@ public final class QuestTileWidget extends AbstractWidget {
 
     public void setDecor(boolean locked, String header, int headerInk, ItemStack icon, String title1, String title2,
                          String title3, boolean titleBeside, ItemStack reward, boolean rewardPlus, boolean xor) {
+        if (decorSet && this.locked && !locked && UiFx.enabled()) {
+            unlockAt = UiFx.nowMs() + UNLOCK_DELAY_MS;
+        }
+        decorSet = true;
         this.locked = locked;
         this.header = header == null ? "" : header;
         this.headerInk = headerInk;
@@ -118,6 +144,20 @@ public final class QuestTileWidget extends AbstractWidget {
     public void setProgress(String progress, int progressInk) {
         this.progress = progress == null ? "" : progress;
         this.progressInk = progressInk;
+    }
+
+    /**
+     * Ledger footer state. {@code fraction} below 0 hides the bar; a new fraction eases in from the drawn one.
+     * {@code claimable} swaps the REWARDS caption for a CLAIM chip.
+     */
+    public void setLedger(String countText, float fraction, boolean claimable, int shineSeed) {
+        this.countText = countText == null ? "" : countText;
+        this.showBar = fraction >= 0f;
+        if (showBar) {
+            bar.retarget(fraction, UiFx.nowMs());
+        }
+        this.claimable = claimable;
+        this.shineSeed = shineSeed;
     }
 
     public void setSelectionHalo(boolean selectionHalo) {
@@ -172,7 +212,19 @@ public final class QuestTileWidget extends AbstractWidget {
         int x = getX();
         int y = getY();
         int size = getWidth();
-        MockChrome.tile(graphics, x, y, size, face, edge, headerW);
+        int hx = hoverX != Integer.MIN_VALUE ? hoverX : mouseX;
+        int hy = hoverY != Integer.MIN_VALUE ? hoverY : mouseY;
+        long now = UiFx.nowMs();
+        boolean underOverlay = clipOverlay && overlaps(hx, hy, 1, 1, overlayX, overlayY, overlayW, overlayH);
+        boolean hovered = !locked && !underOverlay && hx >= x && hy >= y && hx < x + size && hy < y + size;
+        stepLift(hovered, now);
+        float reveal = revealProgress(now);
+        // Hover lift: the tile (not its path arrows) rides 1px up and its rail thickens by one.
+        int liftPx = lift > 0.5f ? 1 : 0;
+        var pose = graphics.pose();
+        pose.pushPose();
+        pose.translate(0, -liftPx, 0);
+        drawLedgerChrome(graphics, x, y, size, reveal, liftPx);
         if (selectionHalo && UiFx.enabled() && edge != 0) {
             float breath = UiFx.wave(2100L, (x * 31L) ^ (y * 17L));
             int halo = UiFx.withAlpha(edge, 0.22f + 0.38f * breath);
@@ -182,9 +234,8 @@ public final class QuestTileWidget extends AbstractWidget {
             // Data D3: LOCKED never gets the expand glyph, even if chrome asked for it.
             MockChrome.expandIcon(graphics, x + size - 4 - 7, y + 2, edge);
         }
+        pose.popPose();
         hoverLock = "";
-        int hx = hoverX != Integer.MIN_VALUE ? hoverX : mouseX;
-        int hy = hoverY != Integer.MIN_VALUE ? hoverY : mouseY;
         for (int[] port : ports) {
             if (port.length < 6) {
                 continue;
@@ -208,7 +259,15 @@ public final class QuestTileWidget extends AbstractWidget {
             }
             MockChrome.pathGate(graphics, lockX, lockY, dx, dy, destLocked, hover, color, UiFx.flowAt(lockX, lockY));
         }
-        drawDecor(graphics, x, y, size);
+        float contentAlpha = locked ? LOCKED_ALPHA : UiFx.lerp(LOCKED_ALPHA, 1f, reveal);
+        pose.pushPose();
+        pose.translate(0, -liftPx, 0);
+        if (contentAlpha < 0.999f) {
+            graphics.setColor(1f, 1f, 1f, contentAlpha);
+        }
+        drawDecor(graphics, x, y, size, reveal, now);
+        graphics.setColor(1f, 1f, 1f, 1f);
+        pose.popPose();
         } finally {
             if (clipBoard) {
                 graphics.disableScissor();
@@ -219,6 +278,88 @@ public final class QuestTileWidget extends AbstractWidget {
     /** Data D3: expand glyph is off on LOCKED everywhere. */
     static boolean showsExpand(boolean locked, boolean expand) {
         return expand && !locked;
+    }
+
+    /**
+     * Ledger tile chrome, as on the quest card: the face, a hairline frame and a rail down the left edge in the
+     * state colour. While a reveal runs the rail cross-fades from locked red to the new state colour by alpha
+     * alone, so neither colour is ever mixed into a third.
+     */
+    private void drawLedgerChrome(GuiGraphics graphics, int x, int y, int size, float reveal, int extraRail) {
+        MockChrome.box(graphics, x, y, size, size, face);
+        MockChrome.frame(graphics, x, y, size, size, QuestColors.SIDEBAR_EDGE);
+        if (edge == 0) {
+            return;
+        }
+        int rail = railPx(size) + extraRail;
+        if (reveal < 1f) {
+            MockChrome.box(graphics, x, y, rail, size, QuestColors.LOCKED_EDGE);
+            MockChrome.box(graphics, x, y, rail, size, UiFx.withAlpha(edge, reveal));
+        } else {
+            MockChrome.box(graphics, x, y, rail, size, edge);
+        }
+    }
+
+    private void stepLift(boolean hovered, long now) {
+        if (!UiFx.enabled()) {
+            lift = 0f;
+            liftFrameMs = now;
+            return;
+        }
+        long dt = liftFrameMs == Long.MIN_VALUE ? 0L : Math.max(0L, Math.min(100L, now - liftFrameMs));
+        liftFrameMs = now;
+        float step = dt / (float) LIFT_MS;
+        lift = hovered ? Math.min(1f, lift + step) : Math.max(0f, lift - step);
+    }
+
+    /** 0 when a reveal has just been armed, 1 when none is running or it has finished. */
+    private float revealProgress(long now) {
+        if (unlockAt == Long.MIN_VALUE || !UiFx.enabled()) {
+            return 1f;
+        }
+        if (now < unlockAt) {
+            return 0f;
+        }
+        float t = UiFx.easeOut(UiFx.clamp01((now - unlockAt) / (float) UNLOCK_MS));
+        if (t >= 1f) {
+            unlockAt = Long.MIN_VALUE;
+        }
+        return t;
+    }
+
+    /** Width of the state rail: 3px, or 2px on the small zoom rungs. */
+    static int railPx(int size) {
+        return size >= 40 ? 3 : 2;
+    }
+
+    /** Left inset of tile content, clear of the rail (and of the rail's hover width). */
+    static int contentInset(int size) {
+        return Math.max(padPx(size), railPx(size) + 2);
+    }
+
+    private static final String SCRAMBLE = "?#%&*+=";
+
+    /**
+     * The title as it settles during an unlock reveal: the first {@code t} of it is real, the rest is noise that
+     * changes every 60ms. Spaces stay spaces so the words keep their shape.
+     */
+    static String descramble(String text, float t, int seed, long now) {
+        if (text == null || text.isEmpty() || t >= 1f) {
+            return text == null ? "" : text;
+        }
+        int keep = Math.round(text.length() * UiFx.clamp01(t));
+        int bucket = (int) (now / 60L);
+        StringBuilder out = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (i < keep || c == ' ') {
+                out.append(c);
+            } else {
+                int pick = (int) (UiFx.hash01(seed + bucket, i) * SCRAMBLE.length());
+                out.append(SCRAMBLE.charAt(Math.min(SCRAMBLE.length() - 1, pick)));
+            }
+        }
+        return out.toString();
     }
 
     static int iconPx(int size) {
@@ -255,7 +396,7 @@ public final class QuestTileWidget extends AbstractWidget {
     static int titleBudget(int size, boolean hasIcon) {
         int pad = padPx(size);
         int icon = hasIcon && !stacked(size, hasIcon) ? iconPx(size) + 2 : 0;
-        return Math.max(20, (size - pad * 2 - icon) * 2);
+        return Math.max(20, (size - pad - contentInset(size) - icon) * 2);
     }
 
     static int rewardPx(int size) {
@@ -267,16 +408,18 @@ public final class QuestTileWidget extends AbstractWidget {
         return y + size - padPx(size) - rewardPx(size);
     }
 
-    private void drawDecor(GuiGraphics graphics, int x, int y, int size) {
+    private void drawDecor(GuiGraphics graphics, int x, int y, int size, float reveal, long now) {
         Font font = Minecraft.getInstance().font;
         int pad = padPx(size);
+        int inset = contentInset(size);
         int iconSize = iconPx(size);
         boolean compact = compact(size);
         boolean stacked = stacked(size, titleBeside && hasIconFace());
         if (!header.isEmpty()) {
-            tiny(graphics, font, header, x + 2, y + 1, headerInk);
+            // The state word sits where the filled corner tab used to be, in the state colour.
+            tiny(graphics, font, header, x + inset, y + 2, edge != 0 ? edge : headerInk);
         }
-        int iconX = x + pad;
+        int iconX = x + inset;
         int iconY = y + Math.max(8, size >= 56 ? 12 : 10);
         if (!glyph.isEmpty()) {
             QuestGlyphs.draw(graphics, glyph, iconX, iconY, iconSize, locked ? QuestColors.LOCKED_TEXT : QuestColors.TEXT);
@@ -296,7 +439,7 @@ public final class QuestTileWidget extends AbstractWidget {
         int ink = locked ? QuestColors.LOCKED_TEXT : CAPTION_INK;
         // Hoisted so the caption budget (F7 fix B) is decided from the renderer's own conditions.
         List<ItemStack> faces = rewards.isEmpty() && !reward.isEmpty() ? List.of(reward) : rewards;
-        String fullTitle = joinTitle(title1, title2, title3);
+        String fullTitle = descramble(joinTitle(title1, title2, title3), reveal, x * 31 + y, now);
         if (!fullTitle.isEmpty()) {
             int budget = captionBudget(size, !faces.isEmpty(), xor);
             // When reward icons are present, leave a clear band above REWARDS so title lines
@@ -311,14 +454,21 @@ public final class QuestTileWidget extends AbstractWidget {
                 tiny(graphics, font, lines.get(i), titleX, titleY + i * LINE_STEP, ink);
             }
         }
-        if (!progress.isEmpty() && size >= 40) {
-            MockChrome.box(graphics, x + 1, y + size - 3, size - 2, 2, edge);
+        if (showBar && !locked && size >= 40) {
+            drawProgressBar(graphics, x, y, size, now);
+        } else if (!progress.isEmpty() && size >= 40) {
+            MockChrome.box(graphics, x + railPx(size), y + size - 3, size - railPx(size) - 1, 2, edge);
             if (title1.isEmpty() && title2.isEmpty()) {
-                List<String> prog = wrapTiny(font, progress, Math.max(8, titleMax - (x + pad)), 1);
+                List<String> prog = wrapTiny(font, progress, Math.max(8, titleMax - (x + inset)), 1);
                 if (!prog.isEmpty()) {
-                    tiny(graphics, font, prog.getFirst(), x + pad, y + size - 10, progressInk);
+                    tiny(graphics, font, prog.getFirst(), x + inset, y + size - 10, progressInk);
                 }
             }
+        }
+        if (!countText.isEmpty() && !locked && size >= 40 && !compact) {
+            // Beside the XOR badge when there is one, so the two never overlap.
+            int countX = xor && size >= 48 ? x + inset + 17 : x + inset;
+            tiny(graphics, font, countText, countX, y + size - 10, QuestColors.MUTED);
         }
         if (!faces.isEmpty() && size >= 40) {
             int rewardPx = rewardPx(size);
@@ -327,7 +477,9 @@ public final class QuestTileWidget extends AbstractWidget {
             int totalW = show * rewardPx + Math.max(0, show - 1) * gap;
             int rx = x + size - pad - totalW;
             int ry = rewardRowY(y, size);
-            if (!compact) {
+            if (!compact && claimable) {
+                drawClaimChip(graphics, font, x + size - pad, ry - LINE_STEP - 2, now);
+            } else if (!compact) {
                 // Slightly smaller than tile captions so it reads as chrome, not body text.
                 tinySmall(graphics, font, "REWARDS", x + size - 26, ry - LINE_STEP, REWARDS_INK);
             }
@@ -346,10 +498,57 @@ public final class QuestTileWidget extends AbstractWidget {
             }
         }
         if (xor && size >= 48) {
-            int inner = x + pad;
+            int inner = x + inset;
             MockChrome.box(graphics, inner, y + size - 11, 15, 6, QuestColors.COMPLETED);
             tiny(graphics, font, "XOR", inner + 2, y + size - 10, MockChrome.INK);
         }
+    }
+
+    /** 2px bar along the bottom, inside the frame and clear of the rail, easing to each new fraction. */
+    private void drawProgressBar(GuiGraphics graphics, int x, int y, int size, long now) {
+        int left = x + railPx(size);
+        int w = size - railPx(size) - 1;
+        int barY = y + size - 3;
+        MockChrome.box(graphics, left, barY, w, 2, UiFx.withAlpha(QuestColors.CELL_LINE, 0.7f));
+        int fill = Math.round(w * bar.value(now));
+        MockChrome.box(graphics, left, barY, fill, 2, edge != 0 ? edge : QuestColors.CURRENT);
+        float glow = bar.edgeAlpha(now);
+        if (glow > 0f && fill > 0) {
+            MockChrome.box(graphics, left + fill - 1, barY - 1, 1, 4, UiFx.withAlpha(QuestColors.TEXT, glow));
+        }
+    }
+
+    static final int CLAIM_CHIP_H = 7;
+
+    /** Filled CLAIM chip, right edge at {@code right}; a thin glint crosses it now and then. */
+    private void drawClaimChip(GuiGraphics graphics, Font font, int right, int top, long now) {
+        int textW = (int) Math.ceil(font.width("CLAIM") * TINY_SCALE);
+        int w = textW + 4;
+        int left = right - w;
+        MockChrome.box(graphics, left, top, w, CLAIM_CHIP_H, QuestColors.COMPLETED);
+        var pose = graphics.pose();
+        pose.pushPose();
+        pose.translate(left + 2, top + 1, 0);
+        pose.scale(TINY_SCALE, TINY_SCALE, 1f);
+        graphics.drawString(font, "CLAIM", 0, 0, MockChrome.INK, false);
+        pose.popPose();
+        int glint = claimShineX(UiFx.phase(SHINE_PERIOD_MS, shineSeed * 389L), w);
+        if (glint >= 0) {
+            MockChrome.box(graphics, left + glint, top, Math.min(2, w - glint), CLAIM_CHIP_H, 0x8CFFFFFF);
+        }
+    }
+
+    /**
+     * Glint column inside a chip {@code w} wide at loop {@code phase}: it crosses in the first third of the loop
+     * and is absent (-1) for the rest, so the cue is a passing gleam rather than a blink.
+     */
+    static int claimShineX(float phase, int w) {
+        float sweep = 0.33f;
+        if (phase >= sweep || w <= 0) {
+            return -1;
+        }
+        int x = Math.round(phase / sweep * (w + 2)) - 2;
+        return x < 0 || x >= w ? -1 : x;
     }
 
     private void drawScaledItem(GuiGraphics graphics, ItemStack stack, int x, int y, int px) {

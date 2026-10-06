@@ -224,6 +224,24 @@ public class QuestBookScreen extends Screen {
     private long fxSearchFlashAt = -1L;
     private String fxSearchFlashId = "";
 
+    // --- ledger board and sidebar motion (1.1.210) --------------------------------------------------
+    /** When this book was opened: the sidebar progress bars sweep in from it, one row after another. */
+    private final long fxSidebarFillAt = UiFx.nowMs();
+    private final Map<String, BarTween> sidebarBars = new HashMap<>();
+    /** Last claimable count drawn per chapter, so a drop can pop the badge. */
+    private final Map<String, Integer> fxBadgeCount = new HashMap<>();
+    private final Map<String, Long> fxBadgePopAt = new HashMap<>();
+    /** Reward faces flying from the card to the chapter's sidebar row after a claim. */
+    private final List<RewardFlight> fxFlights = new ArrayList<>();
+    private static final long SIDEBAR_FILL_MS = 450L;
+    private static final long SIDEBAR_FILL_STAGGER_MS = 60L;
+    private static final long BADGE_POP_MS = 350L;
+    static final long FLIGHT_MS = 700L;
+    private static final long FLIGHT_STAGGER_MS = 90L;
+
+    private record RewardFlight(ItemStack face, int fromX, int fromY, String chapterId, long startMs) {
+    }
+
     private static final long FLARE_MS = 620L;
     private static final long PIP_MS = 900L;
     private static final long CRACK_MS = 320L;
@@ -1523,6 +1541,13 @@ public class QuestBookScreen extends Screen {
             }
             if (drawingLog()) {
                 drawLog(graphics);
+            } else if (UiFx.enabled() && !fxFlights.isEmpty()) {
+                // Above the card the rewards leave and the sidebar they land on.
+                var pose = graphics.pose();
+                pose.pushPose();
+                pose.translate(0, 0, 480);
+                drawRewardFlights(graphics);
+                pose.popPose();
             }
             drawChrome(graphics);
             if (!drawingLog()) {
@@ -1593,6 +1618,12 @@ public class QuestBookScreen extends Screen {
         widget.setGlyph(glyph);
         widget.setRewardFaces(faces, rewardPlus);
         widget.setProgress(progress, visual == TileVisual.FAILED ? QuestColors.FAILED : QuestColors.TEXT);
+        // Ledger footer: an open quest with something to count shows the count and a bar; a finished one with
+        // rewards waiting shows CLAIM.
+        boolean open = visual == TileVisual.NEW || visual == TileVisual.CURRENT;
+        String count = open ? ClientQuestState.tileCountText(chapter, tile) : "";
+        float fraction = open && !count.isEmpty() ? ClientQuestState.taskFraction(chapter, tile) : -1f;
+        widget.setLedger(count, fraction, ClientQuestState.claimable(chapter, tile), tile.id().hashCode());
     }
 
     static boolean showsRewardPlus(Tile tile) {
@@ -1722,7 +1753,8 @@ public class QuestBookScreen extends Screen {
         drawSidebarScrollThumb(graphics);
     }
 
-    private static final int SIDEBAR_ROW_H = 16;
+    /** Row height: the name line plus the progress bar under it. */
+    static final int SIDEBAR_ROW_H = 18;
 
     /** Slides the active-chapter highlight toward {@code targetY} (MIN_VALUE = nothing selected). */
     private void drawSidebarActiveBar(GuiGraphics graphics, int targetY) {
@@ -1757,6 +1789,7 @@ public class QuestBookScreen extends Screen {
             return;
         }
         graphics.enableScissor(0, TOP_H, sidebarWidth(), height);
+        int[] rowIndex = {0};
         for (SidebarRow row : sidebarRows) {
             if (!sidebarRowVisible(row)) {
                 continue;
@@ -1802,7 +1835,11 @@ public class QuestBookScreen extends Screen {
                         }
                     }
                 }
-                int maxPx = sidebarWidth() - textX - SIDEBAR_THUMB_PAD;
+                int right = sidebarWidth() - SIDEBAR_THUMB_PAD;
+                ClientQuestState.ChapterStats stats = locked ? ClientQuestState.ChapterStats.EMPTY
+                        : ClientQuestState.chapterStats(entry);
+                int statsW = locked ? 0 : drawSidebarStats(graphics, entry, stats, textX, right, rowY, reveal, rowIndex[0]);
+                int maxPx = right - textX - (statsW > 0 ? statsW + 4 : 0);
                 iconOnly = maxPx < SIDEBAR_LABEL_MIN;
                 if (!iconOnly) {
                     String label = ellipsize(fullTitle, maxPx);
@@ -1810,11 +1847,12 @@ public class QuestBookScreen extends Screen {
                         graphics.drawString(font, label, textX, rowY + 4, color, false);
                     }
                 }
+                rowIndex[0]++;
                 if (UiFx.enabled() && reveal < 1f) {
                     int barW = Math.max(2, Math.round(sidebarWidth() * reveal));
                     MockChrome.box(graphics, 0, rowY + 13, barW, 2, UiFx.withAlpha(QuestColors.SIDEBAR_HEADER, Math.max(0.35f, reveal)));
                 }
-                if (iconOnly && mouseY >= rowY - 2 && mouseY < rowY + 16 && mouseX >= 0 && mouseX < sidebarWidth()) {
+                if (iconOnly && mouseY >= rowY - 2 && mouseY < rowY + SIDEBAR_ROW_H && mouseX >= 0 && mouseX < sidebarWidth()) {
                     sidebarHoverTitle = fullTitle;
                 }
             });
@@ -1828,6 +1866,92 @@ public class QuestBookScreen extends Screen {
             MockChrome.frame(graphics, tx - 3, ty - 3, tw + 6, 14, QuestColors.SIDEBAR_EDGE);
             graphics.drawString(font, sidebarHoverTitle, tx, ty, QuestColors.TEXT, false);
         }
+    }
+
+    /**
+     * A chapter row's progress: {@code done/total} (or DONE) flush right, a yellow badge counting rewards to claim,
+     * and a 2px bar under the name. The bar eases to each new value and, when the book opens, sweeps in row by row.
+     *
+     * @return pixels taken on the right of the row, so the name can ellipsize short of them
+     */
+    private int drawSidebarStats(GuiGraphics graphics, Chapter entry, ClientQuestState.ChapterStats stats, int textX,
+                                 int right, int rowY, float reveal, int index) {
+        if (stats.total() <= 0) {
+            return 0;
+        }
+        String key = entry.id().toString();
+        long now = UiFx.nowMs();
+        float alpha = Math.max(0.15f, reveal);
+        int used = 0;
+        int cursor = right;
+        if (stats.claimable() > 0) {
+            String n = Integer.toString(stats.claimable());
+            int badgeW = Math.max(7, (int) Math.ceil(font.width(n) * 0.6f) + 4);
+            float pop = badgePopScale(fxBadgePopAt.getOrDefault(key, Long.MIN_VALUE), now);
+            int bx = cursor - badgeW;
+            var pose = graphics.pose();
+            pose.pushPose();
+            pose.translate(bx + badgeW / 2f, rowY + 7.5f, 0);
+            pose.scale(pop, pop, 1f);
+            pose.translate(-badgeW / 2f, -3.5f, 0);
+            MockChrome.box(graphics, 0, 0, badgeW, 7, UiFx.scaleAlpha(QuestColors.COMPLETED, alpha));
+            pose.translate(2, 1, 0);
+            pose.scale(0.6f, 0.6f, 1f);
+            graphics.drawString(font, n, 0, 0, UiFx.scaleAlpha(MockChrome.INK, alpha), false);
+            pose.popPose();
+            cursor = bx - 3;
+            used += badgeW + 3;
+        }
+        noteBadgeCount(key, stats.claimable(), now);
+        boolean complete = stats.complete();
+        String count = complete ? "DONE" : stats.done() + "/" + stats.total();
+        int countW = (int) Math.ceil(font.width(count) * 0.6f);
+        tinyString(graphics, count, cursor - countW, rowY + 5,
+                UiFx.scaleAlpha(complete ? QuestColors.COMPLETED : QuestColors.MUTED, alpha));
+        used += countW;
+
+        BarTween tween = sidebarBars.computeIfAbsent(key, k -> new BarTween());
+        tween.retarget(stats.fraction(), now);
+        float sweep = UiFx.easeOut(UiFx.progress(fxSidebarFillAt + index * SIDEBAR_FILL_STAGGER_MS, SIDEBAR_FILL_MS));
+        int barX = textX;
+        int barW = Math.max(4, right - textX);
+        int barY = rowY + 15;
+        MockChrome.box(graphics, barX, barY, barW, 2, UiFx.withAlpha(QuestColors.CELL_LINE, 0.7f * alpha));
+        int fill = Math.round(barW * tween.value(now) * sweep);
+        MockChrome.box(graphics, barX, barY, fill, 2,
+                UiFx.scaleAlpha(complete ? QuestColors.COMPLETED : QuestColors.CURRENT, alpha));
+        float glow = tween.edgeAlpha(now);
+        if (glow > 0f && fill > 0) {
+            MockChrome.box(graphics, barX + fill - 1, barY - 1, 1, 4, UiFx.withAlpha(QuestColors.TEXT, glow));
+        }
+        return used;
+    }
+
+    /** A drop in a chapter's claimable count pops its badge; with a reward flight on its way, on landing. */
+    private void noteBadgeCount(String key, int claimable, long now) {
+        Integer last = fxBadgeCount.put(key, claimable);
+        if (last == null || claimable >= last || !UiFx.enabled()) {
+            return;
+        }
+        long land = now;
+        for (RewardFlight flight : fxFlights) {
+            if (flight.chapterId().equals(key)) {
+                land = Math.max(land, flight.startMs() + FLIGHT_MS);
+            }
+        }
+        fxBadgePopAt.put(key, land);
+    }
+
+    /** Badge scale for a pop that starts at {@code startMs}: 1 → 1.3 → 1, and 1 outside the pop. */
+    static float badgePopScale(long startMs, long now) {
+        if (startMs == Long.MIN_VALUE || now < startMs || !UiFx.enabled()) {
+            return 1f;
+        }
+        float t = (now - startMs) / (float) BADGE_POP_MS;
+        if (t >= 1f) {
+            return 1f;
+        }
+        return 1f + 0.3f * (float) Math.sin(t * Math.PI);
     }
 
     static final int SIDEBAR_LABEL_MIN = 28;
@@ -1859,7 +1983,7 @@ public class QuestBookScreen extends Screen {
     }
 
     private boolean sidebarRowVisible(SidebarRow row) {
-        return sidebarRowFullyInside(row.y(), 16, TOP_H, height);
+        return sidebarRowFullyInside(row.y(), SIDEBAR_ROW_H, TOP_H, height);
     }
 
     private int sidebarMaxScroll() {
@@ -1936,7 +2060,7 @@ public class QuestBookScreen extends Screen {
             }
         }
         boolean collapsed = hasChildren && collapsedChapters.contains(entry.id().toString());
-        int rowH = 16;
+        int rowH = SIDEBAR_ROW_H;
         final int rowY = y;
         int caretX = 6 + depth * 10;
         sidebarRows.add(new SidebarRow(entry.id(), rowY, depth, locked, hasChildren, collapsed, caretX));
@@ -1959,6 +2083,7 @@ public class QuestBookScreen extends Screen {
         }
         MockChrome.box(graphics, 0, TOP_H - 1, width, 1, rule);
         drawSidebarTitle(graphics);
+        drawBookTotal(graphics);
         if (!logOpen) {
             MockChrome.box(graphics, searchX() - 2, 6, searchW() + 4, 14, QuestColors.CARD);
             MockChrome.frame(graphics, searchX() - 2, 6, searchW() + 4, 14, QuestColors.SIDEBAR_EDGE);
@@ -2029,7 +2154,27 @@ public class QuestBookScreen extends Screen {
     }
 
     private int sidebarTitleMaxW() {
-        return Math.max(24, searchX() - 28);
+        int total = bookTotalW();
+        return Math.max(24, searchX() - 28 - (total > 0 ? total + 6 : 0));
+    }
+
+    private String bookTotalText() {
+        ClientQuestState.ChapterStats book = ClientQuestState.bookStats();
+        return book.total() <= 0 ? "" : book.done() + "/" + book.total();
+    }
+
+    private int bookTotalW() {
+        String text = bookTotalText();
+        return text.isEmpty() ? 0 : font.width(text);
+    }
+
+    /** Book-wide quests done, right-aligned at the end of the title area. */
+    private void drawBookTotal(GuiGraphics graphics) {
+        String text = bookTotalText();
+        if (text.isEmpty() || searchX() - 28 - font.width(text) < 24) {
+            return;
+        }
+        graphics.drawString(font, text, searchX() - 12 - font.width(text), 9, QuestColors.MUTED, false);
     }
 
     private void drawSidebarTitle(GuiGraphics graphics) {
@@ -3185,6 +3330,14 @@ public class QuestBookScreen extends Screen {
                 MockChrome.box(graphics, bar.actionX() - 1, bar.y() + 12, bar.actionW() + 2, 1, halo);
                 MockChrome.box(graphics, bar.actionX() - 1, bar.y() - 1, 1, 13, halo);
                 MockChrome.box(graphics, bar.actionX() + bar.actionW(), bar.y() - 1, 1, 13, halo);
+                if ("CLAIM".equals(bar.actionLabel())) {
+                    // The same passing glint as the board's CLAIM chip.
+                    int glint = QuestTileWidget.claimShineX(UiFx.phase(QuestTileWidget.SHINE_PERIOD_MS, 0L), bar.actionW());
+                    if (glint >= 0) {
+                        MockChrome.box(graphics, bar.actionX() + glint, bar.y(), Math.min(2, bar.actionW() - glint), 12,
+                                0x8CFFFFFF);
+                    }
+                }
             }
         } else if (bar.claimedBadge()) {
             drawButtonLabel(graphics, bar.actionX(), bar.y(), bar.actionW(), 12, "CLAIMED", QuestColors.COMPLETED);
@@ -3769,7 +3922,7 @@ public class QuestBookScreen extends Screen {
                 if (!sidebarRowVisible(row)) {
                     continue;
                 }
-                if (mouseY >= row.y() - 2 && mouseY < row.y() + 16) {
+                if (mouseY >= row.y() - 2 && mouseY < row.y() + SIDEBAR_ROW_H) {
                     if (row.hasChildren() && over(row.caretX(), row.y(), 10, 14, mouseX, mouseY)) {
                         String key = row.id().toString();
                         if (!collapsedChapters.add(key)) {
@@ -4090,6 +4243,65 @@ public class QuestBookScreen extends Screen {
         fxClaimSparkAt = UiFx.nowMs();
         fxClaimSparkX = bar.actionX() + bar.actionW() / 2;
         fxClaimSparkY = bar.y() + 6;
+        // Up to three of the reward faces leave the card for this chapter's row in the sidebar.
+        List<RewardSlot> slots = footerSlots(tile);
+        FooterLayout layout = bar.layout();
+        int iconY = inspectFootY(tile, x, y, w, h);
+        int shown = Math.min(3, layout.shown());
+        for (int i = 0; i < shown; i++) {
+            fxFlights.add(new RewardFlight(slots.get(i).face().copyWithCount(1), layout.slotX()[i], iconY + inspectFxOffsetY(),
+                    chapter.id().toString(), fxClaimSparkAt + i * FLIGHT_STAGGER_MS));
+        }
+    }
+
+    /**
+     * Where a flying reward is at {@code t} (0..1) on its way from (fromX, fromY) to (toX, toY): straight across,
+     * lifted into an arc that peaks halfway, so it reads as tossed rather than slid.
+     */
+    static int[] flightPoint(int fromX, int fromY, int toX, int toY, float t) {
+        float c = UiFx.clamp01(t);
+        float travel = UiFx.easeInOut(c);
+        double dist = Math.hypot(toX - fromX, toY - fromY);
+        float arc = (float) (24 + dist * 0.15);
+        int x = Math.round(UiFx.lerp(fromX, toX, travel));
+        int y = Math.round(UiFx.lerp(fromY, toY, travel) - arc * (float) Math.sin(c * Math.PI));
+        return new int[]{x, y};
+    }
+
+    /** Landing spot for a flight: the chapter's badge, or the sidebar tab when the list is shut or scrolled away. */
+    private int[] flightTarget(String chapterId) {
+        if (!sidebarCollapsed) {
+            for (SidebarRow row : sidebarRows) {
+                if (row.id().toString().equals(chapterId) && sidebarRowVisible(row)) {
+                    return new int[]{sidebarWidth() - SIDEBAR_THUMB_PAD - 8, row.y() + 4};
+                }
+            }
+            return new int[]{sidebarWidth() / 2, TOP_H + 4};
+        }
+        return new int[]{tabX() + TAB_W / 2 - 4, tabY() + TAB_H / 2 - 4};
+    }
+
+    private void drawRewardFlights(GuiGraphics graphics) {
+        if (fxFlights.isEmpty()) {
+            return;
+        }
+        long now = UiFx.nowMs();
+        fxFlights.removeIf(flight -> !UiFx.enabled() || now - flight.startMs() >= FLIGHT_MS);
+        for (RewardFlight flight : fxFlights) {
+            if (now < flight.startMs()) {
+                continue;
+            }
+            float t = (now - flight.startMs()) / (float) FLIGHT_MS;
+            int[] to = flightTarget(flight.chapterId());
+            int[] at = flightPoint(flight.fromX(), flight.fromY(), to[0], to[1], t);
+            float scale = UiFx.lerp(1f, 0.5f, t);
+            var pose = graphics.pose();
+            pose.pushPose();
+            pose.translate(at[0], at[1], 0);
+            pose.scale(scale, scale, 1f);
+            graphics.renderItem(flight.face(), 0, 0);
+            pose.popPose();
+        }
     }
 
     private boolean handleCardClick(Tile tile, int x, int y, int w, int h, double mouseX, double mouseY) {

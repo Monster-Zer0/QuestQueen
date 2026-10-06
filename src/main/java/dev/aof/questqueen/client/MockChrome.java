@@ -69,16 +69,6 @@ public final class MockChrome {
         }
     }
 
-    public static void tile(GuiGraphics graphics, int x, int y, int size, int face, int edge, int headerW) {
-        box(graphics, x, y, size, size, face);
-        if (edge != 0) {
-            frame(graphics, x, y, size, size, edge);
-            if (headerW > 0) {
-                statusTab(graphics, x, y, Math.min(headerW, size - 14), edge, face);
-            }
-        }
-    }
-
     public static void panel(GuiGraphics graphics, int x, int y, int w, int h, int face, int edge, int headerW) {
         box(graphics, x, y, w, h, face);
         frame(graphics, x, y, w, h, edge);
