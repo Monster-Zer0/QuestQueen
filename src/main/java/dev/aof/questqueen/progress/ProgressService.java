@@ -804,7 +804,10 @@ public final class ProgressService {
         // (Auto-grant made loot feel "missing" because COMPLETED showed reward icons with no button.)
         noteMutation(player, teamId);
         player.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.35F, 1.35F);
-        player.sendSystemMessage(Component.translatable("questqueen.complete", tile.title()));
+        // Only point the player at the book when there is something there to claim.
+        boolean loot = !tile.rewards().isEmpty() || !tile.scrolls().isEmpty();
+        player.sendSystemMessage(Component.translatable(loot ? "questqueen.complete" : "questqueen.complete.plain",
+                tile.title()));
         // Caller (increment/setCompleted) already schedules syncTeam — one flush covers the tile flag.
     }
 

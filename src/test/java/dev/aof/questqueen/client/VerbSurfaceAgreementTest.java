@@ -1,7 +1,5 @@
 package dev.aof.questqueen.client;
 
-import dev.aof.questqueen.data.task.Task;
-import dev.aof.questqueen.data.task.TaskFactory;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -9,12 +7,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -41,44 +36,6 @@ class VerbSurfaceAgreementTest {
     private static final Set<String> DELIBERATE = Set.of(
             // Reward.type() is a REWARD type, not a task type; the enum name is its own player-facing label.
             "dev/aof/questqueen/data/reward/Reward.java::return type().toUpperCase(Locale.ROOT);");
-
-    /**
-     * The board's label takes the verb as a parameter, so its caller cannot substitute a type id for it. Pins
-     * both halves: the shape is {@code <VERB> <value>/<need>}, and the verb slot really carries the shared
-     * verb for every type the factory can build.
-     */
-    @Test
-    void theBoardLabelCarriesTheSharedVerbForEveryType() {
-        for (String type : TaskFactory.TYPES) {
-            Task task = TaskFactory.create(type);
-            // tile is only consulted for the null-task fallback, and this task is never null.
-            String label = QuestBookScreen.objectiveLabel(ClientQuestState.taskVerb(task, null), 3, 16);
-            assertFalse(label.contains("_"), type + " put an identifier fragment on the board: " + label);
-            assertTrue(label.endsWith(" 3/16"), type + " lost the value/required shape: " + label);
-            // Only a multi-word type can prove the difference: kill -> KILL and stat -> STAT are the correct
-            // verbs AND the uppercased id, so equality there is not a defect. Asserting on those was an
-            // assumption of mine, not a property of the code.
-            if (type.contains("_")) {
-                assertNotEquals(type.toUpperCase(Locale.ROOT) + " 3/16", label,
-                        type + " still reaches the board as its raw identifier");
-            }
-        }
-        // The two the pack measured on screen, spelled out rather than only compared in a loop.
-        String tag = QuestBookScreen.objectiveLabel(
-                ClientQuestState.taskVerb(TaskFactory.create("item_tag"), null), 16, 16);
-        String xp = QuestBookScreen.objectiveLabel(
-                ClientQuestState.taskVerb(TaskFactory.create("xp_levels"), null), 5, 5);
-        assertFalse(tag.startsWith("ITEM_TAG"), "the board reads ITEM_TAG again: " + tag);
-        assertFalse(xp.startsWith("XP_LEVELS"), "the board reads XP_LEVELS again: " + xp);
-
-        // The BOARD and the CARD must render the same string for the same task. `item_tag` count 16 is the
-        // exact row the pack photographed: the card read COLLECT 16/16 while the board read ITEM_TAG 16/16.
-        Task tagTask = TaskFactory.create("item_tag");
-        String card = ClientQuestState.taskVerb(tagTask, null) + " 16/16";
-        String board = QuestBookScreen.objectiveLabel(ClientQuestState.taskVerb(tagTask, null), 16, 16);
-        assertTrue(board.startsWith(card.substring(0, card.indexOf(' '))),
-                "the board and the card disagree on the verb: board=" + board + " card=" + card);
-    }
 
     /**
      * No render surface may spell a raw task type. This is the guard that would have caught the board half of

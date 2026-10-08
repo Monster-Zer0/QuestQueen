@@ -80,8 +80,12 @@ public final class ClientQuestState {
         return cachedChapterTree;
     }
 
+    /**
+     * An act intro is a parent chapter with no quests of its own. A parent that has quests keeps its board: a
+     * child appearing (the Stage Wing loads only with ProgressiveStages) used to wipe the Feature Showcase board.
+     */
     public static boolean isIntroChapter(Chapter chapter) {
-        return chapter != null && ChapterTree.hasChildren(chapterTreeRoots(), chapter.id());
+        return chapter != null && chapter.tiles().isEmpty() && ChapterTree.hasChildren(chapterTreeRoots(), chapter.id());
     }
 
     public static void setProgress(ProgressSnapshot next) {
@@ -462,8 +466,28 @@ public final class ClientQuestState {
         if (need <= 1) {
             return "";
         }
-        int value = Math.max(0, Math.min(need, progress.value(questId, Integer.toString(taskIndex))));
-        return value + "/" + need;
+        return liveValue(chapter, tile, taskIndex) + "/" + need;
+    }
+
+    /** Local player's XP level, for the count of an xp_levels task before it is submitted. Tests replace it. */
+    static java.util.function.IntSupplier playerLevel = () -> {
+        var player = net.minecraft.client.Minecraft.getInstance().player;
+        return player == null ? 0 : player.experienceLevel;
+    };
+
+    /**
+     * Progress value to show for an open task, capped at its need. An xp_levels task only records progress when
+     * it is submitted (the levels are spent then), so before that its count is the player's current level —
+     * otherwise a player holding the levels read 0/2 next to a SUBMIT that would work.
+     */
+    static int liveValue(Chapter chapter, Tile tile, int taskIndex) {
+        Task task = tile.tasks().get(taskIndex);
+        int need = Math.max(1, task.required());
+        int value = progress.value(chapter.id() + "/" + tile.id(), Integer.toString(taskIndex));
+        if ("xp_levels".equals(task.type())) {
+            value = Math.max(value, playerLevel.getAsInt());
+        }
+        return Math.max(0, Math.min(need, value));
     }
 
     /**
@@ -484,7 +508,7 @@ public final class ClientQuestState {
             if (tileDone || progress.taskCompleted(questId, Integer.toString(i))) {
                 have += required;
             } else {
-                have += Math.max(0, Math.min(required, progress.value(questId, Integer.toString(i))));
+                have += liveValue(chapter, tile, i);
             }
         }
         return need <= 0 ? 0f : have / (float) need;
@@ -501,8 +525,7 @@ public final class ClientQuestState {
             return 1f;
         }
         int need = Math.max(1, tile.tasks().get(taskIndex).required());
-        int value = Math.max(0, Math.min(need, progress.value(questId, Integer.toString(taskIndex))));
-        return value / (float) need;
+        return liveValue(chapter, tile, taskIndex) / (float) need;
     }
 
     /**
@@ -588,8 +611,11 @@ public final class ClientQuestState {
         int done = 0;
         int total = 0;
         int claimable = 0;
+        Set<String> completed = tileIds(chapter, progress.completedTiles());
         for (Tile tile : chapter.tiles()) {
-            if (isConcealed(chapter, tile)) {
+            // A closed fork branch or a NOT gate shut for good can never be done, so it is not part of the total:
+            // counting it left a finished chapter at 5/7 forever.
+            if (isConcealed(chapter, tile) || GateEvaluator.closed(chapter, tile.id(), completed)) {
                 continue;
             }
             total++;

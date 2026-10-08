@@ -94,7 +94,7 @@ public final class EditorBridge {
         stop();
         try {
             if (!refreshSnapshots()) {
-                notifyPlayer("questqueen.editor.fail");
+                notifyPlayer("questqueen.editor.fail.catalog");
                 return false;
             }
             // Mint the nonce before the socket opens: openUri below can load index.html before this method
@@ -112,13 +112,18 @@ public final class EditorBridge {
             server = http;
             String url = "http://127.0.0.1:" + PORT + "/";
             notifyPlayer("questqueen.editor.url", itemCount(), url);
-            Util.getPlatform().openUri(URI.create(url));
+            // Automated runs (e2e/flow.mjs) drive the editor themselves; they set this so no browser tab opens.
+            if (!"false".equals(System.getProperty("questqueen.editor.openBrowser"))) {
+                Util.getPlatform().openUri(URI.create(url));
+            }
             QuestQueen.LOGGER.info("Quest Queen editor listening on {} with {} items", url, itemCount());
             return true;
         } catch (Exception exception) {
             QuestQueen.LOGGER.error("Could not start quest editor on 127.0.0.1:{}", PORT, exception);
             stop();
-            notifyPlayer("questqueen.editor.fail");
+            // A busy port is the usual cause (another game or a dev bridge already holds it); say so.
+            notifyPlayer(exception instanceof java.net.BindException
+                    ? "questqueen.editor.fail.port" : "questqueen.editor.fail");
             return false;
         }
     }

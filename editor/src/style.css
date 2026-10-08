@@ -709,3 +709,9 @@ main { flex: 1; position: relative; min-height: 0; overflow: hidden; display: fl
 @media (prefers-reduced-motion: reduce) {
   *, *::before { animation: none !important; transition: none !important; }
 }
+
+/* Save status and unsaved markers */
+#save-status.ok { color: #6fd08c; }
+#save-status.bad { color: #e8707a; cursor: help; }
+.dirty-dot { color: #f2c94c; margin-left: 6px; font-size: 10px; }
+.choice-option { border-left: 2px solid rgba(255, 255, 255, 0.08); padding-left: 6px; margin-bottom: 6px; }

@@ -78,6 +78,24 @@ class ChapterCompletionTest {
                 Set.of("questqueen:crash/q1", "questqueen:crash/q2")));
     }
 
+    @Test
+    void forkAndNotGateDoNotBlockCompletion() {
+        Chapter chapter = Chapter.blank(id("questqueen:fork"))
+                .withTiles(List.of(Tile.blank("hub", 0, 0), Tile.blank("left", 1, 0), Tile.blank("right", 1, 1),
+                        Tile.blank("before", 0, 1), Tile.blank("end", 2, 0)))
+                .upsertLink("hub", "left", dev.aof.questqueen.data.GateOp.XOR)
+                .upsertLink("hub", "right", dev.aof.questqueen.data.GateOp.XOR)
+                .upsertLink("hub", "before", dev.aof.questqueen.data.GateOp.NOT)
+                .upsertLink("left", "end", dev.aof.questqueen.data.GateOp.OR)
+                .upsertLink("right", "end", dev.aof.questqueen.data.GateOp.OR);
+        List<Chapter> pack = List.of(chapter);
+        assertFalse(ChapterCompletion.fullyComplete("questqueen:fork", pack,
+                Set.of("questqueen:fork/hub", "questqueen:fork/left")), "end is still open");
+        assertTrue(ChapterCompletion.fullyComplete("questqueen:fork", pack,
+                Set.of("questqueen:fork/hub", "questqueen:fork/left", "questqueen:fork/end")),
+                "right (closed fork) and before (NOT shut) are settled, so the chapter is done");
+    }
+
     private static Chapter empty(String id) {
         return Chapter.blank(id(id)).withTiles(List.of());
     }
