@@ -63,6 +63,10 @@ runs {
 
     client {
         systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        // ./gradlew runClient -Pqq.e2e: for e2e/flow.mjs runs, which drive the editor and the book themselves.
+        if (project.hasProperty('qq.e2e')) {
+            systemProperty 'questqueen.editor.openBrowser', 'false'
+        }
     }
 
     server {

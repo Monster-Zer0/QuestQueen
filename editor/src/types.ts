@@ -32,6 +32,7 @@ export interface Reward {
   table?: string;
   message?: string;
   advancement?: string;
+  stage?: string;
   options?: Reward[];
 }
 export interface JumpTarget { chapter: string; tile: string; }
@@ -48,8 +49,10 @@ export interface Tile {
   scrolls?: string[];
   target?: JumpTarget;
   hidden_until?: HiddenUntil;
+  required_stage?: string;
 }
-export interface Link { from: string; to: string; gate?: string | { op: string; conditions?: { type: string; id: string }[] }; }
+export type LinkCondition = { type: string; id: string };
+export interface Link { from: string; to: string; gate?: string | { op: string; conditions?: LinkCondition[] }; }
 export interface Chapter {
   id: string;
   title?: string;
@@ -87,12 +90,27 @@ export function setUnlockConditions(chapter: Chapter, conditions: UnlockConditio
 
 export interface ChapterNode { chapter: Chapter; children: ChapterNode[] }
 
+/** True when following parents from {@code id} comes back to {@code id}. */
+export function parentLoops(byId: Map<string, Chapter>, id: string): boolean {
+  const seen = new Set<string>();
+  let cursor = byId.get(id)?.parent;
+  while (cursor && byId.has(cursor)) {
+    if (cursor === id) return true;
+    if (seen.has(cursor)) return false;
+    seen.add(cursor);
+    cursor = byId.get(cursor)?.parent;
+  }
+  return false;
+}
+
 export function chapterTree(chapters: Chapter[]): ChapterNode[] {
   const byId = new Map(chapters.map((chapter) => [chapter.id, chapter]));
   const children = new Map<string, Chapter[]>();
   const roots: Chapter[] = [];
   for (const chapter of chapters) {
-    if (!chapter.parent || !byId.has(chapter.parent)) {
+    // A parent chain that loops back would hide every chapter on the loop; treat such a chapter as a root,
+    // the way the mod's ChapterTree does.
+    if (!chapter.parent || !byId.has(chapter.parent) || parentLoops(byId, chapter.id)) {
       roots.push(chapter);
       continue;
     }
@@ -127,12 +145,19 @@ export function clampGrid(value: number, fallback: number): number {
   return Math.max(GRID_MIN, Math.min(GRID_MAX, Math.floor(value)));
 }
 
+/**
+ * Board width: the authored width grown to cover every quest, the same rule as the mod's Chapter.boardWidth. Packs
+ * (Skylore among them) place quests past their authored grid, and those quests still need a cell on the board.
+ */
 export function chapterGridWidth(chapter: Chapter): number {
-  return clampGrid(chapter.grid_width ?? GRID_DEFAULT_WIDTH, GRID_DEFAULT_WIDTH);
+  const extent = Math.max(0, ...(chapter.tiles ?? []).map((tile) => tile.pos.x + 1));
+  return clampGrid(Math.max(chapter.grid_width ?? GRID_DEFAULT_WIDTH, extent), GRID_DEFAULT_WIDTH);
 }
 
+/** Board height: the authored height grown to cover every quest. */
 export function chapterGridHeight(chapter: Chapter): number {
-  return clampGrid(chapter.grid_height ?? GRID_DEFAULT_HEIGHT, GRID_DEFAULT_HEIGHT);
+  const extent = Math.max(0, ...(chapter.tiles ?? []).map((tile) => tile.pos.y + 1));
+  return clampGrid(Math.max(chapter.grid_height ?? GRID_DEFAULT_HEIGHT, extent), GRID_DEFAULT_HEIGHT);
 }
 
 export function inGrid(chapter: Chapter, x: number, y: number): boolean {
@@ -148,26 +173,60 @@ export function gateOp(link: Link): GateOpName {
   return ((link.gate.op ?? "and").toLowerCase() as GateOpName) || "and";
 }
 
-export function cycleGate(op: GateOpName): GateOpName {
-  if (op === "and") return "or";
-  if (op === "or") return "xor";
-  return "and";
+/** The link's conditions (advancement / stage / … gates authored in JSON); kept through every op change. */
+export function linkConditions(link: Link): LinkCondition[] {
+  return typeof link.gate === "object" && link.gate?.conditions ? link.gate.conditions : [];
 }
 
+/** The link with a new op. A link that carries conditions keeps its object form so they are not lost. */
+export function withOp(link: Link, op: GateOpName): Link {
+  const conditions = linkConditions(link);
+  return { ...link, gate: conditions.length ? { op, conditions } : op };
+}
+
+/**
+ * Add or re-gate {@code from → to}. AND / OR / NOT is how the CHILD opens, so it is applied to the child's other
+ * non-fork arrows. XOR is the PARENT's fork ("pick one path"), so it is applied to every arrow out of the parent
+ * and never touches the child's other parents. Mirrors {@code Chapter.upsertLink} in the mod.
+ */
 export function upsertLink(chapter: Chapter, from: string, to: string, op: GateOpName): void {
   const links = [...(chapter.links ?? [])];
   let replaced = false;
   for (let i = 0; i < links.length; i++) {
     const link = links[i];
     if (link.from === from && link.to === to) {
-      links[i] = { ...link, gate: op };
+      links[i] = withOp(link, op);
       replaced = true;
-    } else if (link.to === to) {
-      links[i] = { ...link, gate: op };
+    } else if (op === "xor" && link.from === from) {
+      links[i] = withOp(link, "xor");
+    } else if (op !== "xor" && link.to === to && gateOp(link) !== "xor") {
+      links[i] = withOp(link, op);
     }
   }
   if (!replaced) links.push({ from, to, gate: op });
   chapter.links = links;
+}
+
+/** True when adding {@code from → to} would close a loop (a path from {@code to} back to {@code from}). */
+export function wouldCreateCycle(chapter: Chapter, from: string, to: string): boolean {
+  if (from === to) return true;
+  const next = new Map<string, string[]>();
+  for (const link of chapter.links ?? []) {
+    next.set(link.from, [...(next.get(link.from) ?? []), link.to]);
+  }
+  const queue = [to];
+  const seen = new Set<string>([to]);
+  while (queue.length) {
+    const node = queue.shift()!;
+    if (node === from) return true;
+    for (const out of next.get(node) ?? []) {
+      if (!seen.has(out)) {
+        seen.add(out);
+        queue.push(out);
+      }
+    }
+  }
+  return false;
 }
 
 export function removeLink(chapter: Chapter, from: string, to: string): void {
@@ -190,7 +249,7 @@ export const TASK_TYPES = [
 ] as const;
 
 export const REWARD_TYPES = [
-  "item", "xp", "xp_levels", "command", "loot", "toast", "advancement", "choice",
+  "item", "xp", "xp_levels", "command", "loot", "toast", "advancement", "choice", "stage",
 ] as const;
 
 export function defaultTask(type: string): Task {
@@ -233,6 +292,7 @@ export function defaultReward(type: string): Reward {
         { type: "item", item: "minecraft:emerald", count: 8 },
       ],
     };
+    case "stage": return { type, stage: "example" };
     default: return { type: "xp", amount: 5 };
   }
 }

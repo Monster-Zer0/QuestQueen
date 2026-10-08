@@ -3348,9 +3348,14 @@ public class QuestBookScreen extends Screen {
                 pixel(graphics, Component.literal(n), sx + 18, iconY + 4, QuestColors.TEXT);
             }
             if (option && taken >= 0 && slot.option() != taken) {
-                // After the pick, the options not taken fade back so the card shows what was chosen.
+                // After the pick, the options not taken fade back so the card shows what was chosen. Lifted above
+                // the item layer: renderItem draws at a higher z, so a veil at z 0 left the icons bright.
+                var pose = graphics.pose();
+                pose.pushPose();
+                pose.translate(0, 0, 250);
                 MockChrome.box(graphics, sx - 1, iconY - 1, 18 + (n.isEmpty() ? 0 : 2 + font.width(n)), 18,
                         UiFx.withAlpha(QuestColors.CARD, 0.7f));
+                pose.popPose();
             }
         }
         if (layout.overflowX() >= 0) {
@@ -3386,7 +3391,12 @@ public class QuestBookScreen extends Screen {
                 int halo = UiFx.withAlpha(QuestColors.CURRENT, (0.35f + 0.45f * (1f - cp)) * Math.max(0.2f, 1f - cp * 0.4f));
                 MockChrome.box(graphics, bar.choiceX() - 1, bar.y() - 1, bar.choiceW() + 2, 14, halo);
             }
-            drawButtonLabel(graphics, bar.choiceX(), bar.y(), bar.choiceW(), 12, picked >= 0 ? "TAKE" : "PICK ONE");
+            if (picked >= 0) {
+                drawButtonLabel(graphics, bar.choiceX(), bar.y(), bar.choiceW(), 12, "TAKE");
+            } else {
+                // Outline chip until an option is picked, so the label is drawn in the muted ink, not on-fill ink.
+                drawButtonLabel(graphics, bar.choiceX(), bar.y(), bar.choiceW(), 12, "PICK ONE", QuestColors.MUTED);
+            }
         }
         if (bar.pin()) {
             drawPinButton(graphics, bar, borderColor(ClientQuestState.visual(chapter, tile)));

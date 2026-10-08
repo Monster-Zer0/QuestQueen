@@ -1,0 +1,49 @@
+{
+  "id": "questqueen:editor_probe",
+  "title": "Editor Probe",
+  "grid_width": 12,
+  "grid_height": 10,
+  "tiles": [
+    {
+      "id": "hub",
+      "pos": { "x": 1, "y": 2 },
+      "title": "Hub",
+      "tasks": [{ "type": "checkmark" }],
+      "rewards": [{ "type": "stage", "stage": "probe_stage" }]
+    },
+    {
+      "id": "left",
+      "pos": { "x": 2, "y": 1 },
+      "title": "Left path",
+      "tasks": [{ "type": "kill", "tag": "minecraft:skeletons", "count": 3 }],
+      "rewards": [{ "type": "item", "item": "minecraft:bread", "count": 2 }]
+    },
+    {
+      "id": "right",
+      "pos": { "x": 2, "y": 3 },
+      "title": "Right path",
+      "required_stage": "probe_stage",
+      "tasks": [{ "type": "fluid", "fluid": "minecraft:water", "count": 4 }],
+      "rewards": [{
+        "type": "choice",
+        "options": [
+          { "type": "item", "item": "minecraft:diamond", "count": 1 },
+          { "type": "item", "item": "minecraft:emerald", "count": 8 },
+          { "type": "item", "item": "minecraft:iron_ingot", "count": 16 }
+        ]
+      }]
+    },
+    {
+      "id": "gated",
+      "pos": { "x": 3, "y": 1 },
+      "title": "Gated",
+      "hidden_until": { "type": "quest_complete", "id": "questqueen:editor_probe/left" },
+      "tasks": [{ "type": "checkmark" }]
+    }
+  ],
+  "links": [
+    { "from": "hub", "to": "left", "gate": "xor" },
+    { "from": "hub", "to": "right", "gate": "xor" },
+    { "from": "left", "to": "gated", "gate": { "op": "and", "conditions": [{ "type": "advancement", "id": "minecraft:story/mine_stone" }] } }
+  ]
+}
