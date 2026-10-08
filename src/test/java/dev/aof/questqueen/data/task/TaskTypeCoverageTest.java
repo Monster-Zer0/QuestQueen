@@ -48,7 +48,7 @@ class TaskTypeCoverageTest {
             Map.entry("interact_block", "USE"),
             Map.entry("interact_entity", "USE"),
             Map.entry("fluid", "COLLECT"),
-            Map.entry("xp_levels", "REACH"),
+            Map.entry("xp_levels", "SPEND"),
             Map.entry("npc_dialog", "TALK"),
             Map.entry("trigger", "DO")
     );
@@ -157,7 +157,7 @@ class TaskTypeCoverageTest {
         }
         // The two the pack measured on screen.
         assertEquals("COLLECT", TaskVerbs.verb("item_tag"));
-        assertEquals("REACH", TaskVerbs.verb("xp_levels"));
+        assertEquals("SPEND", TaskVerbs.verb("xp_levels"));
     }
 
     @Test

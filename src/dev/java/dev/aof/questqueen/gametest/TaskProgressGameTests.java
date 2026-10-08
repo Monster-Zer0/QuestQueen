@@ -1,6 +1,9 @@
 package dev.aof.questqueen.gametest;
 
 import dev.aof.questqueen.data.Chapter;
+import dev.aof.questqueen.data.Gate;
+import dev.aof.questqueen.data.GateCondition;
+import dev.aof.questqueen.data.GateOp;
 import dev.aof.questqueen.data.GridPos;
 import dev.aof.questqueen.data.QuestDefinitions;
 import dev.aof.questqueen.data.Tile;
@@ -65,6 +68,9 @@ public final class TaskProgressGameTests {
     private static final String PICK = "pick";
     /** required_stage with no Progressive Stages installed: completable only by grant-all, never unlocked. */
     private static final String SEALED = "sealed";
+    private static final String PICK3 = "pick3";
+    private static final ResourceLocation FORK = ResourceLocation.parse("questqueen:gametest_fork");
+    private static final ResourceLocation AFTER_FORK = ResourceLocation.parse("questqueen:gametest_after_fork");
     private static final int LOGS = 0;
     private static final int COBBLE = 1;
     private static final int DIRT = 2;
@@ -87,8 +93,57 @@ public final class TaskProgressGameTests {
                 tile(PICK, 8, List.of(new CheckmarkTask())).withRewards(List.of(choice())),
                 new Tile(SEALED, new GridPos(10, 0), SEALED, "", Optional.empty(), List.of(new CheckmarkTask()),
                         List.of(choice()), List.of(), Optional.empty(), Optional.empty(),
-                        Optional.of("questqueen_gametest_never_granted"))),
+                        Optional.of("questqueen_gametest_never_granted")),
+                tile(PICK3, 12, List.of(new CheckmarkTask())).withRewards(List.of(new ChoiceReward(List.of(
+                        item("minecraft:diamond", 1), item("minecraft:emerald", 8), item("minecraft:iron_ingot", 16)))))),
                 List.of()));
+        // hub forks (XOR) into left / right; "before" is NOT-gated on hub; end opens from either branch (OR).
+        QuestDefinitions.putChapter(new Chapter(FORK, "GameTest fork", List.of(
+                tile("hub", 0, List.of(new CheckmarkTask())),
+                tile("left", 1, List.of(new CheckmarkTask())),
+                tile("right", 2, List.of(new CheckmarkTask())),
+                tile("before", 3, List.of(new CheckmarkTask())),
+                tile("end", 4, List.of(new CheckmarkTask()))),
+                List.of())
+                .upsertLink("hub", "left", GateOp.XOR)
+                .upsertLink("hub", "right", GateOp.XOR)
+                .upsertLink("hub", "before", GateOp.NOT)
+                .upsertLink("left", "end", GateOp.OR)
+                .upsertLink("right", "end", GateOp.OR));
+        QuestDefinitions.putChapter(new Chapter(AFTER_FORK, "GameTest after fork",
+                List.of(tile("z", 0, List.of(new CheckmarkTask()))), List.of())
+                .withMeta(Optional.empty(), 0, Optional.empty(),
+                        new Gate(GateOp.AND, List.of(new GateCondition("chapter_complete", FORK.toString())))));
+    }
+
+    /** A chapter with a fork and a NOT gate is complete once every quest is settled, and its unlock fires. */
+    @GameTest(template = TEMPLATE, batch = BATCH)
+    public static void aForkedChapterCompletesAndUnlocksTheNext(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        check(!snapshot(player).chapterUnlocked(AFTER_FORK.toString()), "unlocked before anything was done");
+        check(TaskHooks.trySubmit(player, FORK, "hub", 0), "hub was refused");
+        check(TaskHooks.trySubmit(player, FORK, "left", 0), "left was refused");
+        check(!TaskHooks.trySubmit(player, FORK, "right", 0), "the fork's other branch must stay closed");
+        check(!snapshot(player).chapterUnlocked(AFTER_FORK.toString()), "unlocked with end still open");
+        check(TaskHooks.trySubmit(player, FORK, "end", 0), "end was refused");
+        check(snapshot(player).chapterUnlocked(AFTER_FORK.toString()),
+                "chapter_complete must count the closed branch and the NOT-shut quest as settled");
+        leave(player);
+        helper.succeed();
+    }
+
+    /** Any option of a choice can be taken, not just the first two the old TAKE A / TAKE B buttons offered. */
+    @GameTest(template = TEMPLATE, batch = BATCH)
+    public static void theThirdChoiceOptionCanBeTaken(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        check(TaskHooks.trySubmit(player, CHAPTER, PICK3, 0), "checkmark was refused");
+        ProgressService.claimChoice(player, CHAPTER, PICK3, 2);
+        check(count(player, Items.IRON_INGOT) == 16, "option 2 must grant 16 iron, got " + count(player, Items.IRON_INGOT));
+        check(count(player, Items.DIAMOND) == 0 && count(player, Items.EMERALD) == 0, "only the picked option is granted");
+        check(snapshot(player).value(ProgressSnapshot.questKey(CHAPTER, PICK3), "choice") == 2,
+                "the pick is recorded so the card and log can show it");
+        leave(player);
+        helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, batch = BATCH)

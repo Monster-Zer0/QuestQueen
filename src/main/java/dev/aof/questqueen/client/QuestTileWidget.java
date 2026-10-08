@@ -466,9 +466,13 @@ public final class QuestTileWidget extends AbstractWidget {
             }
         }
         if (!countText.isEmpty() && !locked && size >= 40 && !compact) {
-            // Beside the XOR badge when there is one, so the two never overlap.
+            // Beside the XOR badge when there is one, and only when it clears the reward icons: the bar below
+            // still carries the progress when the row is too crowded for the number.
             int countX = xor && size >= 48 ? x + inset + 17 : x + inset;
-            tiny(graphics, font, countText, countX, y + size - 10, QuestColors.MUTED);
+            int countW = (int) Math.ceil(font.width(countText) * TINY_SCALE);
+            if (countFits(countX, countW, rewardStripLeft(x, size, faces.size()))) {
+                tiny(graphics, font, countText, countX, y + size - 10, QuestColors.MUTED);
+            }
         }
         if (!faces.isEmpty() && size >= 40) {
             int rewardPx = rewardPx(size);
@@ -502,6 +506,22 @@ public final class QuestTileWidget extends AbstractWidget {
             MockChrome.box(graphics, inner, y + size - 11, 15, 6, QuestColors.COMPLETED);
             tiny(graphics, font, "XOR", inner + 2, y + size - 10, MockChrome.INK);
         }
+    }
+
+    /** Left edge of the reward icon strip at the bottom-right ({@code x + size} when there are none). */
+    static int rewardStripLeft(int x, int size, int faces) {
+        if (faces <= 0) {
+            return x + size;
+        }
+        int rewardPx = rewardPx(size);
+        int show = Math.min(faces, REWARD_FACE_CAP);
+        int gap = show > 1 ? 1 : 0;
+        return x + size - padPx(size) - (show * rewardPx + Math.max(0, show - 1) * gap);
+    }
+
+    /** The count fits when it ends at least 2px short of the reward strip. */
+    static boolean countFits(int countX, int countW, int stripLeft) {
+        return countX + countW <= stripLeft - 2;
     }
 
     /** 2px bar along the bottom, inside the frame and clear of the rail, easing to each new fraction. */

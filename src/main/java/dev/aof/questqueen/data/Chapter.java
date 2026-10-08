@@ -119,14 +119,23 @@ public record Chapter(
         return links.stream().filter(link -> link.from().equals(from) && link.to().equals(to)).findFirst();
     }
 
+    /**
+     * Add or re-gate the link {@code from → to}. AND / OR / NOT is the child's join, so it is applied to every
+     * non-fork arrow into {@code to}. XOR is the parent's fork, so it is applied to every arrow out of
+     * {@code from} (and a fork arrow turned back to a join op leaves the parent's other fork arrows alone).
+     * Link conditions ride along untouched.
+     */
     public Chapter upsertLink(String from, String to, GateOp op) {
         java.util.List<Link> next = new java.util.ArrayList<>();
         boolean replaced = false;
         for (Link link : links) {
-            if (link.from().equals(from) && link.to().equals(to)) {
+            boolean self = link.from().equals(from) && link.to().equals(to);
+            if (self) {
                 next.add(link.withOp(op));
                 replaced = true;
-            } else if (link.to().equals(to)) {
+            } else if (op == GateOp.XOR && link.from().equals(from)) {
+                next.add(link.withOp(GateOp.XOR));
+            } else if (op != GateOp.XOR && link.to().equals(to) && link.gate().op() != GateOp.XOR) {
                 next.add(link.withOp(op));
             } else {
                 next.add(link);
@@ -140,6 +149,24 @@ public record Chapter(
 
     public Chapter setLinkOp(String from, String to, GateOp op) {
         return upsertLink(from, to, op);
+    }
+
+    /** Authored width grown to cover every tile, so a tile placed past the edge still sits on a grid cell. */
+    public int boardWidth() {
+        int extent = 0;
+        for (Tile tile : tiles) {
+            extent = Math.max(extent, tile.pos().x() + 1);
+        }
+        return Math.max(gridWidth, extent);
+    }
+
+    /** Authored height grown to cover every tile. */
+    public int boardHeight() {
+        int extent = 0;
+        for (Tile tile : tiles) {
+            extent = Math.max(extent, tile.pos().y() + 1);
+        }
+        return Math.max(gridHeight, extent);
     }
 
     public static Chapter blank(ResourceLocation id) {

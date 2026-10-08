@@ -23,13 +23,47 @@ public final class GateEvaluator {
         }
         List<Boolean> incoming = new ArrayList<>();
         List<GateCondition> conditions = new ArrayList<>();
-        // Authoring normalizes inbound ops on a child; first edge is authoritative if packs differ.
-        GateOp op = inbound.getFirst().gate().op();
+        GateOp op = joinOp(inbound);
         for (Link link : inbound) {
             incoming.add(completedTiles.contains(link.from()));
             conditions.addAll(link.gate().conditions());
         }
         return evaluate(op, incoming) && extrasPass(conditions, extras);
+    }
+
+    /**
+     * How a tile opens from its parents. XOR is a FORK — a property of the parent's outgoing arrows, enforced by
+     * {@link #xorSiblingCompleted} — so an XOR edge counts as an ordinary parent here and never sets the join.
+     * The join is the first non-XOR inbound op (authoring normalizes them; the first wins if a pack differs),
+     * and AND when every inbound edge is a fork edge.
+     */
+    public static GateOp joinOp(List<Link> inbound) {
+        for (Link link : inbound) {
+            if (link.gate().op() != GateOp.XOR) {
+                return link.gate().op();
+            }
+        }
+        return GateOp.AND;
+    }
+
+    /**
+     * Settled: nothing more can happen to this tile. Completed, closed by a sibling on an XOR fork, or shut for
+     * good by a NOT gate whose parent is done (NOT opens only while every parent is unfinished, and a finished
+     * quest never un-finishes). A chapter is complete when every tile is settled — requiring every tile to be
+     * COMPLETED made any chapter with a fork or a NOT gate impossible to finish.
+     */
+    public static boolean settled(Chapter chapter, String tileId, Set<String> completedTiles) {
+        if (completedTiles.contains(tileId) || xorSiblingCompleted(chapter, tileId, completedTiles)) {
+            return true;
+        }
+        List<Link> inbound = chapter.links().stream().filter(link -> link.to().equals(tileId)).toList();
+        return !inbound.isEmpty() && joinOp(inbound) == GateOp.NOT
+                && inbound.stream().anyMatch(link -> completedTiles.contains(link.from()));
+    }
+
+    /** Closed for good without being completed: the tiles a chapter total leaves out. */
+    public static boolean closed(Chapter chapter, String tileId, Set<String> completedTiles) {
+        return !completedTiles.contains(tileId) && settled(chapter, tileId, completedTiles);
     }
 
     /**

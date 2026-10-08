@@ -2,6 +2,7 @@ package dev.aof.questqueen.progress;
 
 import dev.aof.questqueen.data.Chapter;
 import dev.aof.questqueen.data.ChapterTree;
+import dev.aof.questqueen.data.GateEvaluator;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
@@ -54,9 +55,19 @@ public final class ChapterCompletion {
         return true;
     }
 
+    /**
+     * Every tile settled: completed, or closed for good (the other branch of an XOR fork, a NOT gate whose parent
+     * is done). Requiring every tile to be COMPLETED made a chapter with a fork or a NOT gate impossible to finish.
+     */
     private static boolean allTilesComplete(Chapter chapter, Set<String> completedTiles) {
-        return chapter.tiles().stream().allMatch(tile ->
-                completedTiles.contains(ProgressSnapshot.questKey(chapter.id(), tile.id())));
+        Set<String> done = new java.util.HashSet<>();
+        String prefix = chapter.id() + "/";
+        for (String key : completedTiles) {
+            if (key.startsWith(prefix)) {
+                done.add(key.substring(prefix.length()));
+            }
+        }
+        return chapter.tiles().stream().allMatch(tile -> GateEvaluator.settled(chapter, tile.id(), done));
     }
 
     private static void collectDescendantBoards(ChapterTree.Node node, List<Chapter> boards) {

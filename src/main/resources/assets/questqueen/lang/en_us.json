@@ -3,6 +3,7 @@
   "key.questqueen.open": "Toggle Quest Book",
   "screen.questqueen.book": "Quest Queen",
   "questqueen.complete": "Quest complete: %s — open the book to claim your rewards",
+  "questqueen.complete.plain": "Quest complete: %s",
   "questqueen.rewards_claimed": "Claimed rewards: %s",
   "questqueen.rewards_claimed_chapter": "Claimed %s quests in %s",
   "questqueen.done.tooltip": "Completes this quest. Claim rewards with CLAIM when it is done.",
@@ -10,7 +11,9 @@
   "questqueen.authored": "Saved chapter %s",
   "questqueen.editor.on": "Opening the Quest Queen web editor…",
   "questqueen.editor.off": "Web editor stopped.",
-  "questqueen.editor.fail": "Web editor failed to start. Catalog could not be built.",
+  "questqueen.editor.fail": "Web editor failed to start. See the game log for the cause.",
+  "questqueen.editor.fail.catalog": "Web editor failed to start: the item catalog could not be built. See the game log.",
+  "questqueen.editor.fail.port": "Web editor failed to start: port 47821 is already in use (another game or editor is running).",
   "questqueen.editor.url": "Web editor ready (%s items). Open %s",
   "questqueen.editor.ready": "Web editor ready. Pack catalog loaded.",
 
@@ -34,7 +37,7 @@
   "questqueen.task.interact_block": "USE",
   "questqueen.task.interact_entity": "USE",
   "questqueen.task.fluid": "COLLECT",
-  "questqueen.task.xp_levels": "REACH",
+  "questqueen.task.xp_levels": "SPEND",
   "questqueen.task.npc_dialog": "TALK",
   "questqueen.task.trigger": "DO",
 

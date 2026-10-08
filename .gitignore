@@ -44,3 +44,6 @@ editor/dist/
 ### Logs ###
 logs/
 *.log
+
+### Editor mock bridge saves ###
+editor/dev/out/

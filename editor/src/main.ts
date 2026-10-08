@@ -1,5 +1,4 @@
 import JSZip from "jszip";
-import schema from "../../schema/questqueen.schema.json";
 import {
   BLANK,
   GRID_PRESETS,
@@ -20,6 +19,9 @@ import {
   startsOf,
   unlockConditions,
   upsertLink,
+  wouldCreateCycle,
+  withOp,
+  linkConditions,
   type Chapter,
   type ChapterNode,
   type GateOpName,
@@ -30,6 +32,9 @@ import {
   type UnlockCondition,
 } from "./types";
 import { emptyCatalog, fromApi, type CatalogEntry, type PackCatalog } from "./packCatalog";
+import { cleanChapter, descendantIds, isIntroChapter, minGrid, newTile, packNamespace, uniqueChapterId } from "./model";
+import { validate } from "./validate";
+import { snapshot as snapshotUndo, undo as undoChapter } from "./undo";
 import { iconUrl, itemSelectHtml, readItemSelect, wireItemSelects } from "./itemSelect";
 import { glyphPickerHtml, glyphSvg, previewIntroHtml, readGlyph, wireGlyphPicker } from "./glyphs";
 import {
@@ -125,44 +130,18 @@ let pendingGate: GateOpName = "and";
 /** Slice 3: staged link awaiting confirm (unless Shift power-shortcut). */
 let searchHits: Set<string> | null = null;
 
-type LinkUndo =
-  | { kind: "remove"; from: string; to: string; gate: GateOpName }
-  | { kind: "gate"; from: string; to: string; prev: GateOpName; next: GateOpName }
-  | { kind: "add"; from: string; to: string; gate: GateOpName }
-  | { kind: "move"; id: string; fromX: number; fromY: number; toX: number; toY: number }
-  | { kind: "delete"; tile: Tile; links: { from: string; to: string; gate: GateOpName }[] }
-  | { kind: "spawn"; tile: Tile; from: string; gate: GateOpName };
-const linkUndo: LinkUndo[] = [];
-
-function pushLinkUndo(entry: LinkUndo) {
-  linkUndo.push(entry);
-  if (linkUndo.length > 50) linkUndo.shift();
+/** Snapshot the open chapter before a board edit, so Ctrl+Z can put it back (per chapter, see undo.ts). */
+function pushUndo() {
+  snapshotUndo(chapter);
 }
 
 function undoLastLinkOp() {
-  const entry = linkUndo.pop();
-  if (!entry) return;
-  if (entry.kind === "remove") {
-    upsertLink(chapter, entry.from, entry.to, entry.gate);
-  } else if (entry.kind === "gate") {
-    upsertLink(chapter, entry.from, entry.to, entry.prev);
-  } else if (entry.kind === "add") {
-    removeLink(chapter, entry.from, entry.to);
-  } else if (entry.kind === "move") {
-    const moved = chapter.tiles.find((t) => t.id === entry.id);
-    if (moved) moved.pos = { x: entry.fromX, y: entry.fromY };
-  } else if (entry.kind === "delete") {
-    chapter.tiles.push(structuredClone(entry.tile));
-    for (const link of entry.links) upsertLink(chapter, link.from, link.to, link.gate);
-    selected = entry.tile.id;
-  } else if (entry.kind === "spawn") {
-    removeLink(chapter, entry.from, entry.tile.id);
-    chapter.tiles = chapter.tiles.filter((t) => t.id !== entry.tile.id);
-    if (selected === entry.tile.id) selected = entry.from;
-  }
+  if (!undoChapter(chapter)) return;
+  if (!chapter.tiles.some((t) => t.id === selected)) selected = chapter.tiles[0]?.id ?? "";
   rememberChapter();
   updateLinkStatus();
   syncLinkConfirmChrome();
+  syncGridSizeSelect();
   const tile = chapter.tiles.find((t) => t.id === selected);
   if (tile) showCard(tile);
   draw();
@@ -196,8 +175,10 @@ function ensureTiles(next: Chapter): Tile[] {
   return next.tiles;
 }
 
+/** The open chapter is an act intro: a parent with no quests of its own (same rule as the mod). */
 function chapterHasChildren(id: string): boolean {
-  return packChapters.some((entry) => entry.parent === id);
+  const entry = packChapters.find((c) => c.id === id);
+  return entry ? isIntroChapter(packChapters, entry) : false;
 }
 
 function iconPayload(glyph: string, item: string): { item?: string; glyph?: string } | undefined {
@@ -219,30 +200,34 @@ function switchChapter(id: string) {
   updateLinkStatus();
   syncLinkConfirmChrome();
   syncGridSizeSelect();
+  setSaveStatus(isDirty(chapter) ? "Unsaved changes" : "", true);
   renderChapterTree();
-  const finish = () => {
-    fitChapterBoard();
-    draw();
-    if (chapterHasChildren(chapter.id)) {
-      showCard();
-      return;
-    }
+  // The inspector follows the switch at once: deferring it to the next frame left the old chapter's fields on
+  // screen (in a hidden tab, indefinitely), and editing them wrote into the newly opened chapter.
+  if (chapterHasChildren(chapter.id)) {
+    showCard();
+  } else {
     const tile = chapter.tiles.find((entry) => entry.id === selected) ?? chapter.tiles[0];
     if (tile) showCard(tile);
     else setCardOpen(false);
-  };
-  requestAnimationFrame(finish);
+  }
+  draw();
+  requestAnimationFrame(() => {
+    fitChapterBoard();
+    draw();
+  });
 }
 
 function createChapter() {
   if (!unlocked) return;
   rememberChapter();
-  const slug = `chapter_${packChapters.length + 1}`;
+  // A sibling of the open chapter (same parent), never its child: making the open chapter a parent turned it
+  // into an act intro and hid its quest board.
   const created: Chapter = {
-    id: `questqueen:${slug}`,
+    id: uniqueChapterId(packChapters, packNamespace(packChapters), "new_chapter"),
     title: "New Chapter",
     order: packChapters.length * 10,
-    parent: chapter.id,
+    ...(chapter.parent ? { parent: chapter.parent } : {}),
     grid_width: 12,
     grid_height: 10,
     tiles: [{
@@ -258,12 +243,7 @@ function createChapter() {
     unlock: { op: "and", conditions: [] },
   };
   packChapters.push(created);
-  chapter = created;
-  selected = "start";
-  syncGridSizeSelect();
-  renderChapterTree();
-  draw();
-  showCard(created.tiles[0]);
+  switchChapter(created.id);
 }
 
 function renderChapterTree() {
@@ -273,10 +253,12 @@ function renderChapterTree() {
     const active = node.chapter.id === chapter.id ? "active" : "";
     const title = node.chapter.title || node.chapter.id;
     const kids = node.children.map((child) => renderNode(child, depth + 1)).join("");
-    return `<button type="button" class="chapter-row ${active}" data-chapter-id="${escapeAttr(node.chapter.id)}" style="padding-left:${6 + depth * 12}px">${escapeAttr(title)}</button>${kids}`;
+    const dirty = unlocked && isDirty(node.chapter) ? `<span class="dirty-dot" title="Unsaved changes">●</span>` : "";
+    return `<button type="button" class="chapter-row ${active}" data-chapter-id="${escapeAttr(node.chapter.id)}" style="padding-left:${6 + depth * 12}px">${escapeAttr(title)}${dirty}</button>${kids}`;
   };
   chapterTreeEl.innerHTML = chapterTree(packChapters).map((node) => renderNode(node, 0)).join("")
     || `<p class="muted">No chapters</p>`;
+  refreshProblems();
   chapterTreeEl.querySelectorAll<HTMLButtonElement>("[data-chapter-id]").forEach((button) => {
     button.addEventListener("click", () => switchChapter(button.dataset.chapterId ?? ""));
   });
@@ -461,6 +443,7 @@ function gateColor(op: GateOpName): string {
   const theme = activeTheme();
   if (op === "or") return theme.neu;
   if (op === "xor") return theme.completed;
+  if (op === "not") return theme.lockedEdge;
   return "#C8C0D8";
 }
 
@@ -1143,6 +1126,8 @@ function taskFields(task: Task, index: number, ro: string, disabled: boolean): s
     case "item_tag":
       return `<label>ITEM TAG</label><input data-task="${index}" data-field="tag" list="pack-tags" value="${escapeAttr(task.tag ?? "")}" ${ro} />${count}`;
     case "kill":
+      return `<label>ENTITY</label><input data-task="${index}" data-field="entity" list="pack-entities" value="${escapeAttr(task.entity ?? "")}" ${ro} />
+        <label>OR ENTITY TAG</label><input data-task="${index}" data-field="tag" placeholder="minecraft:skeletons" value="${escapeAttr(task.tag ?? "")}" ${ro} />${count}`;
     case "interact_entity":
       return `<label>ENTITY</label><input data-task="${index}" data-field="entity" list="pack-entities" value="${escapeAttr(task.entity ?? "")}" ${ro} />${count}`;
     case "advancement":
@@ -1154,10 +1139,12 @@ function taskFields(task: Task, index: number, ro: string, disabled: boolean): s
     case "visit_biome":
       return `<label>BIOME</label><input data-task="${index}" data-field="biome" list="pack-biomes" value="${escapeAttr(task.biome ?? "")}" ${ro} />`;
     case "observation":
+      return `<label>BLOCK</label><input data-task="${index}" data-field="block" list="pack-blocks" value="${escapeAttr(task.block ?? "")}" ${ro} />
+        <label>OR ENTITY</label><input data-task="${index}" data-field="entity" list="pack-entities" value="${escapeAttr(task.entity ?? "")}" ${ro} />`;
     case "interact_block":
-      return `<label>BLOCK</label><input data-task="${index}" data-field="block" list="pack-blocks" value="${escapeAttr(task.block ?? "")}" ${ro} />${task.type === "interact_block" ? count : ""}`;
+      return `<label>BLOCK</label><input data-task="${index}" data-field="block" list="pack-blocks" value="${escapeAttr(task.block ?? "")}" ${ro} />${count}`;
     case "fluid":
-      return `<label>FLUID</label><input data-task="${index}" data-field="fluid" value="${escapeAttr(task.fluid ?? "")}" ${ro} />`;
+      return `<label>FLUID</label><input data-task="${index}" data-field="fluid" value="${escapeAttr(task.fluid ?? "")}" ${ro} />${count}`;
     case "stat":
       return `<label>STAT</label><input data-task="${index}" data-field="stat" value="${escapeAttr(task.stat ?? "")}" ${ro} />${count}`;
     case "location":
@@ -1172,7 +1159,7 @@ function taskFields(task: Task, index: number, ro: string, disabled: boolean): s
     case "trigger":
       return `<label>TRIGGER</label><input data-task="${index}" data-field="trigger" value="${escapeAttr(task.trigger ?? "")}" ${ro} />`;
     case "xp_levels":
-      return `<label>LEVELS</label><input data-task="${index}" data-field="levels" type="number" min="1" value="${task.levels ?? 1}" ${ro} />`;
+      return `<label>LEVELS (SPENT ON SUBMIT)</label><input data-task="${index}" data-field="levels" type="number" min="1" value="${task.levels ?? 1}" ${ro} />`;
     case "raid":
       return `<label>WAVES</label><input data-task="${index}" data-field="waves" type="number" min="1" value="${task.waves ?? 1}" ${ro} />`;
     default:
@@ -1198,8 +1185,16 @@ function rewardFields(reward: Reward, index: number, ro: string, disabled: boole
     case "advancement":
       return `<label>ADVANCEMENT</label><input data-reward="${index}" data-field="advancement" list="pack-advancements" value="${escapeAttr(reward.advancement ?? "")}" ${ro} />`;
     case "choice":
-      return `${itemSelectHtml(`data-reward="${index}" data-field="option0"`, reward.options?.[0]?.item ?? "", disabled, "OPTION A")}
-        ${itemSelectHtml(`data-reward="${index}" data-field="option1"`, reward.options?.[1]?.item ?? "", disabled, "OPTION B")}`;
+      // Every option, each with its own count; players pick one by its icon in the book.
+      return `${(reward.options ?? []).map((option, j) => `
+        <div class="choice-option">
+          ${itemSelectHtml(`data-reward="${index}" data-option="${j}" data-field="item"`, option.item ?? "", disabled, `OPTION ${j + 1}`)}
+          <label>COUNT</label><input data-reward="${index}" data-option="${j}" data-field="count" type="number" min="1" value="${option.count ?? 1}" ${ro} />
+          ${disabled ? "" : `<button type="button" data-remove-option="${index}:${j}">REMOVE OPTION</button>`}
+        </div>`).join("")}
+        ${disabled ? "" : `<button type="button" data-add-option="${index}">+ OPTION</button>`}`;
+    case "stage":
+      return `<label>STAGE</label><input data-reward="${index}" data-field="stage" value="${escapeAttr(reward.stage ?? "")}" ${ro} />`;
     default:
       return "";
   }
@@ -1287,6 +1282,23 @@ function showCard(tile?: Tile) {
     <textarea id="tile-body" rows="3" ${ro}>${escapeText(tile?.description ?? "")}</textarea>
     ${itemSelectHtml(`id="tile-item-select"`, tile?.icon?.item ?? "", !authoring, "ICON")}
     ${glyphPickerHtml(tile?.icon?.glyph ?? "", !authoring, "tile-glyph")}
+    <label>REQUIRES STAGE</label>
+    <input id="tile-required-stage" value="${escapeAttr(tile?.required_stage ?? "")}" placeholder="(none)" ${ro} />
+    <label>HIDDEN UNTIL</label>
+    <div style="display:flex;gap:6px">
+      <select id="tile-hidden-type" ${disabled}>
+        ${["", "quest_complete", "stage", "advancement", "team_flag", "trigger"].map((type) =>
+          `<option value="${type}" ${(tile?.hidden_until?.type ?? "") === type ? "selected" : ""}>${type || "(always shown)"}</option>`).join("")}
+      </select>
+      <input id="tile-hidden-id" value="${escapeAttr(tile?.hidden_until?.id ?? "")}" placeholder="id" ${ro} />
+    </div>
+    <label>JUMP TARGET (CHAPTER / QUEST)</label>
+    <div style="display:flex;gap:6px">
+      <input id="tile-target-chapter" value="${escapeAttr(tile?.target?.chapter ?? "")}" placeholder="pack:chapter" ${ro} />
+      <input id="tile-target-tile" value="${escapeAttr(tile?.target?.tile ?? "")}" placeholder="quest id" ${ro} />
+    </div>
+    <label>SCROLLS (COMMA-SEPARATED IDS)</label>
+    <input id="tile-scrolls" value="${escapeAttr((tile?.scrolls ?? []).join(", "))}" placeholder="pack:note" ${ro} />
     <label>QUESTLINE</label>
     ${tile ? questlineHtml(tile) : ""}
     <label>TASKS</label>
@@ -1326,11 +1338,12 @@ function showCard(tile?: Tile) {
     <label>CHAPTER TITLE</label>
     <input id="chapter-title" value="${escapeAttr(chapter.title ?? "")}" ${ro} />
     <label>CHAPTER ID</label>
-    <input id="chapter-id" value="${escapeAttr(chapter.id)}" ${ro} />
+    <input id="chapter-id" value="${escapeAttr(chapter.id)}" ${ro || (savedIds.has(chapter.id) ? "readonly" : "")}
+      title="${savedIds.has(chapter.id) ? "This chapter is in the game; its id is fixed (a new id would make a second copy)." : "Set the id before the first save."}" />
     <label>PARENT CHAPTER</label>
     <select id="chapter-parent" ${disabled}>
       <option value="">(root)</option>
-      ${packChapters.filter((entry) => entry.id !== chapter.id).map((entry) =>
+      ${packChapters.filter((entry) => entry.id !== chapter.id && !descendantIds(packChapters, chapter.id).has(entry.id)).map((entry) =>
         `<option value="${escapeAttr(entry.id)}" ${chapter.parent === entry.id ? "selected" : ""}>${escapeAttr(entry.title || entry.id)}</option>`
       ).join("")}
     </select>
@@ -1369,11 +1382,15 @@ function showCard(tile?: Tile) {
     ${itemSelectHtml(`id="chapter-icon-select"`, chapter.icon?.item ?? "", !authoring, "CHAPTER ICON")}
     ${glyphPickerHtml(chapter.icon?.glyph ?? "", !authoring, "chapter-glyph")}
     <label>UNLOCK CONDITIONS</label>
+    <select id="chapter-unlock-op" ${disabled}>
+      <option value="and" ${unlockOp(chapter) === "and" ? "selected" : ""}>All of these</option>
+      <option value="or" ${unlockOp(chapter) === "or" ? "selected" : ""}>Any one of these</option>
+    </select>
     ${unlockConditions(chapter).map((condition, index) => `
       <fieldset class="stack">
         <legend>CONDITION ${index + 1}</legend>
         <select data-unlock-type="${index}" ${disabled}>
-          ${["quest_complete", "chapter_complete", "advancement", "trigger", "team_flag", "scoreboard"].map((type) =>
+          ${["quest_complete", "chapter_complete", "advancement", "stage", "trigger", "team_flag", "scoreboard"].map((type) =>
             `<option value="${type}" ${condition.type === type ? "selected" : ""}>${type}</option>`
           ).join("")}
         </select>
@@ -1384,7 +1401,7 @@ function showCard(tile?: Tile) {
     ${authoring ? `<button type="button" id="add-unlock">+ UNLOCK CONDITION</button>` : ""}
     <label class="check">
       <input id="chapter-hide-until" type="checkbox" ${chapter.hide_until_unlocked ? "checked" : ""} ${disabled} />
-      Hide until all requirements are met
+      Hide until unlocked
     </label>
   `;
   const primary = intro
@@ -1398,13 +1415,14 @@ function showCard(tile?: Tile) {
   const apply = () => {
     if (!authoring) return;
     chapter.title = (document.getElementById("chapter-title") as HTMLInputElement).value;
-    const nextId = (document.getElementById("chapter-id") as HTMLInputElement).value.trim();
-    if (nextId.includes(":")) chapter.id = nextId;
     const parent = (document.getElementById("chapter-parent") as HTMLSelectElement).value;
     if (parent) chapter.parent = parent;
     else delete chapter.parent;
-    chapter.order = Number((document.getElementById("chapter-order") as HTMLInputElement).value || 0);
-    chapter.theme = (document.getElementById("chapter-theme") as HTMLSelectElement).value || DEFAULT_THEME_ID;
+    // Only write fields the author set: filling in defaults on every edit marked untouched chapters as changed.
+    const order = Number((document.getElementById("chapter-order") as HTMLInputElement).value || 0);
+    if (order !== 0 || chapter.order !== undefined) chapter.order = order;
+    const theme = (document.getElementById("chapter-theme") as HTMLSelectElement).value || DEFAULT_THEME_ID;
+    if (theme !== DEFAULT_THEME_ID || chapter.theme !== undefined) chapter.theme = theme;
     const bgMode = (document.getElementById("chapter-bg-mode") as HTMLSelectElement).value as "color" | "image";
     const bgColor = (document.getElementById("chapter-bg-color") as HTMLInputElement).value.trim();
     const bgImage = (document.getElementById("chapter-bg-image") as HTMLInputElement).value.trim();
@@ -1428,7 +1446,10 @@ function showCard(tile?: Tile) {
       const idInput = cardBody.querySelector<HTMLInputElement>(`[data-unlock-id="${index}"]`);
       conditions.push({ type: select.value, id: idInput?.value ?? "" });
     });
-    setUnlockConditions(chapter, conditions.filter((condition) => condition.id.trim()));
+    const kept = conditions.filter((condition) => condition.id.trim());
+    if (kept.length || typeof chapter.unlock === "object") setUnlockConditions(chapter, kept);
+    const unlockOpEl = document.getElementById("chapter-unlock-op") as HTMLSelectElement | null;
+    if (unlockOpEl && typeof chapter.unlock === "object") chapter.unlock.op = unlockOpEl.value;
     const hideUntil = document.getElementById("chapter-hide-until") as HTMLInputElement | null;
     if (hideUntil?.checked) chapter.hide_until_unlocked = true;
     else delete chapter.hide_until_unlocked;
@@ -1468,7 +1489,30 @@ function showCard(tile?: Tile) {
       if (!task || !field) continue;
       (task as unknown as Record<string, string>)[field] = host.dataset.value ?? "";
     }
-    for (const input of cardBody.querySelectorAll<HTMLInputElement>("[data-reward][data-field]:not(.item-select)")) {
+    const requiredStage = (document.getElementById("tile-required-stage") as HTMLInputElement | null)?.value.trim() ?? "";
+    if (requiredStage) tile.required_stage = requiredStage;
+    else delete tile.required_stage;
+    const hiddenType = (document.getElementById("tile-hidden-type") as HTMLSelectElement | null)?.value ?? "";
+    const hiddenId = (document.getElementById("tile-hidden-id") as HTMLInputElement | null)?.value.trim() ?? "";
+    if (hiddenType && hiddenId) tile.hidden_until = { type: hiddenType, id: hiddenId };
+    else delete tile.hidden_until;
+    const targetChapter = (document.getElementById("tile-target-chapter") as HTMLInputElement | null)?.value.trim() ?? "";
+    const targetTile = (document.getElementById("tile-target-tile") as HTMLInputElement | null)?.value.trim() ?? "";
+    if (targetChapter && targetTile) tile.target = { chapter: targetChapter, tile: targetTile };
+    else delete tile.target;
+    const scrolls = ((document.getElementById("tile-scrolls") as HTMLInputElement | null)?.value ?? "")
+      .split(",").map((id) => id.trim()).filter(Boolean);
+    if (scrolls.length) tile.scrolls = scrolls;
+    else delete tile.scrolls;
+    for (const input of cardBody.querySelectorAll<HTMLInputElement>("[data-reward][data-option][data-field]:not(.item-select)")) {
+      const option = tile.rewards?.[Number(input.dataset.reward)]?.options?.[Number(input.dataset.option)];
+      if (option && input.dataset.field === "count") option.count = Number(input.value || 0);
+    }
+    for (const host of cardBody.querySelectorAll<HTMLElement>(".item-select[data-reward][data-option]")) {
+      const option = tile.rewards?.[Number(host.dataset.reward)]?.options?.[Number(host.dataset.option)];
+      if (option) option.item = host.dataset.value ?? "";
+    }
+    for (const input of cardBody.querySelectorAll<HTMLInputElement>("[data-reward][data-field]:not(.item-select):not([data-option])")) {
       const reward = tile.rewards?.[Number(input.dataset.reward)];
       if (!reward || !input.dataset.field) continue;
       const field = input.dataset.field;
@@ -1478,18 +1522,11 @@ function showCard(tile?: Tile) {
         (reward as unknown as Record<string, string>)[field] = input.value;
       }
     }
-    for (const host of cardBody.querySelectorAll<HTMLElement>(".item-select[data-reward]")) {
+    for (const host of cardBody.querySelectorAll<HTMLElement>(".item-select[data-reward]:not([data-option])")) {
       const reward = tile.rewards?.[Number(host.dataset.reward)];
       const field = host.dataset.field;
       if (!reward || !field) continue;
-      const value = host.dataset.value ?? "";
-      if (field === "option0" || field === "option1") {
-        const slot = field === "option0" ? 0 : 1;
-        reward.options = reward.options ?? [];
-        reward.options[slot] = { type: "item", item: value, count: reward.options[slot]?.count ?? 1 };
-      } else {
-        (reward as unknown as Record<string, string>)[field] = value;
-      }
+      (reward as unknown as Record<string, string>)[field] = host.dataset.value ?? "";
     }
     cardTitle.textContent = `${header} · ${(tile.title ?? tile.id).toUpperCase()}`;
     }
@@ -1540,6 +1577,21 @@ function showCard(tile?: Tile) {
       draw();
     });
   });
+  cardBody.querySelectorAll<HTMLButtonElement>("[data-add-option]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const reward = tile.rewards?.[Number(button.dataset.addOption)];
+      if (!reward) return;
+      reward.options = [...(reward.options ?? []), { type: "item", item: "minecraft:diamond", count: 1 }];
+      showCard(tile);
+    });
+  });
+  cardBody.querySelectorAll<HTMLButtonElement>("[data-remove-option]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const [r, o] = (button.dataset.removeOption ?? "").split(":").map(Number);
+      tile.rewards?.[r]?.options?.splice(o, 1);
+      showCard(tile);
+    });
+  });
   document.getElementById("add-task")?.addEventListener("click", () => {
     tile.tasks = tile.tasks ?? [];
     tile.tasks.push(defaultTask("obtain"));
@@ -1570,7 +1622,7 @@ function showCard(tile?: Tile) {
       const link = (chapter.links ?? []).find((entry) => entry.from === from && entry.to === to);
       if (!link) return;
       if (!confirmLinkDelete(from, to)) return;
-      pushLinkUndo({ kind: "remove", from, to, gate: gateOp(link) });
+      pushUndo();
       removeLink(chapter, from, to);
       showCard(tile);
       draw();
@@ -1591,7 +1643,9 @@ function showCard(tile?: Tile) {
       showCard(tile);
     });
   });
-  cardBody.querySelectorAll("[data-unlock-type],[data-unlock-id],#chapter-title,#chapter-id,#chapter-parent,#chapter-order,#chapter-theme,#chapter-bg-mode,#chapter-bg-color,#chapter-bg-image,#chapter-bg-opacity,#chapter-hide-until").forEach((el) => {
+  document.getElementById("chapter-id")?.addEventListener("change", () => renameChapter(tile));
+  cardBody.querySelectorAll("select").forEach((el) => el.addEventListener("change", apply));
+  cardBody.querySelectorAll("[data-unlock-type],[data-unlock-id],#chapter-title,#chapter-parent,#chapter-order,#chapter-theme,#chapter-bg-mode,#chapter-bg-color,#chapter-bg-image,#chapter-bg-opacity,#chapter-hide-until").forEach((el) => {
     el.addEventListener("change", apply);
     el.addEventListener("input", apply);
   });
@@ -1613,6 +1667,38 @@ function showCard(tile?: Tile) {
     if (mode && stock) mode.value = "image";
     apply();
   });
+}
+
+/** Chapter ids that exist in the game (loaded from it or saved to it). Their ids are fixed in the editor. */
+const savedIds = new Set<string>();
+
+function unlockOp(entry: Chapter): string {
+  return typeof entry.unlock === "object" && entry.unlock?.op ? entry.unlock.op.toLowerCase() : "and";
+}
+
+/**
+ * Commit a new chapter id (on change, not on every keystroke). Only for chapters not yet in the game, and never to
+ * an id another chapter uses: a duplicate made the other chapter unreachable and a save overwrote it.
+ */
+function renameChapter(tile?: Tile) {
+  const input = document.getElementById("chapter-id") as HTMLInputElement | null;
+  if (!input || !authoring || savedIds.has(chapter.id)) return;
+  const nextId = input.value.trim();
+  const problem = !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(nextId)
+    ? "A chapter id is namespace:path in lowercase, like mypack:getting_started."
+    : packChapters.some((entry) => entry !== chapter && entry.id === nextId) ? `Another chapter already uses ${nextId}.` : "";
+  if (problem) {
+    alert(problem);
+    input.value = chapter.id;
+    return;
+  }
+  const oldId = chapter.id;
+  chapter.id = nextId;
+  for (const entry of packChapters) {
+    if (entry.parent === oldId) entry.parent = nextId;
+  }
+  renderChapterTree();
+  showCard(tile);
 }
 
 function escapeAttr(value: string): string {
@@ -1685,6 +1771,7 @@ async function syncFromMinecraft() {
           packChapters = pack.chapters.map((entry) => {
             const copy = structuredClone(entry);
             ensureTiles(copy);
+            markSaved(copy);
             return copy;
           });
           chapter = packChapters[0];
@@ -1715,18 +1802,54 @@ async function syncFromMinecraft() {
   }
 }
 
+/** Live problem count for the open chapter, so problems show while editing rather than only on save. */
+function refreshProblems() {
+  if (!unlocked) return;
+  const problems = validate(chapter, packChapters);
+  const el = document.getElementById("save-status");
+  if (!el) return;
+  if (problems.length) {
+    setSaveStatus(`${problems.length} problem${problems.length === 1 ? "" : "s"}`, false);
+    el.title = problems.join("\n");
+  } else if (el.classList.contains("bad")) {
+    setSaveStatus(isDirty(chapter) ? "Unsaved changes" : "", true);
+    el.title = "";
+  }
+}
+
+function setSaveStatus(text: string, ok: boolean) {
+  const el = document.getElementById("save-status");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle("ok", ok);
+  el.classList.toggle("bad", !ok);
+}
+
+/** JSON of each chapter as the game last saw it; a chapter whose JSON differs has unsaved edits. */
+const savedJson = new Map<Chapter, string>();
+
+function isDirty(entry: Chapter): boolean {
+  return savedJson.get(entry) !== JSON.stringify(cleanChapter(entry));
+}
+
+function markSaved(entry: Chapter) {
+  savedJson.set(entry, JSON.stringify(cleanChapter(entry)));
+  savedIds.add(entry.id);
+}
+
 async function saveToWorld() {
   if (!unlocked) return;
   rememberChapter();
-  const errors = validate(chapter);
+  const errors = validate(chapter, packChapters);
   if (errors.length) {
-    alert(errors.join("\n"));
+    setSaveStatus(`Not saved: ${errors.length} problem${errors.length === 1 ? "" : "s"}`, false);
+    alert(`Fix these before saving:\n\n${errors.join("\n")}`);
     return;
   }
   const response = await bridgeFetch("/api/chapter", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(chapter),
+    body: JSON.stringify(cleanChapter(chapter)),
   });
   if (!response.ok) {
     let reason = "Minecraft rejected the save. Is the editor still enabled?";
@@ -1736,9 +1859,21 @@ async function saveToWorld() {
     } catch {
       /* non-JSON error body — keep the generic message */
     }
+    setSaveStatus("Not saved", false);
     alert(reason);
+    return;
   }
+  markSaved(chapter);
+  setSaveStatus(`Saved · ${chapter.id}`, true);
+  renderChapterTree();
+  showCard(chapter.tiles.find((t) => t.id === selected));
 }
+
+window.addEventListener("beforeunload", (event) => {
+  if (unlocked && packChapters.some(isDirty)) {
+    event.preventDefault();
+  }
+});
 
 function pointerCell(clientX: number, clientY: number) {
   const rect = canvas.getBoundingClientRect();
@@ -1752,7 +1887,8 @@ function pointerCell(clientX: number, clientY: number) {
 function placeTileAt(gx: number, gy: number) {
   let id = `tile_${gx}_${gy}`;
   if (chapter.tiles.some((t) => t.id === id)) id = `tile_${gx}_${gy}_${Date.now()}`;
-  const created: Tile = { id, pos: { x: gx, y: gy }, title: "New tile", description: "", tasks: [], rewards: [] };
+  pushUndo();
+  const created: Tile = newTile(id, gx, gy);
   chapter.tiles.push(created);
   selected = created.id;
   rememberChapter();
@@ -1766,10 +1902,7 @@ function deleteSelectedTile() {
   if (!tile) return;
   const label = tile.title || tile.id;
   if (!window.confirm(`Remove tile ${label}?\n\nYou can press Ctrl+Z to undo.`)) return;
-  const links = (chapter.links ?? [])
-    .filter((link) => link.from === tile.id || link.to === tile.id)
-    .map((link) => ({ from: link.from, to: link.to, gate: gateOp(link) }));
-  pushLinkUndo({ kind: "delete", tile: structuredClone(tile), links });
+  pushUndo();
   chapter.links = (chapter.links ?? []).filter((link) => link.from !== tile.id && link.to !== tile.id);
   chapter.tiles = chapter.tiles.filter((entry) => entry.id !== tile.id);
   if (linkFrom === tile.id) linkFrom = "";
@@ -1796,7 +1929,7 @@ function commitTileDrag(clientX: number, clientY: number) {
   const { gx, gy } = pointerCell(clientX, clientY);
   const occupied = chapter.tiles.some((t) => t.id !== tile.id && t.pos.x === gx && t.pos.y === gy);
   if ((gx !== drag.ox || gy !== drag.oy) && inGrid(chapter, gx, gy) && !occupied) {
-    pushLinkUndo({ kind: "move", id: tile.id, fromX: drag.ox, fromY: drag.oy, toX: gx, toY: gy });
+    pushUndo();
     tile.pos = { x: gx, y: gy };
     rememberChapter();
   }
@@ -1828,7 +1961,7 @@ function openGateAsk(fromId: string, toId: string, existing: boolean) {
     existing
       ? `This arrow already runs from ${tileName(from)} into ${tileName(to)}.`
       : `No arrow yet. Your choice draws one from ${tileName(from)} into ${tileName(to)}.`,
-    `Pick a rule. Every quest that leads into ${tileName(to)} uses that same rule. Ctrl+Z undoes it.`,
+    `AND, OR or NOT sets how ${tileName(to)} opens, for every quest leading into it. FORK instead makes ${tileName(from)} a fork: the player takes one of its paths. Ctrl+Z undoes it.`,
   ].map((line) => `<li>${escapeText(line)}</li>`).join("");
   note.textContent = current
     ? `Current rule: ${current.toUpperCase()}.`
@@ -1849,15 +1982,22 @@ function closeGateAsk() {
 function applyGateAsk(op: GateOpName) {
   if (!gateAsk) return;
   const { from, to, existing } = gateAsk;
+  if (!existing && wouldCreateCycle(chapter, from, to)) {
+    linkHint = `No arrow: ${tileName(chapter.tiles.find((t) => t.id === to))} already leads back to ${tileName(chapter.tiles.find((t) => t.id === from))}, so this would make a loop.`;
+    closeGateAsk();
+    updateLinkStatus();
+    draw();
+    return;
+  }
   if (existing) {
     const link = (chapter.links ?? []).find((entry) => entry.from === from && entry.to === to);
     const prev = link ? gateOp(link) : "and";
     if (prev !== op) {
-      pushLinkUndo({ kind: "gate", from, to, prev, next: op });
+      pushUndo();
       upsertLink(chapter, from, to, op);
     }
   } else {
-    pushLinkUndo({ kind: "add", from, to, gate: op });
+    pushUndo();
     upsertLink(chapter, from, to, op);
   }
   closeGateAsk();
@@ -1877,7 +2017,7 @@ function removeGateAsk() {
     closeGateAsk();
     return;
   }
-  pushLinkUndo({ kind: "remove", from, to, gate: gateOp(link) });
+  pushUndo();
   removeLink(chapter, from, to);
   closeGateAsk();
   rememberChapter();
@@ -1904,9 +2044,9 @@ function onSideClick(tile: Tile, side: SideName) {
     if (!window.confirm(`Create a quest to the ${way} of “${name}”?\n\nIt links from this quest into the new one. Click that side again to choose AND, OR, or XOR.`)) return;
     let id = `tile_${nx}_${ny}`;
     if (chapter.tiles.some((t) => t.id === id)) id = `tile_${nx}_${ny}_${Date.now()}`;
-    const created: Tile = { id, pos: { x: nx, y: ny }, title: "New tile", description: "", tasks: [], rewards: [] };
+    pushUndo();
+    const created: Tile = newTile(id, nx, ny);
     chapter.tiles.push(created);
-    pushLinkUndo({ kind: "spawn", tile: structuredClone(created), from: tile.id, gate: "and" });
     upsertLink(chapter, tile.id, created.id, "and");
     selected = created.id;
     rememberChapter();
@@ -2060,8 +2200,20 @@ search.addEventListener("keydown", (event) => {
     draw();
     return;
   }
-  const matches = chapter.tiles.filter((t) => (t.title ?? t.id).toLowerCase().includes(q));
+  const matchesIn = (entry: Chapter) => entry.tiles.filter((t) =>
+    (t.title ?? "").toLowerCase().includes(q) || t.id.toLowerCase().includes(q));
+  let matches = matchesIn(chapter);
+  if (!matches.length) {
+    // Not in this chapter: open the first chapter that has a match.
+    const other = packChapters.find((entry) => entry !== chapter && matchesIn(entry).length);
+    if (other) {
+      switchChapter(other.id);
+      matches = matchesIn(chapter);
+    }
+  }
   searchHits = new Set(matches.map((t) => t.id));
+  linkHint = matches.length ? "" : `No quest matches "${search.value.trim()}".`;
+  if (!matches.length && linkStatus) linkStatus.textContent = linkHint;
   const hit = matches[0];
   if (hit) {
     selected = hit.id;
@@ -2090,6 +2242,8 @@ function layoutPack() {
   if (!authoring && !(lens === "author")) return;
   const tiles = [...(chapter.tiles ?? [])];
   if (!tiles.length) return;
+  if (!window.confirm("Pack rearranges every quest in this chapter into columns.\n\nYou can press Ctrl+Z to undo.")) return;
+  pushUndo();
   const starts = startsOf(chapter);
   const roots = tiles.filter((t) => starts.has(t.id));
   const ordered = roots.length ? roots : [tiles[0]];
@@ -2137,7 +2291,7 @@ function layoutPack() {
 }
 
 function layoutAlignSelection() {
-  const tiles = selected ? chapter.tiles.filter((t) => t.id === selected) : [];
+  pushUndo();
   // Align all tiles sharing selected row (y) to same y; if none selected, align each column's x
   if (selected) {
     const sel = chapter.tiles.find((t) => t.id === selected);
@@ -2167,6 +2321,7 @@ function layoutAlignSelection() {
 function layoutSpreadRow() {
   const tiles = [...chapter.tiles].sort((a, b) => a.pos.x - b.pos.x || a.pos.y - b.pos.y);
   if (!tiles.length) return;
+  pushUndo();
   const y = selected ? (chapter.tiles.find((t) => t.id === selected)?.pos.y ?? 0) : tiles[0].pos.y;
   const row = tiles.filter((t) => t.pos.y === y);
   row.forEach((t, i) => { t.pos = { x: i, y }; });
@@ -2248,7 +2403,12 @@ function clearPendingLink() {
 
 function commitPendingLink() {
   if (!pendingLink) return;
-  pushLinkUndo({ kind: "add", from: pendingLink.from, to: pendingLink.to, gate: pendingLink.gate });
+  if (wouldCreateCycle(chapter, pendingLink.from, pendingLink.to)) {
+    linkHint = "No arrow: that would make a loop.";
+    clearPendingLink();
+    return;
+  }
+  pushUndo();
   upsertLink(chapter, pendingLink.from, pendingLink.to, pendingLink.gate);
   pendingLink = null;
   linkFrom = "";
@@ -2327,7 +2487,7 @@ document.getElementById("gate-xor")?.addEventListener("click", () => setPendingG
 document.getElementById("gate-ask")?.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-ask-gate]");
   const op = button?.dataset.askGate;
-  if (op === "and" || op === "or" || op === "xor") applyGateAsk(op);
+  if (op === "and" || op === "or" || op === "xor" || op === "not") applyGateAsk(op);
 });
 document.getElementById("gate-ask-cancel")?.addEventListener("click", () => closeGateAsk());
 document.getElementById("gate-ask-remove")?.addEventListener("click", () => removeGateAsk());
@@ -2342,6 +2502,14 @@ function syncGridSizeSelect() {
 }
 
 function applyGridSize(width: number, height: number) {
+  // Never shrink past a quest: a quest left outside the grid has no cell under it in game.
+  const least = minGrid(chapter);
+  if (width < least.width || height < least.height) {
+    alert(`The grid must be at least ${least.width}×${least.height} to keep every quest on it. Move quests first to make it smaller.`);
+    width = Math.max(width, least.width);
+    height = Math.max(height, least.height);
+  }
+  pushUndo();
   chapter.grid_width = width;
   chapter.grid_height = height;
   rememberChapter();
@@ -2396,6 +2564,7 @@ window.addEventListener("keydown", (event) => {
     if (event.key === "1") setPendingGate("and");
     if (event.key === "2") setPendingGate("or");
     if (event.key === "3") setPendingGate("xor");
+    if (event.key === "4") setPendingGate("not");
   }
   if (event.key === "Escape") {
     tileDrag = null;
@@ -2416,27 +2585,21 @@ window.addEventListener("keydown", (event) => {
 
 document.getElementById("template-blank")!.addEventListener("click", () => {
   if (!unlocked) return;
-  chapter = structuredClone(BLANK);
-  packChapters = [chapter];
-  selected = "start";
-  linkFrom = "";
-  updateLinkStatus();
-  syncGridSizeSelect();
-  renderChapterTree();
-  draw();
-  showCard(chapter.tiles[0]);
+  // Adds the template as a new chapter in the pack's namespace; the open chapters stay as they are.
+  rememberChapter();
+  const added = structuredClone(BLANK);
+  added.id = uniqueChapterId(packChapters, packNamespace(packChapters), added.id.split(":")[1]);
+  packChapters.push(added);
+  switchChapter(added.id);
 });
 document.getElementById("template-starter")!.addEventListener("click", () => {
   if (!unlocked) return;
-  chapter = structuredClone(STARTER);
-  packChapters = [chapter];
-  selected = "make_chest";
-  linkFrom = "";
-  updateLinkStatus();
-  syncGridSizeSelect();
-  renderChapterTree();
-  draw();
-  showCard(chapter.tiles[0]);
+  // Adds the template as a new chapter in the pack's namespace; the open chapters stay as they are.
+  rememberChapter();
+  const added = structuredClone(STARTER);
+  added.id = uniqueChapterId(packChapters, packNamespace(packChapters), added.id.split(":")[1]);
+  packChapters.push(added);
+  switchChapter(added.id);
 });
 
 document.getElementById("load-zip")!.addEventListener("click", () => { if (unlocked) fileZip.click(); });
@@ -2466,39 +2629,7 @@ document.getElementById("zoom-fit")?.addEventListener("click", () => {
 });
 
 
-async function writeToPack() {
-  if (!unlocked) return;
-  rememberChapter();
-  const problems = validate(chapter);
-  if (problems.length) {
-    alert(`Cannot WRITE TO PACK:\n\n${problems.join("\n")}`);
-    return;
-  }
-  const id = chapter.id || "(unnamed)";
-  const tiles = chapter.tiles?.length ?? 0;
-  const links = chapter.links?.length ?? 0;
-  const ok = window.confirm(
-    `WRITE TO PACK?\n\nChapter: ${id}\nTiles: ${tiles}\nLinks: ${links}\n\nThis overwrites pack datapack files. Save to World only hot-reloads the open world and is safer for drafts.`,
-  );
-  if (!ok) return;
-  // Prefer bridge write endpoint when present; else fall back to export zip with a clear note.
-  try {
-    const res = await bridgeFetch("/api/pack/write", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chapter }),
-    });
-    if (res.ok) {
-      if (packStatus) packStatus.textContent = `Wrote pack · ${id}`;
-      return;
-    }
-  } catch {
-    /* bridge may not expose pack write yet */
-  }
-  alert("Pack write endpoint unavailable in this session. Use EXPORT ZIP as a backup, then place files into the pack manually. Save to World remains the draft path.");
-}
 
-document.getElementById("write-pack")?.addEventListener("click", () => { void writeToPack(); });
 
 document.getElementById("save-world")?.addEventListener("click", () => { void saveToWorld(); });
 fileZip.addEventListener("change", async () => {
@@ -2523,93 +2654,24 @@ fileZip.addEventListener("change", async () => {
 });
 
 document.getElementById("export-zip")!.addEventListener("click", async () => {
-  const errors = validate(chapter);
-  if (errors.length) {
-    alert(errors.join("\n"));
+  rememberChapter();
+  // The whole pack, not just the open chapter: a backup of one chapter is not a backup.
+  const problems = packChapters.flatMap((entry) => validate(entry, packChapters).map((error) => `${entry.id}: ${error}`));
+  if (problems.length && !window.confirm(`${problems.length} problem(s) found:\n\n${problems.slice(0, 12).join("\n")}\n\nExport anyway?`)) {
     return;
   }
   const zip = new JSZip();
-  const ns = chapter.id.split(":")[0];
-  const path = chapter.id.split(":")[1];
   zip.file("pack.mcmeta", JSON.stringify({ pack: { pack_format: 48, description: "Quest Queen export" } }, null, 2));
-  zip.file(`data/${ns}/questqueen/chapters/${path}.json`, JSON.stringify(chapter, null, 2));
+  for (const entry of packChapters) {
+    const [ns, path] = entry.id.split(":");
+    zip.file(`data/${ns}/questqueen/chapters/${path}.json`, JSON.stringify(cleanChapter(entry), null, 2));
+  }
   const blob = await zip.generateAsync({ type: "blob" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `${path}.zip`;
+  a.download = `${packNamespace(packChapters)}-questqueen.zip`;
   a.click();
 });
-
-function validate(next: Chapter): string[] {
-  const errors: string[] = [];
-  if (!next.id || !next.id.includes(":")) errors.push("Chapter id must be namespace:path");
-  if (!Array.isArray(next.tiles)) errors.push("tiles[] required");
-  const tiles = next.tiles ?? [];
-  const links = next.links ?? [];
-  const ids = new Set(tiles.map((t) => t.id));
-  for (const link of links) {
-    if (!ids.has(link.from) || !ids.has(link.to)) errors.push(`Link ${link.from}->${link.to} missing tile`);
-  }
-  // Cycles (directed)
-  const adj = new Map<string, string[]>();
-  for (const id of ids) adj.set(id, []);
-  for (const link of links) {
-    if (ids.has(link.from) && ids.has(link.to)) adj.get(link.from)!.push(link.to);
-  }
-  const visiting = new Set<string>();
-  const visited = new Set<string>();
-  const stack: string[] = [];
-  const dfs = (node: string): boolean => {
-    if (visiting.has(node)) {
-      const i = stack.indexOf(node);
-      errors.push(`Cycle: ${[...stack.slice(i), node].join(" → ")}`);
-      return true;
-    }
-    if (visited.has(node)) return false;
-    visiting.add(node);
-    stack.push(node);
-    for (const nextId of adj.get(node) ?? []) {
-      if (dfs(nextId)) return true;
-    }
-    stack.pop();
-    visiting.delete(node);
-    visited.add(node);
-    return false;
-  };
-  for (const id of ids) {
-    if (!visited.has(id) && dfs(id)) break;
-  }
-  // XOR outbound fan-out must be >= 2 (Worf: fan-out < 2 is illegal)
-  const xorOut = new Map<string, number>();
-  for (const link of links) {
-    if (gateOp(link) !== "xor") continue;
-    xorOut.set(link.from, (xorOut.get(link.from) ?? 0) + 1);
-  }
-  for (const [from, count] of xorOut) {
-    if (count < 2) errors.push(`XOR from ${from} has fan-out ${count} (need ≥ 2)`);
-  }
-  // Orphans: tiles with no path from any start (no inbound and not a start if chapter has links)
-  if (links.length && tiles.length) {
-    const inbound = new Set(links.map((l) => l.to));
-    const starts = tiles.filter((t) => !inbound.has(t.id)).map((t) => t.id);
-    const reach = new Set<string>();
-    const q = [...starts];
-    for (const s of starts) reach.add(s);
-    while (q.length) {
-      const n = q.shift()!;
-      for (const d of adj.get(n) ?? []) {
-        if (reach.has(d)) continue;
-        reach.add(d);
-        q.push(d);
-      }
-    }
-    for (const t of tiles) {
-      if (!reach.has(t.id)) errors.push(`Orphan tile (unreachable): ${t.id}`);
-    }
-  }
-  void schema;
-  return errors;
-}
 
 const GUIDE_KEY = "questqueen.editor.guide";
 const GUIDE: { title: string; body: string; target: string }[] = [
