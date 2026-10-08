@@ -15,6 +15,8 @@ export interface PackCatalog {
   fluids?: CatalogEntry[];
   dimensions?: CatalogEntry[];
   stats?: CatalogEntry[];
+  /** Stages the pack defines (Progression), with display names. */
+  stages?: CatalogEntry[];
 }
 
 export function emptyCatalog(): PackCatalog {
@@ -30,6 +32,7 @@ export function emptyCatalog(): PackCatalog {
     fluids: [],
     dimensions: [],
     stats: [],
+    stages: [],
   };
 }
 
@@ -46,6 +49,7 @@ export function fromApi(raw: Record<string, unknown>): PackCatalog {
     fluids: asEntries(raw.fluids),
     dimensions: asEntries(raw.dimensions),
     stats: asEntries(raw.stats),
+    stages: asEntries(raw.stages),
   };
 }
 

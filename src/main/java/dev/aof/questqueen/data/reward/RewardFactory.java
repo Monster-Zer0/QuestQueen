@@ -26,7 +26,7 @@ public final class RewardFactory {
                     new ItemReward(ResourceLocation.parse("minecraft:diamond"), 1),
                     new ItemReward(ResourceLocation.parse("minecraft:emerald"), 8)
             ));
-            case "stage", "progressivestages" -> new StageReward("example");
+            case "stage", "progression", "progressivestages" -> new StageReward("example");
             default -> new XpReward(5);
         };
     }

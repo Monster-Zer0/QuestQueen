@@ -3,7 +3,6 @@ package dev.aof.questqueen.data.reward;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import dev.aof.questqueen.compat.ProgressiveStagesCompat;
 import net.minecraft.server.level.ServerPlayer;
 
 public record StageReward(String stage) implements Reward {
@@ -24,6 +23,6 @@ public record StageReward(String stage) implements Reward {
 
     @Override
     public void grant(ServerPlayer player) {
-        ProgressiveStagesCompat.grantStage(player, stage);
+        dev.aof.questqueen.compat.Stages.grantStage(player, stage);
     }
 }

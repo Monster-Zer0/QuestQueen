@@ -5,7 +5,6 @@ import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import dev.aof.questqueen.QuestConfig;
 import dev.aof.questqueen.QuestQueen;
-import dev.aof.questqueen.compat.ProgressiveStagesCompat;
 import dev.aof.questqueen.net.QuestNetwork;
 import dev.aof.questqueen.progress.ProgressService;
 import dev.aof.questqueen.task.TaskHooks;
@@ -134,7 +133,7 @@ public final class QuestDefinitions {
         DemoChapters.Mode mode = DemoChapters.Mode.parse(safeDemoMode());
         boolean includeDev = safeIncludeDev();
         DemoChapters.FilterResult filtered = DemoChapters.filter(
-                loaded, mode, includeDev, ProgressiveStagesCompat.present());
+                loaded, mode, includeDev, dev.aof.questqueen.compat.Stages.present());
         boolean hasCustom = filtered.customCount() > 0;
         boolean keepPlayer = DemoChapters.keepPlayerDemos(mode, hasCustom);
         List<Scroll> keptScrolls = DemoChapters.filterScrolls(scrolls, keepPlayer, includeDev);

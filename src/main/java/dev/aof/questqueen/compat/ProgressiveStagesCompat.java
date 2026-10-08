@@ -21,7 +21,17 @@ public final class ProgressiveStagesCompat {
     private static final String STAGE_CAUSE = "com.enviouse.progressivestages.common.api.StageCause";
     private static final String STAGE_EVENT = "com.enviouse.progressivestages.common.api.StageChangeEvent";
 
-    private static final boolean PRESENT = ModList.get().isLoaded(MOD_ID);
+    private static final boolean PRESENT = loaded();
+
+    /** Safe without a mod list (unit tests): the matching rules below are usable on their own. */
+    private static boolean loaded() {
+        try {
+            ModList mods = ModList.get();
+            return mods != null && mods.isLoaded(MOD_ID);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
 
     private ProgressiveStagesCompat() {
     }

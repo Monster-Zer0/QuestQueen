@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { chapterGridHeight, chapterGridWidth, chapterTree, gateOp, linkConditions, upsertLink, wouldCreateCycle, type Chapter, type Tile } from "./types";
 import { cleanChapter, descendantIds, isIntroChapter, minGrid, newTile, packNamespace, uniqueChapterId } from "./model";
-import { validate } from "./validate";
+import { validStageId, validate } from "./validate";
 import { canUndo, snapshot, undo } from "./undo";
 
 const tile = (id: string, x: number, y: number, extra: Partial<Tile> = {}): Tile =>
@@ -158,5 +158,21 @@ describe("validation", () => {
   it("a one-path fork names the parent the author set", () => {
     const c = chapter("p:c", [tile("hub", 0, 0), tile("only", 1, 0)], { links: [{ from: "hub", to: "only", gate: "xor" }] });
     expect(validate(c)).toContain("The fork from hub has only 1 path; a fork needs at least 2");
+  });
+
+  it("stage ids follow Progression's rule wherever a stage is named", () => {
+    expect(validStageId("mypack:iron_age")).toBe(true);
+    expect(validStageId("Iron_Age")).toBe(true);
+    expect(validStageId("iron age")).toBe(false);
+    const c = chapter("p:c", [tile("q", 0, 0, {
+      required_stage: "iron age",
+      rewards: [{ type: "stage", stage: "Bad Stage!" }],
+    })], { unlock: { op: "and", conditions: [{ type: "stage", id: "x".repeat(65) }] } });
+    const errors = validate(c);
+    expect(errors.some((e) => e.includes("required stage") && e.includes("not a valid stage id"))).toBe(true);
+    expect(errors.some((e) => e.includes("reward 1 (stage)") && e.includes("not a valid stage id"))).toBe(true);
+    expect(errors.some((e) => e.startsWith("Chapter unlock"))).toBe(true);
+    const ok = chapter("p:c", [tile("q", 0, 0, { required_stage: "mypack:iron_age", rewards: [{ type: "stage", stage: "iron_age" }] })]);
+    expect(validate(ok)).toEqual([]);
   });
 });

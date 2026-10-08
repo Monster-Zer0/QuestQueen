@@ -23,7 +23,7 @@ public final class RewardIcons {
         return Optional.ofNullable(switch (reward.type()) {
             case "xp", "xp_levels" -> ResourceLocation.parse("minecraft:experience_bottle");
             case "advancement" -> ResourceLocation.parse("minecraft:knowledge_book");
-            case "stage", "progressivestages" -> ResourceLocation.parse("minecraft:amethyst_shard");
+            case "stage", "progression", "progressivestages" -> ResourceLocation.parse("minecraft:amethyst_shard");
             case "toast" -> ResourceLocation.parse("minecraft:paper");
             case "command" -> ResourceLocation.parse("minecraft:command_block");
             case "loot", "loot_table" -> ResourceLocation.parse("minecraft:chest");

@@ -38,6 +38,10 @@ public final class PackCatalogJson {
         BuiltInRegistries.ITEM.getTagNames().forEach(tag -> tags.add(entry(tag.location().toString(), tag.location().toString())));
         root.add("tags", tags);
         root.add("stats", ids(BuiltInRegistries.CUSTOM_STAT.keySet()));
+        // Stages the pack defines (Progression syncs its definitions to the client); the editor offers them by name.
+        JsonArray stages = new JsonArray();
+        dev.aof.questqueen.compat.Stages.definedStages().forEach((id, name) -> stages.add(entry(id, name)));
+        root.add("stages", stages);
 
         JsonArray biomes = new JsonArray();
         JsonArray structures = new JsonArray();

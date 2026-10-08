@@ -18,6 +18,7 @@ import dev.aof.questqueen.data.task.SubmitTask;
 import dev.aof.questqueen.data.task.Task;
 import dev.aof.questqueen.progress.ProgressService;
 import dev.aof.questqueen.compat.FtbTeamsCompat;
+import dev.aof.questqueen.compat.Stages;
 import dev.aof.questqueen.progress.ProgressDatabase;
 import dev.aof.questqueen.progress.ProgressSnapshot;
 import dev.aof.questqueen.progress.TeamService;
@@ -71,6 +72,8 @@ public final class TaskProgressGameTests {
     private static final String PICK3 = "pick3";
     private static final ResourceLocation FORK = ResourceLocation.parse("questqueen:gametest_fork");
     private static final ResourceLocation AFTER_FORK = ResourceLocation.parse("questqueen:gametest_after_fork");
+    private static final ResourceLocation STAGES = ResourceLocation.parse("questqueen:gametest_stages");
+    private static final ResourceLocation STAGE_CHAPTER = ResourceLocation.parse("questqueen:gametest_stage_chapter");
     private static final int LOGS = 0;
     private static final int COBBLE = 1;
     private static final int DIRT = 2;
@@ -114,6 +117,99 @@ public final class TaskProgressGameTests {
                 List.of(tile("z", 0, List.of(new CheckmarkTask()))), List.of())
                 .withMeta(Optional.empty(), 0, Optional.empty(),
                         new Gate(GateOp.AND, List.of(new GateCondition("chapter_complete", FORK.toString())))));
+        // Stage gating through whichever stage mod is installed (the stage tests below skip without Progression).
+        QuestDefinitions.putChapter(new Chapter(STAGES, "GameTest stages", List.of(
+                new Tile("gated", new GridPos(0, 0), "gated", "", Optional.empty(), List.of(new CheckmarkTask()),
+                        List.of(), List.of(), Optional.empty(), Optional.empty(), Optional.of("qqgt_gate")),
+                new Tile("live", new GridPos(1, 0), "live", "", Optional.empty(), List.of(new CheckmarkTask()),
+                        List.of(), List.of(), Optional.empty(), Optional.empty(), Optional.of("qqgt_live")),
+                tile("grant", 2, List.of(new CheckmarkTask()))
+                        .withRewards(List.of(new dev.aof.questqueen.data.reward.StageReward("qqgt_reward")))),
+                List.of()));
+        QuestDefinitions.putChapter(new Chapter(STAGE_CHAPTER, "GameTest stage chapter",
+                List.of(tile("z", 0, List.of(new CheckmarkTask()))), List.of())
+                .withMeta(Optional.empty(), 0, Optional.empty(),
+                        new Gate(GateOp.AND, List.of(new GateCondition("progression", "qqgt_chapter")))));
+    }
+
+    /** Stage tests need a stage mod (Progression or ProgressiveStages) in the run's mods folder; without one they pass trivially (CI has none). */
+    private static boolean stageMod() {
+        return Stages.present();
+    }
+
+    private static String stagesKey(String tile) {
+        return ProgressSnapshot.questKey(STAGES, tile);
+    }
+
+    @GameTest(template = TEMPLATE, batch = BATCH)
+    public static void aRequiredStageGatesTheQuestUntilProgressionGrantsIt(GameTestHelper helper) {
+        if (!stageMod()) {
+            helper.succeed();
+            return;
+        }
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        check(!snapshot(player).revealedTiles().contains(stagesKey("gated")), "gated before the stage");
+        check(!TaskHooks.trySubmit(player, STAGES, "gated", 0), "a stage-gated quest must refuse progress");
+        check(Stages.grantStage(player, "qqgt_gate"), "Progression refused the grant");
+        check(Stages.hasStage(player, "qqgt_gate"), "Progression does not report the granted stage");
+        check(snapshot(player).revealedTiles().contains(stagesKey("gated")), "the quest must open once the stage is held");
+        check(TaskHooks.trySubmit(player, STAGES, "gated", 0), "the opened quest must accept progress");
+        leave(player);
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, batch = BATCH)
+    public static void aStageConditionUnlocksAChapter(GameTestHelper helper) {
+        if (!stageMod()) {
+            helper.succeed();
+            return;
+        }
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        check(!snapshot(player).chapterUnlocked(STAGE_CHAPTER.toString()), "unlocked before the stage");
+        Stages.grantStage(player, "qqgt_chapter");
+        check(snapshot(player).chapterUnlocked(STAGE_CHAPTER.toString()),
+                "a \"progression\" unlock condition must open the chapter");
+        leave(player);
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, batch = BATCH)
+    public static void theStageRewardGrantsAProgressionStage(GameTestHelper helper) {
+        if (!stageMod()) {
+            helper.succeed();
+            return;
+        }
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        check(!Stages.hasStage(player, "qqgt_reward"), "held before the claim");
+        check(TaskHooks.trySubmit(player, STAGES, "grant", 0), "checkmark was refused");
+        check(ProgressService.claimTileRewards(player, STAGES, "grant"), "claim was refused");
+        check(Stages.hasStage(player, "qqgt_reward"), "the stage reward must grant the Progression stage");
+        check(snapshot(player).ownedStages().contains("qqgt_reward"), "the client snapshot must carry the stage");
+        leave(player);
+        helper.succeed();
+    }
+
+    /**
+     * A stage granted outside Quest Queen (a command, another mod) reaches the book without a relog: Progression's
+     * StagesChangedEvent resyncs, which drops the cached snapshot. The cache is read WITHOUT invalidating here.
+     */
+    @GameTest(template = TEMPLATE, batch = BATCH, timeoutTicks = 100)
+    public static void aStageGrantedElsewhereResyncsTheSnapshot(GameTestHelper helper) {
+        if (!stageMod()) {
+            helper.succeed();
+            return;
+        }
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        check(!snapshot(player).revealedTiles().contains(stagesKey("live")), "open before the stage");
+        // Granted straight through Progression's API, the way a command or another mod would: Quest Queen is not
+        // told, so only the StagesChangedEvent hook can refresh the cache. (/progression grant <name> needs the
+        // server's profile cache, which the game-test server does not have.)
+        check(Stages.grantStage(player, "qqgt_live"), "Progression refused the grant");
+        helper.succeedWhen(() -> {
+            check(ProgressService.snapshot(player).revealedTiles().contains(stagesKey("live")),
+                    "the cached snapshot was not refreshed by the stage change");
+            leave(player);
+        });
     }
 
     /** A chapter with a fork and a NOT gate is complete once every quest is settled, and its unlock fires. */

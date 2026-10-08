@@ -90,7 +90,7 @@ public record ProgressSnapshot(
     }
 
     public boolean hasStage(String id) {
-        return dev.aof.questqueen.compat.ProgressiveStagesCompat.matches(ownedStages, id);
+        return dev.aof.questqueen.compat.Stages.matches(ownedStages, id);
     }
 
     public static String questKey(ResourceLocation chapter, String tile) {
