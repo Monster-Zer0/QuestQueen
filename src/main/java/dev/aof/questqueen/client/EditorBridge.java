@@ -112,7 +112,10 @@ public final class EditorBridge {
             server = http;
             String url = "http://127.0.0.1:" + PORT + "/";
             notifyPlayer("questqueen.editor.url", itemCount(), url);
-            Util.getPlatform().openUri(URI.create(url));
+            // Automated runs (e2e/flow.mjs) drive the editor themselves; they set this so no browser tab opens.
+            if (!"false".equals(System.getProperty("questqueen.editor.openBrowser"))) {
+                Util.getPlatform().openUri(URI.create(url));
+            }
             QuestQueen.LOGGER.info("Quest Queen editor listening on {} with {} items", url, itemCount());
             return true;
         } catch (Exception exception) {

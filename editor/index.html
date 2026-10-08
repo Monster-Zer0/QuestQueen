@@ -45,7 +45,7 @@
             <span class="segmented">
               <button id="gate-and" class="gate active" type="button" title="AND — every quest leading in must be finished">AND</button>
               <button id="gate-or" class="gate" type="button" title="OR — any one quest leading in is enough">OR</button>
-              <button id="gate-xor" class="gate" type="button" title="XOR — the player picks exactly one path">XOR</button>
+              <button id="gate-xor" class="gate" type="button" title="Fork — the earlier quest becomes a pick-one-path fork">FORK</button>
             </span>
           </span>
 
@@ -105,8 +105,8 @@
             <button id="template-starter" class="btn btn-ghost btn-sm" type="button" title="Load the starter chapter template">Starter</button>
             <span class="divider" aria-hidden="true"></span>
             <button id="load-zip" class="btn btn-ghost btn-sm" type="button" title="Load chapters from a ZIP">Load ZIP</button>
-            <button id="export-zip" class="btn btn-ghost btn-sm" type="button" title="Export chapter ZIP backup">Export ZIP</button>
-            <button id="write-pack" class="btn btn-warn btn-sm" type="button" title="Writes chapter JSON into the pack datapack — not the same as Save to world">Write to pack</button>
+            <button id="export-zip" class="btn btn-ghost btn-sm" type="button" title="Export every chapter as a datapack ZIP">Export ZIP</button>
+            <span id="save-status" class="hint-text" role="status"></span>
             <button id="save-world" class="btn btn-accent btn-sm" type="button" title="Hot-reload this chapter into the open world (not a pack write)">
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h8l2 2v10H3V2Z"/><path d="M5 2v4h6V2M5 14v-4h6v4"/></svg>Save to world
             </button>
@@ -147,9 +147,10 @@
           <h2 id="gate-ask-title">How does this quest open?</h2>
           <ol id="gate-ask-steps"></ol>
           <div class="gate-choices">
-            <button type="button" class="choice" data-ask-gate="and"><strong>AND</strong><span>All quests leading here must be finished.</span></button>
-            <button type="button" class="choice" data-ask-gate="or"><strong>OR</strong><span>Any one quest leading here is enough.</span></button>
-            <button type="button" class="choice" data-ask-gate="xor"><strong>XOR</strong><span>The player picks exactly one. The other paths stay closed.</span></button>
+            <button type="button" class="choice" data-ask-gate="and"><strong>AND</strong><span>Opens when every quest leading here is finished.</span></button>
+            <button type="button" class="choice" data-ask-gate="or"><strong>OR</strong><span>Opens when any one quest leading here is finished.</span></button>
+            <button type="button" class="choice" data-ask-gate="not"><strong>NOT</strong><span>Open only until a quest leading here is finished, then closed for good.</span></button>
+            <button type="button" class="choice" data-ask-gate="xor"><strong>FORK</strong><span id="gate-ask-fork">Makes the earlier quest a fork: the player picks one of its paths and the others close.</span></button>
           </div>
           <p id="gate-ask-note" class="muted"></p>
           <div class="gate-ask-actions">

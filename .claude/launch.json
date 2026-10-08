@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "editor-mock",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["editor/dev/mock-bridge.mjs"],
+      "port": 47821
+    },
+    {
+      "name": "editor-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "editor", "run", "dev", "--", "--host", "127.0.0.1", "--strictPort"],
+      "port": 5173
+    }
+  ]
+}
