@@ -14,7 +14,20 @@ const TASK_REQUIRES: Record<string, string[]> = {
   interact_entity: ["entity"], fluid: ["fluid"], npc_dialog: ["npc"], trigger: ["trigger"],
 };
 /** Free-text fields: they must be filled in but are not resource ids. */
-const FREE_TEXT = new Set(["npc", "trigger", "command", "message", "stage"]);
+const FREE_TEXT = new Set(["npc", "trigger", "command", "message"]);
+/** Progression's stage id rule (it lowercases ids itself): 1-64 of a-z 0-9 _ . : / - */
+const STAGE_ID = /^[a-z0-9_.:/-]{1,64}$/;
+const STAGE_TYPES = new Set(["stage", "progression", "progressivestages"]);
+
+export function validStageId(id: string): boolean {
+  return STAGE_ID.test(id.trim().toLowerCase());
+}
+
+function checkStage(where: string, id: string | undefined, errors: string[]) {
+  if (id === undefined) return;
+  if (!id.trim()) errors.push(`${where}: stage is empty`);
+  else if (!validStageId(id)) errors.push(`${where}: "${id}" is not a valid stage id (a-z 0-9 _ . : / -, up to 64 characters)`);
+}
 const COUNTED = new Set(["obtain", "submit", "item_tag", "kill", "stat", "interact_block", "interact_entity", "fluid"]);
 
 const REWARD_REQUIRES: Record<string, string[]> = {
@@ -24,6 +37,7 @@ const REWARD_REQUIRES: Record<string, string[]> = {
 function fieldProblem(value: unknown, field: string): string | null {
   const text = typeof value === "string" ? value.trim() : "";
   if (!text) return "is empty";
+  if (field === "stage") return validStageId(text) ? null : `"${text}" is not a valid stage id`;
   if (!FREE_TEXT.has(field) && !RESOURCE.test(text)) return `"${text}" is not a valid id`;
   return null;
 }
@@ -68,6 +82,10 @@ export function validate(next: Chapter, all: Chapter[] = [next]): string[] {
   if (!next.id || !CHAPTER_ID.test(next.id)) errors.push(`Chapter id "${next.id}" must be namespace:path in lowercase`);
   if (all.filter((chapter) => chapter.id === next.id).length > 1) errors.push(`Another chapter already uses the id ${next.id}`);
   const byId = new Map(all.map((chapter) => [chapter.id, chapter]));
+  const unlock = typeof next.unlock === "object" ? next.unlock?.conditions ?? [] : [];
+  for (const condition of unlock) {
+    if (STAGE_TYPES.has(condition.type)) checkStage("Chapter unlock", condition.id, errors);
+  }
   if (next.parent && byId.has(next.parent) && parentLoops(byId, next.id)) errors.push(`Parent ${next.parent} makes a loop of chapters`);
   // A chapter may leave "tiles" out entirely (act intros do); the mod reads that as no quests.
   const tiles = Array.isArray(next.tiles) ? next.tiles : [];
@@ -84,6 +102,8 @@ export function validate(next: Chapter, all: Chapter[] = [next]): string[] {
       errors.push(`${name} is off the board at ${tile.pos.x},${tile.pos.y}`);
     }
     if (!(tile.tasks ?? []).length) errors.push(`${name} has no tasks, so players can never complete it`);
+    checkStage(`${name} required stage`, tile.required_stage, errors);
+    if (tile.hidden_until && STAGE_TYPES.has(tile.hidden_until.type)) checkStage(`${name} hidden until`, tile.hidden_until.id, errors);
     (tile.tasks ?? []).forEach((task, i) => checkTask(`${name} task ${i + 1} (${task.type})`, task, errors));
     (tile.rewards ?? []).forEach((reward, i) => checkReward(`${name} reward ${i + 1} (${reward.type})`, reward, errors));
   }

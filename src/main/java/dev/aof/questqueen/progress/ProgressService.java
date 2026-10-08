@@ -190,7 +190,7 @@ public final class ProgressService {
             throw new IllegalStateException(exception);
         }
         return new ProgressSnapshot(teamId, canAuthor(player), values, completedTasks, completedTiles, revealed,
-                unlockedChapters, dev.aof.questqueen.compat.ProgressiveStagesCompat.ownedStages(player),
+                unlockedChapters, dev.aof.questqueen.compat.Stages.ownedStages(player),
                 scrolls, pinChapter, pinTile);
     }
 
@@ -737,7 +737,7 @@ public final class ProgressService {
         Set<String> completedTiles = snap.completedTiles();
         Set<String> completedForChapter = chapterCompletedTiles(chapter, completedTiles);
         if (tile.requiredStage().isPresent()
-                && !dev.aof.questqueen.compat.ProgressiveStagesCompat.hasStage(player, tile.requiredStage().get())) {
+                && !dev.aof.questqueen.compat.Stages.hasStage(player, tile.requiredStage().get())) {
             return false;
         }
         if (!GateEvaluator.unlocked(chapter, tile.id(), completedForChapter, condition -> extra(player, condition, completedTiles))) {
@@ -781,8 +781,8 @@ public final class ProgressService {
                     condition.id(), QuestDefinitions.chapters(), completedTiles);
             case "trigger" -> completedTiles.contains(condition.id())
                     || TeamService.hasFlag(TeamService.current(player), "trigger:" + condition.id());
-            case "stage", "progressivestages" ->
-                    dev.aof.questqueen.compat.ProgressiveStagesCompat.hasStage(player, condition.id());
+            case "stage", "progression", "progressivestages" ->
+                    dev.aof.questqueen.compat.Stages.hasStage(player, condition.id());
             default -> false;
         };
     }
@@ -874,7 +874,7 @@ public final class ProgressService {
                 boolean unlocked = GateEvaluator.unlocked(chapter, tile.id(), completedForChapter, condition -> extra(player, condition, completedTiles));
                 boolean hidden = tile.hiddenUntil().isPresent() && !hiddenMet(player, tile.hiddenUntil().get(), completedTiles);
                 boolean stageOk = tile.requiredStage().isEmpty()
-                        || dev.aof.questqueen.compat.ProgressiveStagesCompat.hasStage(player, tile.requiredStage().get());
+                        || dev.aof.questqueen.compat.Stages.hasStage(player, tile.requiredStage().get());
                 if ((unlocked || starts.contains(tile.id())) && !hidden && stageOk) {
                     revealed.add(ProgressSnapshot.questKey(chapter.id(), tile.id()));
                 }

@@ -59,7 +59,7 @@ async function status() {
   pending.push(...lines.filter((l) => !l.startsWith("QQ status")));
   const last = (key) => [...lines].reverse().find((l) => l.startsWith(`QQ status ${key}=`)) ?? "";
   const pick = (key) => last(key).slice(`QQ status ${key}=`.length);
-  return { completed: pick("completed"), pin: pick("pin"), chapters: pick("chapters") };
+  return { completed: pick("completed"), pin: pick("pin"), stages: pick("stages"), chapters: pick("chapters") };
 }
 async function inventory() {
   const res = await call("GET", "/inventory");
@@ -127,6 +127,21 @@ const AFTER_CHAPTER = {
   unlock: { op: "and", conditions: [{ type: "chapter_complete", id: "qqe2e:flow" }] },
   tiles: [{ id: "y", pos: { x: 0, y: 0 }, title: "Reward chapter", tasks: [{ type: "checkmark" }] }], links: [],
 };
+
+/**
+ * A quest whose reward grants a stage, and a quest that needs it. Progression accepts any valid id; ProgressiveStages
+ * only grants stages its own files define, so that run uses one (QQ_PS_STAGE, default: its bundled showcase:mage).
+ */
+const staged = (stage) => ({
+  id: "qqe2e:staged", title: "Staged",
+  tiles: [
+    { id: "key", pos: { x: 0, y: 0 }, title: "Earn the stage", tasks: [{ type: "obtain", item: "minecraft:clay_ball", count: 1 }],
+      rewards: [{ type: "stage", stage }] },
+    { id: "gated", pos: { x: 1, y: 1 }, title: "Needs a stage", required_stage: stage,
+      tasks: [{ type: "obtain", item: "minecraft:flint", count: 1 }] },
+  ],
+  links: [],
+});
 
 async function main() {
   const ping = await call("GET", "/ping").catch(() => null);
@@ -213,6 +228,42 @@ async function main() {
   await call("POST", "/screen/close");
   await wait(20);
   await shot("e2e-05-hud.png");
+
+  // Optional: stage gating through whichever stage mod is installed (Progression or ProgressiveStages). Progression
+  // needs NeoForge 21.1.256+: ./gradlew runClient -Pqq.e2e -Pneo_version=21.1.256 with its jar in run/client/mods.
+  s = await status();
+  const backend = s.stages.split(" ")[0];
+  if (backend && backend !== "none") {
+    const stage = backend === "progression" ? "qqe2e_gate" : (process.env.QQ_PS_STAGE ?? "showcase:mage");
+    console.log(`INFO  stage mod: ${backend}, stage ${stage}`);
+    check((await save(staged(stage))) === 202, "the bridge accepts a stage-gated chapter");
+    await wait(20);
+    await server("give @p minecraft:flint 1");
+    await wait(60);
+    s = await status();
+    check(!s.completed.includes("qqe2e:staged/gated"), "a required_stage quest ignores progress before the stage");
+    // The stage reward is Quest Queen's own grant path, the same for both stage mods.
+    await server("give @p minecraft:clay_ball 1");
+    await wait(60);
+    await chat("questqueen book chapter qqe2e:staged");
+    await wait(20);
+    await click({ tile: "key" });
+    await click({ action: true });
+    await wait(60);
+    s = await status();
+    check(s.stages.includes(stage), `the stage reward grants the stage through ${backend}`);
+    check(s.completed.includes("qqe2e:staged/gated"), "holding the stage opens the quest without a relog");
+    if (backend === "progression") {
+      // A stage granted outside Quest Queen: Progression's command, as op through the server.
+      await server("progression grant @p qqe2e_outside");
+      await wait(60);
+      s = await status();
+      check(s.stages.includes("qqe2e_outside"), "a /progression grant reaches the book without a relog");
+    }
+    await shot("e2e-06-stage-quest.png");
+  } else {
+    console.log("SKIP  no stage mod installed; stage checks not run");
+  }
 
   await call("POST", "/world/leave", undefined, 120000);
   await call("POST", "/world/delete", { name: WORLD });
