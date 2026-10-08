@@ -25,6 +25,7 @@ final class RewardCodecs {
             Map.entry("advancement", AdvancementReward.CODEC),
             Map.entry("choice", ChoiceReward.CODEC),
             Map.entry("stage", StageReward.CODEC),
+            Map.entry("progression", StageReward.CODEC),
             Map.entry("progressivestages", StageReward.CODEC)
     );
 

@@ -29,7 +29,7 @@ public class QuestQueen {
         NeoForge.EVENT_BUS.register(dev.aof.questqueen.progress.EditorSessions.class);
         NeoForge.EVENT_BUS.register(TaskHooks.class);
         NeoForge.EVENT_BUS.register(QuestQueenCommands.class);
-        dev.aof.questqueen.compat.ProgressiveStagesCompat.register();
+        dev.aof.questqueen.compat.Stages.register();
     }
 
     public static ResourceLocation id(String path) {

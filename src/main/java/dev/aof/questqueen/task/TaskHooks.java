@@ -46,6 +46,10 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 import java.util.ArrayList;
+import dev.aof.questqueen.compat.ProgressionCompat;
+import dev.aof.questqueen.compat.Stages;
+import dev.aof.questqueen.data.GateCondition;
+import dev.aof.questqueen.data.Link;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -673,6 +677,53 @@ public final class TaskHooks {
                         problems.add(chapter.id() + "/" + tile.id() + " task[" + i + "] (" + task.type()
                                 + ") names a blank id, so nothing can ever count toward it");
                     }
+                }
+            }
+        }
+        problems.addAll(stageProblems(chapters, Stages.backend() == Stages.Backend.PROGRESSION
+                ? ProgressionCompat.serverDefinedStages() : Set.of()));
+        return problems;
+    }
+
+    /**
+     * Stage ids that can never match: not a valid id (Progression's rule, lowercase 1-64 of [a-z0-9_.:/-]), or, when
+     * the pack defines stages, one it does not define. The second catches Progression's namespacing trap: a
+     * definition at data/mypack/progression/stages/iron_age.json with no "id" is mypack:iron_age, not iron_age.
+     */
+    static List<String> stageProblems(Collection<Chapter> chapters, Set<String> defined) {
+        List<String> problems = new ArrayList<>();
+        for (Chapter chapter : chapters) {
+            List<String[]> uses = new ArrayList<>();
+            for (GateCondition condition : chapter.unlock().conditions()) {
+                if (Stages.isStageType(condition.type())) {
+                    uses.add(new String[]{"chapter unlock", condition.id()});
+                }
+            }
+            for (Link link : chapter.links()) {
+                for (GateCondition condition : link.gate().conditions()) {
+                    if (Stages.isStageType(condition.type())) {
+                        uses.add(new String[]{"link " + link.from() + "->" + link.to(), condition.id()});
+                    }
+                }
+            }
+            for (Tile tile : chapter.tiles()) {
+                tile.requiredStage().ifPresent(id -> uses.add(new String[]{tile.id() + " required_stage", id}));
+                tile.hiddenUntil().filter(hidden -> Stages.isStageType(hidden.type()))
+                        .ifPresent(hidden -> uses.add(new String[]{tile.id() + " hidden_until", hidden.id()}));
+                for (var reward : tile.rewards()) {
+                    if (reward instanceof dev.aof.questqueen.data.reward.StageReward stage) {
+                        uses.add(new String[]{tile.id() + " stage reward", stage.stage()});
+                    }
+                }
+            }
+            for (String[] use : uses) {
+                String id = use[1];
+                if (!Stages.validId(id)) {
+                    problems.add(chapter.id() + " " + use[0] + ": \"" + id + "\" is not a valid stage id"
+                            + " (lowercase, 1-64 characters of a-z 0-9 _ . : / -)");
+                } else if (!defined.isEmpty() && !defined.contains(id.trim().toLowerCase(java.util.Locale.ROOT))) {
+                    problems.add(chapter.id() + " " + use[0] + ": stage \"" + id + "\" is not defined by any"
+                            + " Progression stage file; check its namespace");
                 }
             }
         }

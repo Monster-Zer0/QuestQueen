@@ -730,7 +730,7 @@ public final class ClientQuestState {
 
     private static boolean extraMet(GateCondition condition) {
         return switch (condition.type()) {
-            case "stage", "progressivestages" -> progress.hasStage(condition.id());
+            case "stage", "progression", "progressivestages" -> progress.hasStage(condition.id());
             case "quest_complete" -> progress.completedTiles().contains(condition.id());
             // The client cannot evaluate advancement / scoreboard / team_flag / chapter_complete / trigger
             // gates — those need live server state. Report them UNMET rather than satisfied: a permissive
