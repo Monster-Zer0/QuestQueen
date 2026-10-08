@@ -60,6 +60,12 @@ const CATALOG = {
   fluids: ids(["minecraft:water", "minecraft:lava"]),
   dimensions: ids(["minecraft:overworld", "minecraft:the_nether"]),
   stats: ids(["minecraft:walk_one_cm"]),
+  // As the game sends Progression's defined stages: id plus display name.
+  stages: [
+    { id: "stone_age", name: "Stone Age" },
+    { id: "iron_age", name: "Iron Age" },
+    { id: "mypack:nether", name: "The Nether" },
+  ],
 };
 
 // 1x1 transparent PNG: the editor only needs an image to load.

@@ -1194,7 +1194,7 @@ function rewardFields(reward: Reward, index: number, ro: string, disabled: boole
         </div>`).join("")}
         ${disabled ? "" : `<button type="button" data-add-option="${index}">+ OPTION</button>`}`;
     case "stage":
-      return `<label>STAGE</label><input data-reward="${index}" data-field="stage" value="${escapeAttr(reward.stage ?? "")}" ${ro} />`;
+      return `<label>STAGE</label><input data-reward="${index}" data-field="stage" list="pack-stages" value="${escapeAttr(reward.stage ?? "")}" ${ro} />`;
     default:
       return "";
   }
@@ -1283,14 +1283,14 @@ function showCard(tile?: Tile) {
     ${itemSelectHtml(`id="tile-item-select"`, tile?.icon?.item ?? "", !authoring, "ICON")}
     ${glyphPickerHtml(tile?.icon?.glyph ?? "", !authoring, "tile-glyph")}
     <label>REQUIRES STAGE</label>
-    <input id="tile-required-stage" value="${escapeAttr(tile?.required_stage ?? "")}" placeholder="(none)" ${ro} />
+    <input id="tile-required-stage" list="pack-stages" value="${escapeAttr(tile?.required_stage ?? "")}" placeholder="(none)" ${ro} />
     <label>HIDDEN UNTIL</label>
     <div style="display:flex;gap:6px">
       <select id="tile-hidden-type" ${disabled}>
         ${["", "quest_complete", "stage", "advancement", "team_flag", "trigger"].map((type) =>
           `<option value="${type}" ${(tile?.hidden_until?.type ?? "") === type ? "selected" : ""}>${type || "(always shown)"}</option>`).join("")}
       </select>
-      <input id="tile-hidden-id" value="${escapeAttr(tile?.hidden_until?.id ?? "")}" placeholder="id" ${ro} />
+      <input id="tile-hidden-id" ${tile?.hidden_until?.type === "stage" ? `list="pack-stages"` : ""} value="${escapeAttr(tile?.hidden_until?.id ?? "")}" placeholder="id" ${ro} />
     </div>
     <label>JUMP TARGET (CHAPTER / QUEST)</label>
     <div style="display:flex;gap:6px">
@@ -1335,6 +1335,7 @@ function showCard(tile?: Tile) {
     <datalist id="pack-biomes">${listOptions(catalog.biomes)}</datalist>
     <datalist id="pack-structures">${listOptions(catalog.structures)}</datalist>
     <datalist id="pack-loot">${listOptions(catalog.loot)}</datalist>
+    <datalist id="pack-stages">${listOptions(catalog.stages ?? [])}</datalist>
     <label>CHAPTER TITLE</label>
     <input id="chapter-title" value="${escapeAttr(chapter.title ?? "")}" ${ro} />
     <label>CHAPTER ID</label>
@@ -1394,7 +1395,7 @@ function showCard(tile?: Tile) {
             `<option value="${type}" ${condition.type === type ? "selected" : ""}>${type}</option>`
           ).join("")}
         </select>
-        <input data-unlock-id="${index}" value="${escapeAttr(condition.id)}" placeholder="questqueen:starter/go_nether" ${ro} />
+        <input data-unlock-id="${index}" ${condition.type === "stage" ? `list="pack-stages"` : ""} value="${escapeAttr(condition.id)}" placeholder="${condition.type === "stage" ? "iron_age" : "questqueen:starter/go_nether"}" ${ro} />
         ${authoring ? `<button type="button" data-remove-unlock="${index}">REMOVE</button>` : ""}
       </fieldset>
     `).join("")}
@@ -1644,6 +1645,13 @@ function showCard(tile?: Tile) {
     });
   });
   document.getElementById("chapter-id")?.addEventListener("change", () => renameChapter(tile));
+  // A field switched to a "stage" type gets the stage list (and its placeholder) straight away.
+  cardBody.querySelectorAll("[data-unlock-type],#tile-hidden-type").forEach((el) => {
+    el.addEventListener("change", () => {
+      apply();
+      showCard(tile);
+    });
+  });
   cardBody.querySelectorAll("select").forEach((el) => el.addEventListener("change", apply));
   cardBody.querySelectorAll("[data-unlock-type],[data-unlock-id],#chapter-title,#chapter-parent,#chapter-order,#chapter-theme,#chapter-bg-mode,#chapter-bg-color,#chapter-bg-image,#chapter-bg-opacity,#chapter-hide-until").forEach((el) => {
     el.addEventListener("change", apply);
@@ -1711,7 +1719,8 @@ function escapeText(value: string): string {
 
 function updatePackStatus() {
   if (packStatus) {
-    packStatus.textContent = unlocked ? `Connected · ${catalog.items.length.toLocaleString()} items` : "Waiting for Minecraft";
+    const stages = catalog.stages?.length ? ` · ${catalog.stages.length} stages` : "";
+    packStatus.textContent = unlocked ? `Connected · ${catalog.items.length.toLocaleString()} items${stages}` : "Waiting for Minecraft";
     packStatus.classList.toggle("online", unlocked);
     packStatus.title = unlocked ? "Item catalog comes from the pack loaded in Minecraft" : "Run /questqueen editor in game";
   }

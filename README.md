@@ -44,6 +44,20 @@ Each file's `"id"` should use that pack's namespace (`"<pack>:<name>"`). These i
 
 When the pack has its own chapters, the highest-priority `book.json` outside this mod's jar sets the sidebar title. Clicking a task item opens it in EMI, then REI, then JEI, whichever of those is installed.
 
+## Stages
+
+Quest Queen works with a stage mod when one is installed: Progression (mod id `progression`) first, otherwise ProgressiveStages. Neither is required. Stages are used by:
+
+- `"required_stage": "<id>"` on a quest: the quest stays closed until the player has the stage;
+- `{"type": "stage", "id": "<id>"}` conditions in a link's `gate.conditions`, a chapter's `unlock`, or a quest's `hidden_until`;
+- the `{"type": "stage", "stage": "<id>"}` reward, which grants the stage to the player.
+
+`"progression"` and `"progressivestages"` work as the type name too. A stage granted any other way (a command, an advancement, KubeJS, another mod) reaches the quest book without a relog.
+
+With Progression, stage ids are exact: lowercase, 1–64 characters of `a-z 0-9 _ . : / -`, with no implied namespace. A Progression stage file at `data/mypack/progression/stages/iron_age.json` with no `"id"` defines `mypack:iron_age`, not `iron_age`. Quest Queen logs a `quest authoring problem` at load for stage ids that are invalid or that the pack's Progression stage files do not define. The web editor offers the defined stages by name.
+
+ProgressiveStages only grants stages its own stage files define.
+
 ## Layout
 
 - `src/main/java/dev/aof/questqueen/` - mod

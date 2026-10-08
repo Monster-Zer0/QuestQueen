@@ -364,6 +364,9 @@ public final class QuestQueenCommands {
                 : String.join(", ", snapshot.unlockedChapters().stream().sorted().toList());
         player.sendSystemMessage(Component.literal("QQ status completed=[" + completed + "]"));
         player.sendSystemMessage(Component.literal("QQ status pin=" + pin));
+        // Which stage mod Quest Queen is using, and the stages it sees for this player.
+        player.sendSystemMessage(Component.literal("QQ status stages=" + dev.aof.questqueen.compat.Stages.backend()
+                .name().toLowerCase(java.util.Locale.ROOT) + " " + snapshot.ownedStages().stream().sorted().toList()));
         player.sendSystemMessage(Component.literal("QQ status chapters=[" + unlocked + "]"));
         return 1;
     }
