@@ -14,6 +14,12 @@ public record KillTask(Optional<ResourceLocation> entity, Optional<ResourceLocat
             TaskCounts.COUNT.optionalFieldOf("count", 1).forGetter(KillTask::count)
     ).apply(instance, KillTask::new));
 
+    /** A blank selector ({@code "entity": ""} parses to {@code minecraft:}) means "not set", not "match nothing". */
+    public KillTask {
+        entity = entity.filter(id -> !id.getPath().isEmpty());
+        tag = tag.filter(id -> !id.getPath().isEmpty());
+    }
+
     public KillTask(ResourceLocation entity, int count) {
         this(Optional.of(entity), Optional.empty(), count);
     }

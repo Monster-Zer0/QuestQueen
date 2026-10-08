@@ -36,11 +36,25 @@ class CardLedgerLayoutTest {
     }
 
     @Test
-    void choiceButtonsSitRightOfPin() {
+    void theOneTakeButtonSitsRightOfPin() {
         var layout = QuestBookScreen.footerLayout(X, W, new int[0], 0, 38, 36, 10);
-        assertEquals(RIGHT - 38, layout.choiceBX());
-        assertEquals(layout.choiceBX() - QuestBookScreen.BUTTON_GAP - 38, layout.choiceAX());
-        assertEquals(layout.choiceAX() - QuestBookScreen.BUTTON_GAP - 36, layout.pinX());
+        assertEquals(RIGHT - 38, layout.choiceX());
+        assertEquals(layout.choiceX() - QuestBookScreen.BUTTON_GAP - 36, layout.pinX());
+    }
+
+    @Test
+    void threeChoiceIconsFitBesideTakeAndPin() {
+        // A three-option choice (1 diamond, 8 emerald, 16 iron) beside PICK ONE. A pending choice is on a
+        // COMPLETED quest, which never shows PIN, so PICK ONE is the only button. Every option stays clickable.
+        var layout = QuestBookScreen.footerLayout(X, W, new int[]{16, 24, 30}, 0, 54, 0, 12);
+        assertEquals(3, layout.shown());
+        assertEquals(-1, layout.overflowX());
+    }
+
+    @Test
+    void moreTasksTextCountsWhatTheCardLeftOut() {
+        assertEquals("+1 more task", QuestBookScreen.moreTasksText(1));
+        assertEquals("+13 more tasks", QuestBookScreen.moreTasksText(13));
     }
 
     @Test
@@ -57,12 +71,12 @@ class CardLedgerLayoutTest {
     void rewardsNeverReachTheLeftmostButton() {
         int[] many = {30, 30, 30, 30, 30, 30};
         var layout = QuestBookScreen.footerLayout(X, W, many, 38, 38, 46, 12);
-        int leftmostButton = Math.min(layout.pinX(), layout.choiceAX());
+        int leftmostButton = Math.min(layout.pinX(), layout.choiceX());
         for (int i = 0; i < layout.shown(); i++) {
             assertTrue(layout.slotX()[i] + many[i] <= leftmostButton - QuestBookScreen.REWARD_GAP,
                     "slot " + i + " runs into the buttons");
         }
-        assertTrue(layout.shown() < many.length, "six wide slots cannot fit beside three buttons");
+        assertTrue(layout.shown() < many.length, "six wide slots cannot fit beside the buttons");
         assertTrue(layout.overflowX() >= 0, "the slots that did not fit are counted in a +N chip");
         assertTrue(layout.overflowX() + 12 <= leftmostButton, "the +N chip itself stays clear of the buttons");
     }

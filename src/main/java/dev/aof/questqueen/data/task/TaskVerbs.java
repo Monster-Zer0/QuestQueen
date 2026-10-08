@@ -48,7 +48,7 @@ public final class TaskVerbs {
             Map.entry("interact_block", "USE"),
             Map.entry("interact_entity", "USE"),
             Map.entry("fluid", "COLLECT"),
-            Map.entry("xp_levels", "REACH"),
+            Map.entry("xp_levels", "SPEND"),
             Map.entry("npc_dialog", "TALK"),
             Map.entry("trigger", "DO")
     );

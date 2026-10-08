@@ -149,6 +149,11 @@ public class QuestBookScreen extends Screen {
     private int inspectOffY;
     /** XOR parents whose modal was dismissed. Fork debt stays until a child completes. */
     private final Set<String> xorDismissed = new HashSet<>();
+    /** Choice reward option picked on the card (by its icon) and the tile it belongs to; TAKE sends it. */
+    private String choicePickTile = "";
+    private int choicePick = -1;
+    /** The pinned card was closed with its X: the quest stays pinned (HUD), the card stays shut until reopened. */
+    private boolean pinnedCardHidden;
     /** Marionette / probe hover — sticky until cleared so a screenshot can catch the lock. */
     private static final int[][] EMPTY_PORTS = new int[0][];
     private boolean widgetsDirty = true;
@@ -306,7 +311,7 @@ public class QuestBookScreen extends Screen {
      * @param slotX     left x of each reward slot that fits
      * @param overflowX x of the {@code +N} chip when some slots did not fit, else -1
      */
-    record FooterLayout(int[] slotX, int overflowX, int actionX, int choiceAX, int choiceBX, int pinX, int limit) {
+    record FooterLayout(int[] slotX, int overflowX, int actionX, int choiceX, int pinX, int limit) {
         int shown() {
             return slotX.length;
         }
@@ -320,8 +325,7 @@ public class QuestBookScreen extends Screen {
         int right = x + w - CARD_PAD;
         int cursor = right;
         int actionX = right;
-        int choiceAX = right;
-        int choiceBX = right;
+        int choiceX = right;
         int pinX = right;
         boolean anyButton = false;
         if (actionW > 0) {
@@ -330,9 +334,9 @@ public class QuestBookScreen extends Screen {
             anyButton = true;
         }
         if (choiceW > 0) {
-            choiceBX = cursor - choiceW;
-            choiceAX = choiceBX - BUTTON_GAP - choiceW;
-            cursor = choiceAX - BUTTON_GAP;
+            // One TAKE button: the option is picked by clicking its reward icon, so any number of options fits.
+            choiceX = cursor - choiceW;
+            cursor = choiceX - BUTTON_GAP;
             anyButton = true;
         }
         if (pinW > 0) {
@@ -364,7 +368,7 @@ public class QuestBookScreen extends Screen {
             sx += slotW[i] + REWARD_GAP;
         }
         int overflowX = count < slotW.length ? sx : -1;
-        return new FooterLayout(xs, overflowX, actionX, choiceAX, choiceBX, pinX, limit);
+        return new FooterLayout(xs, overflowX, actionX, choiceX, pinX, limit);
     }
 
     private record SidebarRow(ResourceLocation id, int y, int depth, boolean locked, boolean hasChildren,
@@ -556,7 +560,7 @@ public class QuestBookScreen extends Screen {
             expanded = false;
             return;
         }
-        if (!ClientQuestState.hasPin()) {
+        if (!ClientQuestState.hasPin() || pinnedCardHidden) {
             return;
         }
         String pinChapter = ClientQuestState.progress.pinChapter().orElse("");
@@ -582,7 +586,7 @@ public class QuestBookScreen extends Screen {
     }
 
     private String inspectTileId() {
-        if (ClientQuestState.hasPin()
+        if (!pinnedCardHidden && ClientQuestState.hasPin()
                 && ClientQuestState.progress.pinChapter().orElse("").equals(chapter.id().toString())) {
             String pinTile = ClientQuestState.progress.pinTile().orElse("");
             if (!pinTile.isEmpty() && chapter.tile(pinTile).isPresent()) {
@@ -594,8 +598,18 @@ public class QuestBookScreen extends Screen {
 
     private boolean showInspectPanel() {
         return !isIntroChapter() && !logOpen && modal == ModalKind.NONE && !inspectTileId().isEmpty()
-                && (expanded || (ClientQuestState.hasPin()
+                && (expanded || (!pinnedCardHidden && ClientQuestState.hasPin()
                 && ClientQuestState.progress.pinChapter().orElse("").equals(chapter.id().toString())));
+    }
+
+    /**
+     * The "pick one path" prompt shows once per unresolved fork. After it is dismissed, clicking the fork quest
+     * opens its card like any other — it used to reopen the prompt every time, so a choice reward on the fork
+     * quest could not be taken until a branch was finished.
+     */
+    private boolean xorPromptDue(Tile tile) {
+        return ClientQuestState.needsXorChoice(chapter, tile)
+                && !xorDismissed.contains(ClientQuestState.xorKey(chapter, tile.id()));
     }
 
     private boolean isIntroChapter() {
@@ -687,7 +701,7 @@ public class QuestBookScreen extends Screen {
                 centerOn(tileId);
                 return;
             }
-            if (ClientQuestState.needsXorChoice(chapter, tile)) {
+            if (xorPromptDue(tile)) {
                 expanded = false;
                 openModal(ModalKind.XOR, tileId);
                 centerOn(tileId);
@@ -1201,8 +1215,9 @@ public class QuestBookScreen extends Screen {
                         float cp = UiFx.easeOut(UiFx.progress(fxChoiceAt, CHOICE_MS));
                         choiceW = Math.max(8, Math.round(UiFx.lerp(choiceW * 0.55f, choiceW, cp)));
                     }
-                    chips.add(new QuestOverlayWidget.Chip(bar.choiceAX(), bar.y(), choiceW, 12, QuestColors.CURRENT));
-                    chips.add(new QuestOverlayWidget.Chip(bar.choiceBX(), bar.y(), choiceW, 12, QuestColors.EDIT));
+                    boolean ready = choicePick(selected) >= 0;
+                    chips.add(new QuestOverlayWidget.Chip(bar.choiceX(), bar.y(), choiceW, 12,
+                            ready ? QuestColors.CURRENT : QuestColors.MUTED, !ready));
                 }
                 if (bar.pin()) {
                     // PIN is an outline in the card's state colour; PINNED fills, so the active state reads at once.
@@ -1638,14 +1653,13 @@ public class QuestBookScreen extends Screen {
         return tile.rewards().getFirst() instanceof ChoiceReward;
     }
 
+    /** The card's description, or "" when the quest has none (players never see an authoring placeholder). */
     static String inspectBody(Tile tile) {
-        if (tile == null) {
-            return "No description yet.";
+        if (tile == null || tile.description().isBlank()) {
+            return "";
         }
-        String rawBody = tile.description().isBlank() ? "No description yet." : tile.description();
         // Drop trailing "Rewards: …" prose from description (Jerry — counts on icons only).
-        String body = rawBody.replaceAll("(?is)\\s*Rewards?:\\s*.*$", "").trim();
-        return body.isEmpty() ? "No description yet." : body;
+        return tile.description().replaceAll("(?is)\\s*Rewards?:\\s*.*$", "").trim();
     }
 
     static String rewardsCaption(Tile tile) {
@@ -1665,7 +1679,11 @@ public class QuestBookScreen extends Screen {
         return parts.isEmpty() ? "" : "Rewards: " + String.join(", ", parts);
     }
 
-    private record RewardSlot(Reward reward, ItemStack face) {
+    /** A footer reward icon. {@code option} is its index in a choice reward's options, or -1. */
+    private record RewardSlot(Reward reward, ItemStack face, int option) {
+        RewardSlot(Reward reward, ItemStack face) {
+            this(reward, face, -1);
+        }
     }
 
     private List<RewardSlot> collectRewardSlots(Tile tile) {
@@ -1675,20 +1693,20 @@ public class QuestBookScreen extends Screen {
         }
         for (Reward reward : tile.rewards()) {
             if (reward instanceof ChoiceReward choice) {
-                for (var option : choice.options()) {
-                    addRewardSlot(slots, option);
+                for (int i = 0; i < choice.options().size(); i++) {
+                    addRewardSlot(slots, choice.options().get(i), i);
                 }
             } else {
-                addRewardSlot(slots, reward);
+                addRewardSlot(slots, reward, -1);
             }
         }
         return slots;
     }
 
-    private static void addRewardSlot(List<RewardSlot> slots, Reward reward) {
+    private static void addRewardSlot(List<RewardSlot> slots, Reward reward, int option) {
         ItemStack face = rewardFace(reward);
         if (!face.isEmpty()) {
-            slots.add(new RewardSlot(reward, face));
+            slots.add(new RewardSlot(reward, face, option));
         }
     }
 
@@ -2297,34 +2315,15 @@ public class QuestBookScreen extends Screen {
     }
 
     /** Mock cards use the quest title; progress only when the task is counted. */
+    /**
+     * The tile's caption: the quest title. Progress lives in the ledger footer (count and bar), so the caption no
+     * longer swaps itself for "FIND 0/4" — that hid the title and repeated the count right above the footer.
+     */
     private String tileObjective(Tile tile) {
         String title = tile.title().isBlank() ? tile.id() : tile.title();
-        if (tile.tasks().isEmpty()) {
-            return title.toUpperCase(Locale.ROOT);
-        }
-        Task task = tile.tasks().getFirst();
-        int need = Math.max(1, task.required());
-        if (need > 1) {
-            String questId = chapter.id() + "/" + tile.id();
-            int value = ClientQuestState.progress.value(questId, "0");
-            // The BOARD half of the raw-verb defect. This used to uppercase task.type() directly, so the
-            // board behind a tile card still read ITEM_TAG 16/16 while the card's own task rows read
-            // COLLECT 16/16 — two surfaces, two labels, same task. It now goes through the same shared verb
-            // as the card, so the two surfaces cannot disagree again.
-            return objectiveLabel(ClientQuestState.taskVerb(task, tile), value, need);
-        }
         return title.toUpperCase(Locale.ROOT);
     }
 
-    /**
-     * The board's {@code <VERB> <value>/<need>} label. Pure, and package-private so a test can pin its shape
-     * without standing up a screen. The verb is a parameter and never a type id: the board and the tile
-     * card's own task rows now render the same string for the same task, which is the property that was
-     * broken when the board read {@code ITEM_TAG 16/16} while the card above it read {@code COLLECT 16/16}.
-     */
-    static String objectiveLabel(String verb, int value, int need) {
-        return verb + " " + value + "/" + need;
-    }
 
     /** 0.6-scale board labels — mock tile text is ~5–7px tall. */
     private void tinyString(GuiGraphics graphics, String text, int x, int y, int color) {
@@ -2339,8 +2338,8 @@ public class QuestBookScreen extends Screen {
     /** Quiet viewport squares — recessed mock grid cells, no LOCKED label. */
     private int drawQuietCells(GuiGraphics graphics) {
         ensureOccupiedCells();
-        int gw = chapter.gridWidth();
-        int gh = chapter.gridHeight();
+        int gw = chapter.boardWidth();
+        int gh = chapter.boardHeight();
         int minGx = Math.max(0, (int) Math.floor(cameraX / STRIDE) - 1);
         int minGy = Math.max(0, (int) Math.floor(cameraY / STRIDE) - 1);
         int maxGx = Math.min(gw, (int) Math.ceil((cameraX + contentWidth() / zoom) / STRIDE) + 1);
@@ -3201,8 +3200,10 @@ public class QuestBookScreen extends Screen {
         // so the body budget, the draw and inspectFootY cannot drift apart.
         int taskSlots = cardTaskSlots(tile, cursor, y, h);
         lastBodyBudget = bodyLineBudget(h, taskSlots, titlePush);
-        cursor = drawWrapped(graphics, body, x + 10, cursor + 4, w - 20, QuestColors.MUTED,
-                lastBodyBudget) + 6;
+        if (!body.isEmpty()) {
+            cursor = drawWrapped(graphics, body, x + 10, cursor + 4, w - 20, QuestColors.MUTED,
+                    lastBodyBudget) + 6;
+        }
         // Jerry: no Rewards: prose — counts live on icons as Nx
 
 
@@ -3213,8 +3214,11 @@ public class QuestBookScreen extends Screen {
         drawnTaskRows = 0;
         int footerRuleY = y + h - FOOTER_FROM_BOTTOM - 5;
         if (taskSlots > 0) {
-            int shownTasks = taskSlots;
-            int blockTop = taskBlockTop(y, h, shownTasks);
+            // When some tasks do not fit, the last row says how many are left out instead of hiding them.
+            int moreTasks = tile.tasks().size() - taskSlots;
+            int shownTasks = moreTasks > 0 && taskSlots >= 2 ? taskSlots - 1 : taskSlots;
+            moreTasks = tile.tasks().size() - shownTasks;
+            int blockTop = taskBlockTop(y, h, taskSlots);
             drawnTaskRows = shownTasks;
             MockChrome.box(graphics, x + CARD_PAD, blockTop - 4, w - CARD_PAD * 2, 1, QuestColors.SIDEBAR_EDGE);
             int rowY = blockTop;
@@ -3312,6 +3316,9 @@ public class QuestBookScreen extends Screen {
                 }
                 rowY += 12;
             }
+            if (moreTasks > 0) {
+                pixel(graphics, Component.literal(moreTasksText(moreTasks)), x + 28, rowY + 4, QuestColors.MUTED);
+            }
         }
         PlayBar bar = playBar(tile, x, y, w, h);
         List<RewardSlot> slots = footerSlots(tile);
@@ -3320,13 +3327,30 @@ public class QuestBookScreen extends Screen {
         }
         FooterLayout layout = bar.layout();
         int iconY = y + h - FOOTER_FROM_BOTTOM;
+        int picked = bar.choice() ? choicePick(tile) : -1;
+        int taken = takenOption(tile);
+        int stateInk = borderColor(ClientQuestState.visual(chapter, tile));
         for (int i = 0; i < layout.shown(); i++) {
             RewardSlot slot = slots.get(i);
             int sx = layout.slotX()[i];
+            boolean option = slot.option() >= 0;
+            if (option && bar.choice()) {
+                // Pickable: the picked icon is framed in the state colour, the hovered one in a muted frame.
+                if (slot.option() == picked) {
+                    MockChrome.frame(graphics, sx - 2, iconY - 2, 20, 20, stateInk == 0 ? QuestColors.CURRENT : stateInk);
+                } else if (over(sx - 1, iconY - 1, 18, 18, mouseX, mouseY)) {
+                    MockChrome.frame(graphics, sx - 2, iconY - 2, 20, 20, QuestColors.MUTED);
+                }
+            }
             graphics.renderItem(slot.face(), sx, iconY);
             String n = rewardCountText(slot.reward());
             if (!n.isEmpty()) {
                 pixel(graphics, Component.literal(n), sx + 18, iconY + 4, QuestColors.TEXT);
+            }
+            if (option && taken >= 0 && slot.option() != taken) {
+                // After the pick, the options not taken fade back so the card shows what was chosen.
+                MockChrome.box(graphics, sx - 1, iconY - 1, 18 + (n.isEmpty() ? 0 : 2 + font.width(n)), 18,
+                        UiFx.withAlpha(QuestColors.CARD, 0.7f));
             }
         }
         if (layout.overflowX() >= 0) {
@@ -3360,16 +3384,18 @@ public class QuestBookScreen extends Screen {
             if (UiFx.enabled() && fxChoiceAt >= 0L && fxChoiceTileId.equals(tile.id())) {
                 float cp = UiFx.easeOut(UiFx.progress(fxChoiceAt, CHOICE_MS));
                 int halo = UiFx.withAlpha(QuestColors.CURRENT, (0.35f + 0.45f * (1f - cp)) * Math.max(0.2f, 1f - cp * 0.4f));
-                MockChrome.box(graphics, bar.choiceAX() - 1, bar.y() - 1, bar.choiceW() + 2, 14, halo);
-                MockChrome.box(graphics, bar.choiceBX() - 1, bar.y() - 1, bar.choiceW() + 2, 14,
-                        UiFx.withAlpha(QuestColors.EDIT, (0.35f + 0.45f * (1f - cp)) * Math.max(0.2f, 1f - cp * 0.4f)));
+                MockChrome.box(graphics, bar.choiceX() - 1, bar.y() - 1, bar.choiceW() + 2, 14, halo);
             }
-            drawButtonLabel(graphics, bar.choiceAX(), bar.y(), bar.choiceW(), 12, "TAKE A");
-            drawButtonLabel(graphics, bar.choiceBX(), bar.y(), bar.choiceW(), 12, "TAKE B");
+            drawButtonLabel(graphics, bar.choiceX(), bar.y(), bar.choiceW(), 12, picked >= 0 ? "TAKE" : "PICK ONE");
         }
         if (bar.pin()) {
             drawPinButton(graphics, bar, borderColor(ClientQuestState.visual(chapter, tile)));
         }
+    }
+
+    /** The card's last task row when tasks are cut: how many the card could not show. */
+    static String moreTasksText(int more) {
+        return "+" + more + (more == 1 ? " more task" : " more tasks");
     }
 
     /** Where the lit dots of a leader from {@code from} to {@code to} end at progress {@code fraction}. */
@@ -3640,7 +3666,7 @@ public class QuestBookScreen extends Screen {
 
     private record PlayBar(boolean action, boolean choice, boolean pin, boolean pinned, String actionLabel, boolean claimedBadge,
                            int y, int actionX, int actionW,
-                           int choiceAX, int choiceBX, int choiceW, int pinX, int pinW, FooterLayout layout) {
+                           int choiceX, int choiceW, int pinX, int pinW, FooterLayout layout) {
     }
 
     private boolean inspectPinned() {
@@ -3669,7 +3695,7 @@ public class QuestBookScreen extends Screen {
         if (!tileInteractive(tile)) {
             FooterLayout layout = footerLayout(x, w, rewardSlotWidths(tile), 0, 0, 0, overflowWidth(tile));
             return new PlayBar(false, false, false, false, "", false, y + h - 16, x + w - CARD_PAD, 0,
-                    x + w - CARD_PAD, x + w - CARD_PAD, 0, x + w - CARD_PAD, 0, layout);
+                    x + w - CARD_PAD, 0, x + w - CARD_PAD, 0, layout);
         }
         String questId = chapter.id() + "/" + tile.id();
         boolean tileDone = ClientQuestState.progress.tileCompleted(chapter.id().toString(), tile.id());
@@ -3697,11 +3723,11 @@ public class QuestBookScreen extends Screen {
         boolean pinned = isPinnedTile(tile);
         boolean pin = pinAllowed(tile) || pinned;
         int actionW = action || claimedBadge ? pillW(claimedBadge && !action ? "CLAIMED" : label) : 0;
-        int choiceW = choice ? pillW("TAKE A") : 0;
+        int choiceW = choice ? pillW("PICK ONE") : 0;
         int pinW = pin ? pillW(pinned ? "PINNED" : "PIN") + 10 : 0;
         FooterLayout layout = footerLayout(x, w, rewardSlotWidths(tile), actionW, choiceW, pinW, overflowWidth(tile));
         return new PlayBar(action, choice, pin, pinned, label, claimedBadge, y + h - 16, layout.actionX(), actionW,
-                layout.choiceAX(), layout.choiceBX(), choiceW, layout.pinX(), pinW, layout);
+                layout.choiceX(), choiceW, layout.pinX(), pinW, layout);
     }
 
     private int[] rewardSlotWidths(Tile tile) {
@@ -3788,7 +3814,12 @@ public class QuestBookScreen extends Screen {
             }
             List<LogRow> block = completedTileRows(entry, ly,
                     tile -> ClientQuestState.progress.tileCompleted(entry.id().toString(), tile.id()),
-                    QuestBookScreen::rewardFace);
+                    QuestBookScreen::rewardFace,
+                    tile -> {
+                        String questId = entry.id() + "/" + tile.id();
+                        return ClientQuestState.progress.taskCompleted(questId, "choice")
+                                ? ClientQuestState.progress.value(questId, "choice") : -1;
+                    });
             rows.addAll(block);
             if (!block.isEmpty()) {
                 ly = block.get(block.size() - 1).y() + 11;
@@ -3819,6 +3850,13 @@ public class QuestBookScreen extends Screen {
      */
     static List<LogRow> completedTileRows(Chapter entry, int startY, java.util.function.Predicate<Tile> isDone,
             java.util.function.Function<Reward, ItemStack> iconResolver) {
+        return completedTileRows(entry, startY, isDone, iconResolver, tile -> -1);
+    }
+
+    /** As above; {@code takenOption} names the option taken on a choice reward (-1 while still to pick). */
+    static List<LogRow> completedTileRows(Chapter entry, int startY, java.util.function.Predicate<Tile> isDone,
+            java.util.function.Function<Reward, ItemStack> iconResolver,
+            java.util.function.ToIntFunction<Tile> takenOption) {
         List<LogRow> rows = new ArrayList<>();
         int ly = startY;
         String chapterName = entry.title().isBlank() ? entry.id().getPath() : entry.title();
@@ -3836,9 +3874,16 @@ public class QuestBookScreen extends Screen {
                 ly += 11;
             } else {
                 for (Reward reward : tile.rewards()) {
+                    int taken = takenOption.applyAsInt(tile);
+                    Reward shown = reward;
+                    String text = reward.describe();
+                    if (reward instanceof ChoiceReward choice && taken >= 0 && taken < choice.options().size()) {
+                        shown = choice.options().get(taken);
+                        text = "took " + shown.describe();
+                    }
                     // ofNullable so a resolver may legitimately report "no icon" (tests pass null).
-                    ItemStack icon = iconResolver.apply(reward);
-                    rows.add(new LogRow(ly, "reward  " + reward.describe(), QuestColors.TEXT,
+                    ItemStack icon = iconResolver.apply(shown);
+                    rows.add(new LogRow(ly, "reward  " + text, QuestColors.TEXT,
                             Optional.ofNullable(icon), 30));
                     ly += 12;
                 }
@@ -4007,7 +4052,8 @@ public class QuestBookScreen extends Screen {
             if (over(x + w - 14, y, 12, 12, mouseX, mouseY)) {
                 Tile pinned = chapter.tile(inspectId).orElse(null);
                 if (pinned != null && isPinnedTile(pinned)) {
-                    togglePin(pinned);
+                    // X closes the card and keeps the pin: the HUD tracker stays. PINNED unpins.
+                    pinnedCardHidden = true;
                 }
                 expanded = false;
                 return true;
@@ -4047,6 +4093,9 @@ public class QuestBookScreen extends Screen {
                 if (visual == TileVisual.CLOSED) {
                     return true;
                 }
+                if (isPinnedTile(tile)) {
+                    pinnedCardHidden = false;
+                }
                 if (expanded && selectedId.equals(tile.id())) {
                     if (isPinnedTile(tile)) {
                         return true;
@@ -4056,7 +4105,7 @@ public class QuestBookScreen extends Screen {
                 }
                 selectedId = tile.id();
                 bounce = 0f;
-                if (ClientQuestState.needsXorChoice(chapter, tile)) {
+                if (xorPromptDue(tile)) {
                     expanded = false;
                     openModal(ModalKind.XOR, tile.id());
                 } else {
@@ -4217,6 +4266,7 @@ public class QuestBookScreen extends Screen {
         PINNED_CARD_OFFSET.put(pinKey(chapter.id().toString(), tile.id()), new int[]{inspectOffX, inspectOffY});
         selectedId = tile.id();
         expanded = true;
+        pinnedCardHidden = false;
         ClientQuestState.setPinLocal(Optional.of(chapter.id().toString()), Optional.of(tile.id()));
         QuestNetwork.sendToServer(new PinC2S(chapter.id(), tile.id(), false));
     }
@@ -4326,6 +4376,33 @@ public class QuestBookScreen extends Screen {
         }
     }
 
+    /** The choice option picked on this tile's card, or -1 before the player picks one. */
+    private int choicePick(Tile tile) {
+        return tile.id().equals(choicePickTile) ? choicePick : -1;
+    }
+
+    /** Choice option under the pointer among the footer's reward icons, or -1. */
+    private int choiceOptionAt(Tile tile, PlayBar bar, int x, int y, int w, int h, double mouseX, double mouseY) {
+        List<RewardSlot> slots = footerSlots(tile);
+        FooterLayout layout = bar.layout();
+        int iconY = inspectFootY(tile, x, y, w, h);
+        for (int i = 0; i < layout.shown(); i++) {
+            if (slots.get(i).option() >= 0 && over(layout.slotX()[i] - 1, iconY - 1, 18, 18, mouseX, mouseY)) {
+                return slots.get(i).option();
+            }
+        }
+        return -1;
+    }
+
+    /** The option the team took on this tile's choice reward, or -1 while it is still to pick. */
+    private int takenOption(Tile tile) {
+        String questId = chapter.id() + "/" + tile.id();
+        if (!ClientQuestState.progress.taskCompleted(questId, "choice")) {
+            return -1;
+        }
+        return ClientQuestState.progress.value(questId, "choice");
+    }
+
     private boolean handleCardClick(Tile tile, int x, int y, int w, int h, double mouseX, double mouseY) {
         // JEI icon hits use the rectangles painted this frame (bottom-anchored task rows).
         // This must run before CLAIM surface / early return — otherwise "Click: how to make it"
@@ -4345,13 +4422,20 @@ public class QuestBookScreen extends Screen {
             clickDone(tile);
             return true;
         }
-        if (bar.choice() && over(bar.choiceAX(), bar.y(), bar.choiceW(), 12, mouseX, mouseY)) {
-            QuestNetwork.sendToServer(new ClaimChoiceC2S(chapter.id(), tile.id(), 0));
-            return true;
-        }
-        if (bar.choice() && over(bar.choiceBX(), bar.y(), bar.choiceW(), 12, mouseX, mouseY)) {
-            QuestNetwork.sendToServer(new ClaimChoiceC2S(chapter.id(), tile.id(), 1));
-            return true;
+        if (bar.choice()) {
+            int option = choiceOptionAt(tile, bar, x, y, w, h, mouseX, mouseY);
+            if (option >= 0) {
+                choicePickTile = tile.id();
+                choicePick = option;
+                return true;
+            }
+            if (over(bar.choiceX(), bar.y(), bar.choiceW(), 12, mouseX, mouseY)) {
+                int pick = choicePick(tile);
+                if (pick >= 0) {
+                    QuestNetwork.sendToServer(new ClaimChoiceC2S(chapter.id(), tile.id(), pick));
+                }
+                return true;
+            }
         }
         if (bar.pin() && over(bar.pinX(), bar.y(), bar.pinW(), 12, mouseX, mouseY)) {
             togglePin(tile);
@@ -4435,7 +4519,8 @@ public class QuestBookScreen extends Screen {
         }
         String title = tile.title().isBlank() ? tile.id() : tile.title();
         int titleLines = wrapLineCount(title.toUpperCase(Locale.ROOT), cardW() - 20);
-        int bodyLines = wrapLineCount(inspectBody(tile), cardW() - 20);
+        String body = inspectBody(tile);
+        int bodyLines = body.isEmpty() ? 0 : wrapLineCount(body, cardW() - 20);
         // One 12px row per task, so a multi-item quest gets room for its icons instead of overlapping
         // the play bar.
         int taskRows = Math.min(tile.tasks().size(), MAX_TASK_ROWS);
@@ -5136,7 +5221,17 @@ public class QuestBookScreen extends Screen {
         return mx >= x && my >= y && mx < x + w && my < y + h;
     }
 
+    /**
+     * The qq-click.json test hook drives the book (clicks, claims, pins) from a file in the temp folder. It is for
+     * dev runs and Marionette checks only: a released jar ignores it unless {@code -Dquestqueen.testHooks=true}.
+     */
+    static final boolean TEST_HOOKS = !net.neoforged.fml.loading.FMLEnvironment.production
+            || Boolean.getBoolean("questqueen.testHooks");
+
     private void drainTestClick() {
+        if (!TEST_HOOKS) {
+            return;
+        }
         // Avoid Files.exists every client tick; Marionette wait(12) still hits within a few polls.
         if (Minecraft.getInstance().level == null
                 || Minecraft.getInstance().level.getGameTime() % 5L != 0L) {
@@ -5287,8 +5382,9 @@ public class QuestBookScreen extends Screen {
                 chapter.tile(selectedId).ifPresent(tile -> {
                     PlayBar bar = playBar(tile, cardX(), cardY(), cardW(), cardH());
                     if (bar.choice()) {
-                        int which = json.get("claim").getAsInt();
-                        clickGui((which == 0 ? bar.choiceAX() : bar.choiceBX()) + 16, bar.y() + 6);
+                        choicePickTile = tile.id();
+                        choicePick = json.get("claim").getAsInt();
+                        clickGui(bar.choiceX() + bar.choiceW() / 2.0, bar.y() + 6);
                     }
                 });
                 return;

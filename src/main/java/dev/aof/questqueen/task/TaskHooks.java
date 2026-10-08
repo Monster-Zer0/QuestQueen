@@ -46,6 +46,7 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
@@ -86,6 +87,7 @@ public final class TaskHooks {
         LAST_STRUCTURE_POS.clear();
         STAT_BASELINE.clear();
         reportMalformedKillTasks();
+        reportAuthoringProblems();
     }
 
     @SubscribeEvent
@@ -646,6 +648,40 @@ public final class TaskHooks {
                                     + " match it.", chapter.id(), tile.id(), taskIndex, id));
                 }
             }
+        }
+    }
+
+    /**
+     * One WARN line per quest a player can never finish because of how it was authored: no tasks at all (only a
+     * grant command completes it), or a task whose item / tag / entity id is blank ({@code ""} parses to
+     * {@code minecraft:}, which names nothing). Same idea as {@link #reportMalformedKillTasks()}: loud at load
+     * instead of silent in play. Prefix "quest authoring problem" for grepping.
+     */
+    static List<String> authoringProblems(Collection<Chapter> chapters) {
+        List<String> problems = new ArrayList<>();
+        for (Chapter chapter : chapters) {
+            for (Tile tile : chapter.tiles()) {
+                if (tile.tasks().isEmpty()) {
+                    problems.add(chapter.id() + "/" + tile.id() + " has no tasks, so only a grant command can complete it");
+                }
+                for (int i = 0; i < tile.tasks().size(); i++) {
+                    Task task = tile.tasks().get(i);
+                    boolean blank = task.itemId().filter(id -> id.getPath().isEmpty()).isPresent()
+                            || task.tagId().filter(id -> id.getPath().isEmpty()).isPresent()
+                            || task.entityId().filter(id -> id.getPath().isEmpty()).isPresent();
+                    if (blank) {
+                        problems.add(chapter.id() + "/" + tile.id() + " task[" + i + "] (" + task.type()
+                                + ") names a blank id, so nothing can ever count toward it");
+                    }
+                }
+            }
+        }
+        return problems;
+    }
+
+    private static void reportAuthoringProblems() {
+        for (String problem : authoringProblems(QuestDefinitions.chapters())) {
+            QuestQueen.LOGGER.warn("quest authoring problem: {}", problem);
         }
     }
 

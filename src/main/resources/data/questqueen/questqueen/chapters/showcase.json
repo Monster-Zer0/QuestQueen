@@ -10,7 +10,7 @@
       "id": "briefing",
       "pos": { "x": 1, "y": 1 },
       "title": "Read the brief",
-      "description": "Open this card. The TASK and REWARD rows below are the inspector format.\n\nPress DONE when you are ready.",
+      "description": "Open this card. The TASK and REWARD rows below are the inspector format.\n\nPress CLAIM when you are ready.",
       "icon": { "item": "minecraft:writable_book" },
       "tasks": [{ "type": "checkmark" }],
       "rewards": [
@@ -68,7 +68,7 @@
       "id": "stage_grant",
       "pos": { "x": 3, "y": 3 },
       "title": "Unlock a stage",
-      "description": "DONE grants the Progressive Stages id questqueen_demo.\nThat stage reveals the hidden tile.",
+      "description": "CLAIM grants the Progressive Stages id questqueen_demo.\nThat stage reveals the hidden tile.",
       "icon": { "item": "minecraft:amethyst_shard" },
       "tasks": [{ "type": "checkmark" }],
       "rewards": [

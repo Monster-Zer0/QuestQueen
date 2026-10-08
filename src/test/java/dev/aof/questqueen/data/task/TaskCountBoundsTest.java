@@ -30,6 +30,14 @@ class TaskCountBoundsTest {
     }
 
     @Test
+    void aBlankKillSelectorIsAbsent() {
+        Task task = parse("""
+                {"type":"kill","tag":"minecraft:skeletons","entity":"","count":1}""").orElseThrow();
+        assertTrue(task.entityId().isEmpty(), "\"entity\": \"\" must not become minecraft:");
+        assertEquals(Optional.of(ResourceLocation.parse("minecraft:skeletons")), task.tagId());
+    }
+
+    @Test
     void zeroAndNegativeCountsAreRejected() {
         assertTrue(parse("""
                 {"type":"kill","entity":"minecraft:zombie","count":0}""").isEmpty(), "count 0 must not parse");
