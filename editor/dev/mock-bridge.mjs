@@ -60,7 +60,7 @@ const CATALOG = {
   fluids: ids(["minecraft:water", "minecraft:lava"]),
   dimensions: ids(["minecraft:overworld", "minecraft:the_nether"]),
   stats: ids(["minecraft:walk_one_cm"]),
-  // As the game sends Progression's defined stages: id plus display name.
+  // As the game sends StageLock's defined stages: id plus display name.
   stages: [
     { id: "stone_age", name: "Stone Age" },
     { id: "iron_age", name: "Iron Age" },

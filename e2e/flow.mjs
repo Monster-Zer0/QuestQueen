@@ -129,7 +129,7 @@ const AFTER_CHAPTER = {
 };
 
 /**
- * A quest whose reward grants a stage, and a quest that needs it. Progression accepts any valid id; ProgressiveStages
+ * A quest whose reward grants a stage, and a quest that needs it. StageLock accepts any valid id; ProgressiveStages
  * only grants stages its own files define, so that run uses one (QQ_PS_STAGE, default: its bundled showcase:mage).
  */
 const staged = (stage) => ({
@@ -229,12 +229,12 @@ async function main() {
   await wait(20);
   await shot("e2e-05-hud.png");
 
-  // Optional: stage gating through whichever stage mod is installed (Progression or ProgressiveStages). Progression
+  // Optional: stage gating through whichever stage mod is installed (StageLock or ProgressiveStages). StageLock
   // needs NeoForge 21.1.256+: ./gradlew runClient -Pqq.e2e -Pneo_version=21.1.256 with its jar in run/client/mods.
   s = await status();
   const backend = s.stages.split(" ")[0];
   if (backend && backend !== "none") {
-    const stage = backend === "progression" ? "qqe2e_gate" : (process.env.QQ_PS_STAGE ?? "showcase:mage");
+    const stage = backend === "stagelock" ? "qqe2e_gate" : (process.env.QQ_PS_STAGE ?? "showcase:mage");
     console.log(`INFO  stage mod: ${backend}, stage ${stage}`);
     check((await save(staged(stage))) === 202, "the bridge accepts a stage-gated chapter");
     await wait(20);
@@ -253,12 +253,12 @@ async function main() {
     s = await status();
     check(s.stages.includes(stage), `the stage reward grants the stage through ${backend}`);
     check(s.completed.includes("qqe2e:staged/gated"), "holding the stage opens the quest without a relog");
-    if (backend === "progression") {
-      // A stage granted outside Quest Queen: Progression's command, as op through the server.
-      await server("progression grant @p qqe2e_outside");
+    if (backend === "stagelock") {
+      // A stage granted outside Quest Queen: StageLock's command, as op through the server.
+      await server("stagelock grant @p qqe2e_outside");
       await wait(60);
       s = await status();
-      check(s.stages.includes("qqe2e_outside"), "a /progression grant reaches the book without a relog");
+      check(s.stages.includes("qqe2e_outside"), "a /stagelock grant reaches the book without a relog");
     }
     await shot("e2e-06-stage-quest.png");
   } else {

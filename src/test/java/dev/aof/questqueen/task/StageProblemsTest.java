@@ -18,7 +18,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Stage ids that can never match are reported at load, like Progression's own "undefined stage" warning. */
+/** Stage ids that can never match are reported at load, like StageLock's own "undefined stage" warning. */
 class StageProblemsTest {
     private static Chapter chapter() {
         Tile gated = new Tile("gated", new GridPos(0, 0), "Gated", "", Optional.empty(), List.of(new CheckmarkTask()),
@@ -26,7 +26,8 @@ class StageProblemsTest {
                 Optional.of("mypack:iron_age"));
         return new Chapter(ResourceLocation.parse("p:stages"), "Stages", List.of(gated), List.of())
                 .withMeta(Optional.empty(), 0, Optional.empty(),
-                        new Gate(GateOp.AND, List.of(new GateCondition("progression", "iron_age"))));
+                        new Gate(GateOp.AND, List.of(new GateCondition("stagelock", "iron_age"),
+                                new GateCondition("progression", "mypack:old_name"))));
     }
 
     @Test
@@ -42,5 +43,7 @@ class StageProblemsTest {
         assertTrue(problems.stream().anyMatch(p -> p.contains("chapter unlock: stage \"iron_age\" is not defined")),
                 "the namespacing trap: iron_age vs mypack:iron_age\n" + problems);
         assertTrue(problems.stream().noneMatch(p -> p.contains("required_stage")), "mypack:iron_age is defined");
+        assertTrue(problems.stream().anyMatch(p -> p.contains("\"mypack:old_name\" is not defined")),
+                "the old \"progression\" type name is still a stage condition\n" + problems);
     }
 }

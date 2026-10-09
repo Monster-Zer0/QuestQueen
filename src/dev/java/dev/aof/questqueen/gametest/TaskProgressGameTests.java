@@ -117,7 +117,7 @@ public final class TaskProgressGameTests {
                 List.of(tile("z", 0, List.of(new CheckmarkTask()))), List.of())
                 .withMeta(Optional.empty(), 0, Optional.empty(),
                         new Gate(GateOp.AND, List.of(new GateCondition("chapter_complete", FORK.toString())))));
-        // Stage gating through whichever stage mod is installed (the stage tests below skip without Progression).
+        // Stage gating through whichever stage mod is installed (the stage tests below skip without StageLock).
         QuestDefinitions.putChapter(new Chapter(STAGES, "GameTest stages", List.of(
                 new Tile("gated", new GridPos(0, 0), "gated", "", Optional.empty(), List.of(new CheckmarkTask()),
                         List.of(), List.of(), Optional.empty(), Optional.empty(), Optional.of("qqgt_gate")),
@@ -129,10 +129,10 @@ public final class TaskProgressGameTests {
         QuestDefinitions.putChapter(new Chapter(STAGE_CHAPTER, "GameTest stage chapter",
                 List.of(tile("z", 0, List.of(new CheckmarkTask()))), List.of())
                 .withMeta(Optional.empty(), 0, Optional.empty(),
-                        new Gate(GateOp.AND, List.of(new GateCondition("progression", "qqgt_chapter")))));
+                        new Gate(GateOp.AND, List.of(new GateCondition("stagelock", "qqgt_chapter")))));
     }
 
-    /** Stage tests need a stage mod (Progression or ProgressiveStages) in the run's mods folder; without one they pass trivially (CI has none). */
+    /** Stage tests need a stage mod (StageLock or ProgressiveStages) in the run's mods folder; without one they pass trivially (CI has none). */
     private static boolean stageMod() {
         return Stages.present();
     }
@@ -142,7 +142,7 @@ public final class TaskProgressGameTests {
     }
 
     @GameTest(template = TEMPLATE, batch = BATCH)
-    public static void aRequiredStageGatesTheQuestUntilProgressionGrantsIt(GameTestHelper helper) {
+    public static void aRequiredStageGatesTheQuestUntilStageLockGrantsIt(GameTestHelper helper) {
         if (!stageMod()) {
             helper.succeed();
             return;
@@ -150,8 +150,8 @@ public final class TaskProgressGameTests {
         ServerPlayer player = helper.makeMockServerPlayerInLevel();
         check(!snapshot(player).revealedTiles().contains(stagesKey("gated")), "gated before the stage");
         check(!TaskHooks.trySubmit(player, STAGES, "gated", 0), "a stage-gated quest must refuse progress");
-        check(Stages.grantStage(player, "qqgt_gate"), "Progression refused the grant");
-        check(Stages.hasStage(player, "qqgt_gate"), "Progression does not report the granted stage");
+        check(Stages.grantStage(player, "qqgt_gate"), "StageLock refused the grant");
+        check(Stages.hasStage(player, "qqgt_gate"), "StageLock does not report the granted stage");
         check(snapshot(player).revealedTiles().contains(stagesKey("gated")), "the quest must open once the stage is held");
         check(TaskHooks.trySubmit(player, STAGES, "gated", 0), "the opened quest must accept progress");
         leave(player);
@@ -168,13 +168,13 @@ public final class TaskProgressGameTests {
         check(!snapshot(player).chapterUnlocked(STAGE_CHAPTER.toString()), "unlocked before the stage");
         Stages.grantStage(player, "qqgt_chapter");
         check(snapshot(player).chapterUnlocked(STAGE_CHAPTER.toString()),
-                "a \"progression\" unlock condition must open the chapter");
+                "a \"stagelock\" unlock condition must open the chapter");
         leave(player);
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, batch = BATCH)
-    public static void theStageRewardGrantsAProgressionStage(GameTestHelper helper) {
+    public static void theStageRewardGrantsAStageLockStage(GameTestHelper helper) {
         if (!stageMod()) {
             helper.succeed();
             return;
@@ -183,14 +183,14 @@ public final class TaskProgressGameTests {
         check(!Stages.hasStage(player, "qqgt_reward"), "held before the claim");
         check(TaskHooks.trySubmit(player, STAGES, "grant", 0), "checkmark was refused");
         check(ProgressService.claimTileRewards(player, STAGES, "grant"), "claim was refused");
-        check(Stages.hasStage(player, "qqgt_reward"), "the stage reward must grant the Progression stage");
+        check(Stages.hasStage(player, "qqgt_reward"), "the stage reward must grant the StageLock stage");
         check(snapshot(player).ownedStages().contains("qqgt_reward"), "the client snapshot must carry the stage");
         leave(player);
         helper.succeed();
     }
 
     /**
-     * A stage granted outside Quest Queen (a command, another mod) reaches the book without a relog: Progression's
+     * A stage granted outside Quest Queen (a command, another mod) reaches the book without a relog: StageLock's
      * StagesChangedEvent resyncs, which drops the cached snapshot. The cache is read WITHOUT invalidating here.
      */
     @GameTest(template = TEMPLATE, batch = BATCH, timeoutTicks = 100)
@@ -201,10 +201,10 @@ public final class TaskProgressGameTests {
         }
         ServerPlayer player = helper.makeMockServerPlayerInLevel();
         check(!snapshot(player).revealedTiles().contains(stagesKey("live")), "open before the stage");
-        // Granted straight through Progression's API, the way a command or another mod would: Quest Queen is not
-        // told, so only the StagesChangedEvent hook can refresh the cache. (/progression grant <name> needs the
+        // Granted straight through StageLock's API, the way a command or another mod would: Quest Queen is not
+        // told, so only the StagesChangedEvent hook can refresh the cache. (/stagelock grant <name> needs the
         // server's profile cache, which the game-test server does not have.)
-        check(Stages.grantStage(player, "qqgt_live"), "Progression refused the grant");
+        check(Stages.grantStage(player, "qqgt_live"), "StageLock refused the grant");
         helper.succeedWhen(() -> {
             check(ProgressService.snapshot(player).revealedTiles().contains(stagesKey("live")),
                     "the cached snapshot was not refreshed by the stage change");

@@ -18,19 +18,19 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Optional bridge to Progression (mod id {@code progression}), the stage mod. Reflection rather than a compile
+ * Optional bridge to StageLock (mod id {@code stagelock}), the stage mod. Reflection rather than a compile
  * dependency, like {@link FtbTeamsCompat}, so the jar works with or without it. Any failure disables the bridge
  * with one WARN and Quest Queen carries on as if no stage mod were installed.
  *
- * <p>Progression stage ids are exact: lowercase, 1-64 chars of {@code [a-z0-9_.:/-]}, no implied namespace (a
- * definition at {@code data/mypack/progression/stages/iron_age.json} with no "id" is {@code mypack:iron_age}).
+ * <p>StageLock stage ids are exact: lowercase, 1-64 chars of {@code [a-z0-9_.:/-]}, no implied namespace (a
+ * definition at {@code data/mypack/stagelock/stages/iron_age.json} with no "id" is {@code mypack:iron_age}).
  */
-public final class ProgressionCompat {
-    public static final String MOD_ID = "progression";
-    private static final String API = "dev.progression.api.ProgressionAPI";
-    private static final String STAGE_SET = "dev.progression.api.StageSet";
-    private static final String CHANGED_EVENT = "dev.progression.api.event.StagesChangedEvent";
-    private static final String DEFINITIONS = "dev.progression.core.definition.StageDefinitions";
+public final class StageLockCompat {
+    public static final String MOD_ID = "stagelock";
+    private static final String API = "dev.stagelock.api.StageLockAPI";
+    private static final String STAGE_SET = "dev.stagelock.api.StageSet";
+    private static final String CHANGED_EVENT = "dev.stagelock.api.event.StagesChangedEvent";
+    private static final String DEFINITIONS = "dev.stagelock.core.definition.StageDefinitions";
 
     private static boolean broken;
     private static Method has;
@@ -38,10 +38,10 @@ public final class ProgressionCompat {
     private static Method asSet;
     private static Method grant;
 
-    private ProgressionCompat() {
+    private StageLockCompat() {
     }
 
-    /** Resolve the API once. False (and logged once) when Progression's API is not what this bridge expects. */
+    /** Resolve the API once. False (and logged once) when StageLock's API is not what this bridge expects. */
     private static synchronized boolean ready() {
         if (broken) {
             return false;
@@ -65,12 +65,12 @@ public final class ProgressionCompat {
     private static void fail(String what, Throwable exception) {
         if (!broken) {
             broken = true;
-            QuestQueen.LOGGER.warn("Progression is installed but its {} failed ({}); stage features are off", what,
+            QuestQueen.LOGGER.warn("StageLock is installed but its {} failed ({}); stage features are off", what,
                     exception.toString());
         }
     }
 
-    /** Progression lowercases ids; a pack may have written {@code Iron_Age}. */
+    /** StageLock lowercases ids; a pack may have written {@code Iron_Age}. */
     static String normalize(String id) {
         return id == null ? "" : id.trim().toLowerCase(Locale.ROOT);
     }
@@ -82,8 +82,8 @@ public final class ProgressionCompat {
         try {
             @SuppressWarnings("unchecked")
             Class<? extends Event> event = (Class<? extends Event>) Class.forName(CHANGED_EVENT);
-            NeoForge.EVENT_BUS.addListener(EventPriority.NORMAL, false, event, ProgressionCompat::onStagesChanged);
-            QuestQueen.LOGGER.info("Progression stage compat enabled");
+            NeoForge.EVENT_BUS.addListener(EventPriority.NORMAL, false, event, StageLockCompat::onStagesChanged);
+            QuestQueen.LOGGER.info("StageLock stage compat enabled");
         } catch (Throwable exception) {
             fail("stage-change hook", exception);
         }
@@ -109,12 +109,12 @@ public final class ProgressionCompat {
             grant.invoke(null, player, new String[]{normalize(id)});
             return true;
         } catch (Throwable exception) {
-            QuestQueen.LOGGER.warn("Progression grant failed for {}: {}", id, exception.toString());
+            QuestQueen.LOGGER.warn("StageLock grant failed for {}: {}", id, exception.toString());
             return false;
         }
     }
 
-    /** The player's effective stages (player, team, global and contributed), as Progression reports them. */
+    /** The player's effective stages (player, team, global and contributed), as StageLock reports them. */
     public static Set<String> ownedStages(Player player) {
         Set<String> owned = new LinkedHashSet<>();
         if (player == null || !ready()) {
@@ -133,13 +133,13 @@ public final class ProgressionCompat {
         return owned;
     }
 
-    /** Exact match after lowercasing: Progression has no implied namespace to strip or add. */
+    /** Exact match after lowercasing: StageLock has no implied namespace to strip or add. */
     public static boolean matches(Set<String> owned, String id) {
         return owned != null && !normalize(id).isEmpty() && owned.contains(normalize(id));
     }
 
     /**
-     * Stages the pack defines, id → display name, from the client's synced copy. That store is Progression's
+     * Stages the pack defines, id → display name, from the client's synced copy. That store is StageLock's
      * internal class (the public API has no listing), so a change there only empties the editor's dropdown.
      */
     public static Map<String, String> definedStages() {
