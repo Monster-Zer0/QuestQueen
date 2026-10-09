@@ -11,12 +11,12 @@ import java.util.regex.Pattern;
 /**
  * The one door to stages. Everything in Quest Queen that reads or grants a stage ({@code required_stage}, "stage"
  * conditions on links, chapter unlocks and {@code hidden_until}, the stage reward) goes through here, and this picks
- * the installed stage mod: Progression first, then ProgressiveStages, else none (every stage check answers false).
+ * the installed stage mod: StageLock first, then ProgressiveStages, else none (every stage check answers false).
  */
 public final class Stages {
-    public enum Backend { PROGRESSION, PROGRESSIVE_STAGES, NONE }
+    public enum Backend { STAGELOCK, PROGRESSIVE_STAGES, NONE }
 
-    /** Stage id rule Progression enforces (and a safe one for ProgressiveStages): lowercase, 1-64 of [a-z0-9_.:/-]. */
+    /** Stage id rule StageLock enforces (and a safe one for ProgressiveStages): lowercase, 1-64 of [a-z0-9_.:/-]. */
     private static final Pattern VALID = Pattern.compile("^[a-z0-9_.:/-]{1,64}$");
 
     private static Backend backend;
@@ -38,8 +38,8 @@ public final class Stages {
             if (mods == null) {
                 return Backend.NONE;
             }
-            if (mods.isLoaded(ProgressionCompat.MOD_ID)) {
-                return Backend.PROGRESSION;
+            if (mods.isLoaded(StageLockCompat.MOD_ID)) {
+                return Backend.STAGELOCK;
             }
             if (mods.isLoaded(ProgressiveStagesCompat.MOD_ID)) {
                 return Backend.PROGRESSIVE_STAGES;
@@ -56,12 +56,12 @@ public final class Stages {
     public static void register() {
         Backend chosen = backend();
         QuestQueen.LOGGER.info("Quest stages: {}", switch (chosen) {
-            case PROGRESSION -> "Progression";
+            case STAGELOCK -> "StageLock";
             case PROGRESSIVE_STAGES -> "ProgressiveStages";
             case NONE -> "no stage mod installed";
         });
         switch (chosen) {
-            case PROGRESSION -> ProgressionCompat.register();
+            case STAGELOCK -> StageLockCompat.register();
             case PROGRESSIVE_STAGES -> ProgressiveStagesCompat.register();
             case NONE -> {
             }
@@ -70,7 +70,7 @@ public final class Stages {
 
     public static boolean hasStage(ServerPlayer player, String id) {
         return switch (backend()) {
-            case PROGRESSION -> ProgressionCompat.hasStage(player, id);
+            case STAGELOCK -> StageLockCompat.hasStage(player, id);
             case PROGRESSIVE_STAGES -> ProgressiveStagesCompat.hasStage(player, id);
             case NONE -> false;
         };
@@ -78,7 +78,7 @@ public final class Stages {
 
     public static boolean grantStage(ServerPlayer player, String id) {
         return switch (backend()) {
-            case PROGRESSION -> ProgressionCompat.grantStage(player, id);
+            case STAGELOCK -> StageLockCompat.grantStage(player, id);
             case PROGRESSIVE_STAGES -> ProgressiveStagesCompat.grantStage(player, id);
             case NONE -> false;
         };
@@ -87,7 +87,7 @@ public final class Stages {
     /** The player's stages, sent to the client so the book can decide stage-gated quests the way the server does. */
     public static Set<String> ownedStages(ServerPlayer player) {
         return switch (backend()) {
-            case PROGRESSION -> ProgressionCompat.ownedStages(player);
+            case STAGELOCK -> StageLockCompat.ownedStages(player);
             case PROGRESSIVE_STAGES -> ProgressiveStagesCompat.ownedStages(player);
             case NONE -> Set.of();
         };
@@ -96,25 +96,25 @@ public final class Stages {
     /** Does a synced stage list contain {@code id}? Each stage mod has its own id rules. */
     public static boolean matches(Set<String> owned, String id) {
         return switch (backend()) {
-            case PROGRESSION -> ProgressionCompat.matches(owned, id);
+            case STAGELOCK -> StageLockCompat.matches(owned, id);
             case PROGRESSIVE_STAGES -> ProgressiveStagesCompat.matches(owned, id);
             case NONE -> false;
         };
     }
 
-    /** Stages the pack defines (id → display name), for the editor's dropdown. Only Progression lists them. */
+    /** Stages the pack defines (id → display name), for the editor's dropdown. Only StageLock lists them. */
     public static Map<String, String> definedStages() {
-        return backend() == Backend.PROGRESSION ? ProgressionCompat.definedStages() : Map.of();
+        return backend() == Backend.STAGELOCK ? StageLockCompat.definedStages() : Map.of();
     }
 
-    /** A stage id Progression accepts after lowercasing (it lowercases ids itself). */
+    /** A stage id StageLock accepts after lowercasing (it lowercases ids itself). */
     public static boolean validId(String id) {
         return id != null && VALID.matcher(id.trim().toLowerCase(java.util.Locale.ROOT)).matches();
     }
 
-    /** Condition and reward type names that mean "a stage". */
+    /** Condition and reward type names that mean "a stage". "progression" is StageLock's old name (packs from 1.1.213). */
     public static boolean isStageType(String type) {
-        return "stage".equals(type) || "progression".equals(type) || "progressivestages".equals(type);
+        return "stage".equals(type) || "stagelock".equals(type) || "progression".equals(type) || "progressivestages".equals(type);
     }
 
     /** Test hook: pin the backend (unit tests run without a mod list). */

@@ -7,6 +7,7 @@ import dev.aof.questqueen.data.reward.StageReward;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -22,22 +23,22 @@ class StagesTest {
     }
 
     @Test
-    void stageIdsFollowProgressionsRule() {
+    void stageIdsFollowStageLocksRule() {
         assertTrue(Stages.validId("iron_age"));
         assertTrue(Stages.validId("mypack:nether/deep-1.0"));
-        assertTrue(Stages.validId("Iron_Age"), "Progression lowercases ids itself");
+        assertTrue(Stages.validId("Iron_Age"), "StageLock lowercases ids itself");
         assertFalse(Stages.validId(""));
         assertFalse(Stages.validId("iron age"), "no spaces");
         assertFalse(Stages.validId("x".repeat(65)), "at most 64 characters");
     }
 
     @Test
-    void progressionMatchesExactlyAfterLowercasing() {
-        Stages.force(Stages.Backend.PROGRESSION);
+    void stageLockMatchesExactlyAfterLowercasing() {
+        Stages.force(Stages.Backend.STAGELOCK);
         Set<String> owned = Set.of("mypack:iron_age");
         assertTrue(Stages.matches(owned, "mypack:iron_age"));
         assertTrue(Stages.matches(owned, "MyPack:Iron_Age"));
-        assertFalse(Stages.matches(owned, "iron_age"), "Progression ids have no implied namespace");
+        assertFalse(Stages.matches(owned, "iron_age"), "StageLock ids have no implied namespace");
         assertFalse(Stages.matches(Set.of("iron_age"), "mypack:iron_age"));
     }
 
@@ -55,14 +56,17 @@ class StagesTest {
     }
 
     @Test
-    void progressionIsAStageTypeName() {
+    void stageLockAndItsOldNameAreStageTypeNames() {
         assertTrue(Stages.isStageType("stage"));
-        assertTrue(Stages.isStageType("progression"));
+        assertTrue(Stages.isStageType("stagelock"));
+        assertTrue(Stages.isStageType("progression"), "StageLock's old name, from 1.1.213 packs");
         assertTrue(Stages.isStageType("progressivestages"));
         assertFalse(Stages.isStageType("advancement"));
-        Reward reward = Reward.CODEC.parse(JsonOps.INSTANCE,
-                JsonParser.parseString("{\"type\":\"progression\",\"stage\":\"iron_age\"}")).getOrThrow();
-        assertInstanceOf(StageReward.class, reward);
-        assertEquals("iron_age", ((StageReward) reward).stage());
+        for (String type : List.of("stagelock", "progression")) {
+            Reward reward = Reward.CODEC.parse(JsonOps.INSTANCE,
+                    JsonParser.parseString("{\"type\":\"" + type + "\",\"stage\":\"iron_age\"}")).getOrThrow();
+            assertInstanceOf(StageReward.class, reward, type);
+            assertEquals("iron_age", ((StageReward) reward).stage());
+        }
     }
 }

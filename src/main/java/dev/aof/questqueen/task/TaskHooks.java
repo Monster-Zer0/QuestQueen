@@ -46,7 +46,7 @@ import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 import java.util.ArrayList;
-import dev.aof.questqueen.compat.ProgressionCompat;
+import dev.aof.questqueen.compat.StageLockCompat;
 import dev.aof.questqueen.compat.Stages;
 import dev.aof.questqueen.data.GateCondition;
 import dev.aof.questqueen.data.Link;
@@ -680,15 +680,15 @@ public final class TaskHooks {
                 }
             }
         }
-        problems.addAll(stageProblems(chapters, Stages.backend() == Stages.Backend.PROGRESSION
-                ? ProgressionCompat.serverDefinedStages() : Set.of()));
+        problems.addAll(stageProblems(chapters, Stages.backend() == Stages.Backend.STAGELOCK
+                ? StageLockCompat.serverDefinedStages() : Set.of()));
         return problems;
     }
 
     /**
-     * Stage ids that can never match: not a valid id (Progression's rule, lowercase 1-64 of [a-z0-9_.:/-]), or, when
-     * the pack defines stages, one it does not define. The second catches Progression's namespacing trap: a
-     * definition at data/mypack/progression/stages/iron_age.json with no "id" is mypack:iron_age, not iron_age.
+     * Stage ids that can never match: not a valid id (StageLock's rule, lowercase 1-64 of [a-z0-9_.:/-]), or, when
+     * the pack defines stages, one it does not define. The second catches StageLock's namespacing trap: a
+     * definition at data/mypack/stagelock/stages/iron_age.json with no "id" is mypack:iron_age, not iron_age.
      */
     static List<String> stageProblems(Collection<Chapter> chapters, Set<String> defined) {
         List<String> problems = new ArrayList<>();
@@ -723,7 +723,7 @@ public final class TaskHooks {
                             + " (lowercase, 1-64 characters of a-z 0-9 _ . : / -)");
                 } else if (!defined.isEmpty() && !defined.contains(id.trim().toLowerCase(java.util.Locale.ROOT))) {
                     problems.add(chapter.id() + " " + use[0] + ": stage \"" + id + "\" is not defined by any"
-                            + " Progression stage file; check its namespace");
+                            + " StageLock stage file; check its namespace");
                 }
             }
         }
