@@ -43,6 +43,8 @@ jobs:
           find . -path '*/build/libs/*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' -exec cp {} /tmp/jars/ \;
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The build step edits tracked files (gradlew mode, gradle.properties); drop that before switching.
+          git reset -q --hard
           git fetch origin jars || true
           if git rev-parse --verify -q origin/jars >/dev/null; then git checkout -B jars origin/jars; else git checkout --orphan jars; git rm -rfq .; fi
           git clean -fdxq
