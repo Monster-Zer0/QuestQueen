@@ -160,7 +160,7 @@ describe("validation", () => {
     expect(validate(c)).toContain("The fork from hub has only 1 path; a fork needs at least 2");
   });
 
-  it("stage ids follow Progression's rule wherever a stage is named", () => {
+  it("stage ids follow StageLock's rule wherever a stage is named", () => {
     expect(validStageId("mypack:iron_age")).toBe(true);
     expect(validStageId("Iron_Age")).toBe(true);
     expect(validStageId("iron age")).toBe(false);
@@ -174,5 +174,10 @@ describe("validation", () => {
     expect(errors.some((e) => e.startsWith("Chapter unlock"))).toBe(true);
     const ok = chapter("p:c", [tile("q", 0, 0, { required_stage: "mypack:iron_age", rewards: [{ type: "stage", stage: "iron_age" }] })]);
     expect(validate(ok)).toEqual([]);
+    // StageLock's type name, and its old name from 1.1.213 packs, are stage conditions too.
+    for (const type of ["stagelock", "progression"]) {
+      const named = chapter("p:c", [tile("q", 0, 0)], { unlock: { op: "and", conditions: [{ type, id: "Bad Stage!" }] } });
+      expect(validate(named).some((e) => e.startsWith("Chapter unlock") && e.includes("not a valid stage id"))).toBe(true);
+    }
   });
 });
