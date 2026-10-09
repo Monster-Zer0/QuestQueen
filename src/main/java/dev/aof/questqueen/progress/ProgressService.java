@@ -781,7 +781,7 @@ public final class ProgressService {
                     condition.id(), QuestDefinitions.chapters(), completedTiles);
             case "trigger" -> completedTiles.contains(condition.id())
                     || TeamService.hasFlag(TeamService.current(player), "trigger:" + condition.id());
-            case "stage", "progression", "progressivestages" ->
+            case "stage", "stagelock", "progression", "progressivestages" ->
                     dev.aof.questqueen.compat.Stages.hasStage(player, condition.id());
             default -> false;
         };

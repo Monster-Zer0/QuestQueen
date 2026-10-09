@@ -15,9 +15,15 @@ const TASK_REQUIRES: Record<string, string[]> = {
 };
 /** Free-text fields: they must be filled in but are not resource ids. */
 const FREE_TEXT = new Set(["npc", "trigger", "command", "message"]);
-/** Progression's stage id rule (it lowercases ids itself): 1-64 of a-z 0-9 _ . : / - */
+/** StageLock's stage id rule (it lowercases ids itself): 1-64 of a-z 0-9 _ . : / - */
 const STAGE_ID = /^[a-z0-9_.:/-]{1,64}$/;
-const STAGE_TYPES = new Set(["stage", "progression", "progressivestages"]);
+// "progression" is StageLock's old name, kept for packs written for 1.1.213.
+const STAGE_TYPES = new Set(["stage", "stagelock", "progression", "progressivestages"]);
+
+/** A condition or reward type that means "a stage" under any of its names. */
+export function isStageType(type: string | undefined): boolean {
+  return type !== undefined && STAGE_TYPES.has(type);
+}
 
 export function validStageId(id: string): boolean {
   return STAGE_ID.test(id.trim().toLowerCase());

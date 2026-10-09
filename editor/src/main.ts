@@ -33,7 +33,7 @@ import {
 } from "./types";
 import { emptyCatalog, fromApi, type CatalogEntry, type PackCatalog } from "./packCatalog";
 import { cleanChapter, descendantIds, isIntroChapter, minGrid, newTile, packNamespace, uniqueChapterId } from "./model";
-import { validate } from "./validate";
+import { isStageType, validate } from "./validate";
 import { snapshot as snapshotUndo, undo as undoChapter } from "./undo";
 import { iconUrl, itemSelectHtml, readItemSelect, wireItemSelects } from "./itemSelect";
 import { glyphPickerHtml, glyphSvg, previewIntroHtml, readGlyph, wireGlyphPicker } from "./glyphs";
@@ -1288,9 +1288,9 @@ function showCard(tile?: Tile) {
     <div style="display:flex;gap:6px">
       <select id="tile-hidden-type" ${disabled}>
         ${["", "quest_complete", "stage", "advancement", "team_flag", "trigger"].map((type) =>
-          `<option value="${type}" ${(tile?.hidden_until?.type ?? "") === type ? "selected" : ""}>${type || "(always shown)"}</option>`).join("")}
+          `<option value="${type}" ${stageAsOne(tile?.hidden_until?.type ?? "") === type ? "selected" : ""}>${type || "(always shown)"}</option>`).join("")}
       </select>
-      <input id="tile-hidden-id" ${tile?.hidden_until?.type === "stage" ? `list="pack-stages"` : ""} value="${escapeAttr(tile?.hidden_until?.id ?? "")}" placeholder="id" ${ro} />
+      <input id="tile-hidden-id" ${isStageType(tile?.hidden_until?.type) ? `list="pack-stages"` : ""} value="${escapeAttr(tile?.hidden_until?.id ?? "")}" placeholder="id" ${ro} />
     </div>
     <label>JUMP TARGET (CHAPTER / QUEST)</label>
     <div style="display:flex;gap:6px">
@@ -1392,10 +1392,10 @@ function showCard(tile?: Tile) {
         <legend>CONDITION ${index + 1}</legend>
         <select data-unlock-type="${index}" ${disabled}>
           ${["quest_complete", "chapter_complete", "advancement", "stage", "trigger", "team_flag", "scoreboard"].map((type) =>
-            `<option value="${type}" ${condition.type === type ? "selected" : ""}>${type}</option>`
+            `<option value="${type}" ${stageAsOne(condition.type) === type ? "selected" : ""}>${type}</option>`
           ).join("")}
         </select>
-        <input data-unlock-id="${index}" ${condition.type === "stage" ? `list="pack-stages"` : ""} value="${escapeAttr(condition.id)}" placeholder="${condition.type === "stage" ? "iron_age" : "questqueen:starter/go_nether"}" ${ro} />
+        <input data-unlock-id="${index}" ${isStageType(condition.type) ? `list="pack-stages"` : ""} value="${escapeAttr(condition.id)}" placeholder="${isStageType(condition.type) ? "iron_age" : "questqueen:starter/go_nether"}" ${ro} />
         ${authoring ? `<button type="button" data-remove-unlock="${index}">REMOVE</button>` : ""}
       </fieldset>
     `).join("")}
@@ -1707,6 +1707,11 @@ function renameChapter(tile?: Tile) {
   }
   renderChapterTree();
   showCard(tile);
+}
+
+/** The type selects list one "stage"; a pack's "stagelock" / "progressivestages" / "progression" shows as it. */
+function stageAsOne(type: string): string {
+  return isStageType(type) ? "stage" : type;
 }
 
 function escapeAttr(value: string): string {

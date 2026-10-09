@@ -15,7 +15,7 @@ export interface PackCatalog {
   fluids?: CatalogEntry[];
   dimensions?: CatalogEntry[];
   stats?: CatalogEntry[];
-  /** Stages the pack defines (Progression), with display names. */
+  /** Stages the pack defines (StageLock), with display names. */
   stages?: CatalogEntry[];
 }
 
