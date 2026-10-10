@@ -1,0 +1,54 @@
+{
+  "id": "questqueen:rich_probe",
+  "title": "Rich Descriptions",
+  "grid_width": 6,
+  "grid_height": 3,
+  "tiles": [
+    {
+      "id": "long",
+      "pos": {
+        "x": 0,
+        "y": 1
+      },
+      "title": "The Founding",
+      "description": "# The Founding\nWelcome, **adventurer**! This quest shows *every* kind of {#FFAA00}formatting{/#} a description can use.\n\n## What you need\n- {item:minecraft:oak_log x8} for the first house\n- {item:minecraft:cobblestone x32} for the foundations\n- A steady supply of {item:minecraft:bread x4}\n---\n## The sign\n![The Minecraft logo](minecraft:textures/gui/title/minecraft.png)\n__Underlined__ text and {size:12}larger text{/size} work too. {glyph:star}\n\n## Tips\n- Scroll with the mouse wheel.\n- Press the expand button to read it in a big window.\n- A picture that is missing shows a frame:\n![Not there](minecraft:textures/quest/not_there.png)\n\nThat is everything. Good luck out there, and may your **tools** never break.",
+      "icon": {
+        "item": "minecraft:oak_sapling"
+      },
+      "tasks": [
+        {
+          "type": "checkmark"
+        }
+      ]
+    },
+    {
+      "id": "plain",
+      "pos": {
+        "x": 2,
+        "y": 1
+      },
+      "title": "Plain Text",
+      "description": "No markup at all.\nJust two plain lines, as every older pack wrote them.",
+      "tasks": [
+        {
+          "type": "checkmark"
+        }
+      ]
+    },
+    {
+      "id": "bad",
+      "pos": {
+        "x": 4,
+        "y": 1
+      },
+      "title": "Broken Markup",
+      "description": "![x](mypack:a.jpg)\n{item:Not An Id}\n{glyph:nope}",
+      "tasks": [
+        {
+          "type": "checkmark"
+        }
+      ]
+    }
+  ],
+  "links": []
+}

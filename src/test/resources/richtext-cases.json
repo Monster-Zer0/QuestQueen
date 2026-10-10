@@ -1,0 +1,1043 @@
+[
+ {
+  "source": "plain text",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "plain text",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "plain text"
+ },
+ {
+  "source": "a **bold** b *it* c __un__ d {#FF8800}orange{/#}",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "a ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "t": "bold",
+      "c": 0,
+      "s": 9,
+      "b": true,
+      "i": false,
+      "u": false
+     },
+     {
+      "t": " b ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "t": "it",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": true,
+      "u": false
+     },
+     {
+      "t": " c ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "t": "un",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": true
+     },
+     {
+      "t": " d ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "t": "orange",
+      "c": 4294936576,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "a bold b it c un d orange"
+ },
+ {
+  "source": "**bold and *both* here**",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "bold and ",
+      "c": 0,
+      "s": 9,
+      "b": true,
+      "i": false,
+      "u": false
+     },
+     {
+      "t": "both",
+      "c": 0,
+      "s": 9,
+      "b": true,
+      "i": true,
+      "u": false
+     },
+     {
+      "t": " here",
+      "c": 0,
+      "s": 9,
+      "b": true,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "bold and both here"
+ },
+ {
+  "source": "{#00FF00}**green bold**{/#}",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "green bold",
+      "c": 4278255360,
+      "s": 9,
+      "b": true,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "green bold"
+ },
+ {
+  "source": "**not closed",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "**not closed",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "**not closed"
+ },
+ {
+  "source": "5 * 3 * 2",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "5 * 3 * 2",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "5 * 3 * 2"
+ },
+ {
+  "source": "{#GGGGGG}x{/#}",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "{#GGGGGG}x{/#}",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "{#GGGGGG}x{/#}"
+ },
+ {
+  "source": "{#FF0000}no close",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "{#FF0000}no close",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "{#FF0000}no close"
+ },
+ {
+  "source": "{size:99}big{/size} {size:1}small{/size} {size:12}mid{/size}",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "big",
+      "c": 0,
+      "s": 24,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "t": " ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "t": "small",
+      "c": 0,
+      "s": 8,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "t": " ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "t": "mid",
+      "c": 0,
+      "s": 12,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "big small mid"
+ },
+ {
+  "source": "{size:abc}x{/size}",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "{size:abc}x{/size}",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "{size:abc}x{/size}"
+ },
+ {
+  "source": "\\*lit\\* \\{item:minecraft:dirt} a\\\\b",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "*lit* {item:minecraft:dirt} a\\b",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "*lit* {item:minecraft:dirt} a\\b"
+ },
+ {
+  "source": "# Big\n## Small\n#hashtag\n- bullet\n-5 deg\n• dot",
+  "shape": [
+   {
+    "h": "title",
+    "bullet": false,
+    "in": [
+     {
+      "t": "Big",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   },
+   {
+    "h": "subtitle",
+    "bullet": false,
+    "in": [
+     {
+      "t": "Small",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   },
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "#hashtag",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   },
+   {
+    "h": "none",
+    "bullet": true,
+    "in": [
+     {
+      "t": "bullet",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   },
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "-5 deg",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   },
+   {
+    "h": "none",
+    "bullet": true,
+    "in": [
+     {
+      "t": "dot",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "Big\nSmall\n#hashtag\nbullet\n-5 deg\ndot"
+ },
+ {
+  "source": "Bring {item:minecraft:diamond} or {item:minecraft:iron_ingot x3}.",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "Bring ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "item": "minecraft:diamond",
+      "n": 1
+     },
+     {
+      "t": " or ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "item": "minecraft:iron_ingot",
+      "n": 3
+     },
+     {
+      "t": ".",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "Bring  or ."
+ },
+ {
+  "source": "{item:Not An Id} {item:minecraft:dirt xtwo} {item:} {item:minecraft:dirt x0} {item:minecraft:dirt x99999} {item:Minecraft:dirt}",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "{item:Not An Id} {item:minecraft:dirt xtwo} {item:} ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "item": "minecraft:dirt",
+      "n": 1
+     },
+     {
+      "t": " ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "item": "minecraft:dirt",
+      "n": 9999
+     },
+     {
+      "t": " {item:Minecraft:dirt}",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "{item:Not An Id} {item:minecraft:dirt xtwo} {item:}   {item:Minecraft:dirt}"
+ },
+ {
+  "source": "{glyph:sword} {glyph:nope} {#FF0000}{glyph:flask}{/#}",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "glyph": "sword",
+      "c": 0
+     },
+     {
+      "t": " {glyph:nope} ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "glyph": "flask",
+      "c": 4294901760
+     }
+    ]
+   }
+  ],
+  "plain": " {glyph:nope} "
+ },
+ {
+  "source": "![The castle](mypack:textures/quest/castle.png)",
+  "shape": [
+   {
+    "img": "mypack:textures/quest/castle.png",
+    "cap": "The castle"
+   }
+  ],
+  "plain": "The castle"
+ },
+ {
+  "source": "![x](mypack:quest/castle.png)\n![x](mypack:textures/a.jpg)\n![x](https://e.com/a.png)\n![x](nope)",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "![x](mypack:quest/castle.png)",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   },
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "![x](mypack:textures/a.jpg)",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   },
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "![x](https://e.com/a.png)",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   },
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "![x](nope)",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "![x](mypack:quest/castle.png)\n![x](mypack:textures/a.jpg)\n![x](https://e.com/a.png)\n![x](nope)"
+ },
+ {
+  "source": "see ![x](mypack:textures/a.png) here",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "see ![x](mypack:textures/a.png) here",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "see ![x](mypack:textures/a.png) here"
+ },
+ {
+  "source": "one\n\n\n---\ntwo\n",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "one",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   },
+   "gap",
+   "rule",
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "two",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "one\ntwo"
+ },
+ {
+  "source": "  leading spaces\n   - indented bullet",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "  leading spaces",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   },
+   {
+    "h": "none",
+    "bullet": true,
+    "in": [
+     {
+      "t": "indented bullet",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "  leading spaces\nindented bullet"
+ },
+ {
+  "source": "Windows\r\nline endings\rhere",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "Windows",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   },
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "line endings",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   },
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "here",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "Windows\nline endings\nhere"
+ },
+ {
+  "source": "",
+  "shape": [],
+  "plain": ""
+ },
+ {
+  "source": "   \n  ",
+  "shape": [],
+  "plain": ""
+ },
+ {
+  "source": "## ## nested?\n# # double",
+  "shape": [
+   {
+    "h": "subtitle",
+    "bullet": false,
+    "in": [
+     {
+      "t": "## nested?",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   },
+   {
+    "h": "title",
+    "bullet": false,
+    "in": [
+     {
+      "t": "# double",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "## nested?\n# double"
+ },
+ {
+  "source": "![](minecraft:textures/gui/title/minecraft.png)",
+  "shape": [
+   {
+    "img": "minecraft:textures/gui/title/minecraft.png",
+    "cap": ""
+   }
+  ],
+  "plain": ""
+ },
+ {
+  "source": "__a__ __ b__ a__b",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "a",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": true
+     },
+     {
+      "t": " ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "t": " b",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": true
+     },
+     {
+      "t": " a__b",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "a  b a__b"
+ },
+ {
+  "source": "**",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "**",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "**"
+ },
+ {
+  "source": "*",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "*",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "*"
+ },
+ {
+  "source": "{",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "{",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "{"
+ },
+ {
+  "source": "{#",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "{#",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "{#"
+ },
+ {
+  "source": "\\",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "\\",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "\\"
+ },
+ {
+  "source": "![",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "![",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     }
+    ]
+   }
+  ],
+  "plain": "!["
+ },
+ {
+  "source": "- ",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": true,
+    "in": []
+   }
+  ],
+  "plain": ""
+ },
+ {
+  "source": "{item:minecraft:dirt x3} {item:minecraft:dirt X2}",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "item": "minecraft:dirt",
+      "n": 3
+     },
+     {
+      "t": " ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "item": "minecraft:dirt",
+      "n": 2
+     }
+    ]
+   }
+  ],
+  "plain": ""
+ },
+ {
+  "source": "Mixed: {#FFAA00}**gold {item:minecraft:gold_ingot x2}**{/#} and __{glyph:star}__",
+  "shape": [
+   {
+    "h": "none",
+    "bullet": false,
+    "in": [
+     {
+      "t": "Mixed: ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "t": "gold ",
+      "c": 4294945280,
+      "s": 9,
+      "b": true,
+      "i": false,
+      "u": false
+     },
+     {
+      "item": "minecraft:gold_ingot",
+      "n": 2
+     },
+     {
+      "t": " and ",
+      "c": 0,
+      "s": 9,
+      "b": false,
+      "i": false,
+      "u": false
+     },
+     {
+      "glyph": "star",
+      "c": 0
+     }
+    ]
+   }
+  ],
+  "plain": "Mixed: gold  and "
+ }
+]
