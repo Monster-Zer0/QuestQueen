@@ -36,7 +36,8 @@ import { cleanChapter, descendantIds, isIntroChapter, minGrid, newTile, packName
 import { isStageType, validate } from "./validate";
 import { snapshot as snapshotUndo, undo as undoChapter } from "./undo";
 import { iconUrl, itemSelectHtml, readItemSelect, wireItemSelects } from "./itemSelect";
-import { glyphPickerHtml, glyphSvg, previewIntroHtml, readGlyph, wireGlyphPicker } from "./glyphs";
+import { GLYPH_IDS, glyphPickerHtml, glyphSvg, previewIntroHtml, readGlyph, wireGlyphPicker } from "./glyphs";
+import { descriptionProblems, richToHtml, validTexture } from "./richtext";
 import {
   DEFAULT_THEME_ID,
   STOCK_BACKGROUNDS,
@@ -1279,7 +1280,11 @@ function showCard(tile?: Tile) {
     <label>TILE TITLE</label>
     <input id="tile-title" value="${escapeAttr(tile?.title ?? "")}" ${ro} />
     <label>DESCRIPTION</label>
-    <textarea id="tile-body" rows="3" ${ro}>${escapeText(tile?.description ?? "")}</textarea>
+    ${authoring ? descriptionToolsHtml() : ""}
+    <textarea id="tile-body" rows="6" ${ro}>${escapeText(tile?.description ?? "")}</textarea>
+    <div id="desc-preview" class="desc-preview" aria-label="Description preview">${richToHtml(tile?.description ?? "", { iconUrl: (id) => iconUrl(bridgeBase(), id) })}</div>
+    <div id="desc-problems" class="desc-problems">${descriptionProblems(tile?.description).map((p) => `<div>${escapeText(p)}</div>`).join("")}</div>
+    <p class="intro-note">**bold** *italic* __underline__ · # heading · - bullet · --- · {#RRGGBB}colour{/#} · {item:minecraft:diamond x3} · {glyph:star} · ![caption](pack:textures/name.png)</p>
     ${itemSelectHtml(`id="tile-item-select"`, tile?.icon?.item ?? "", !authoring, "ICON")}
     ${glyphPickerHtml(tile?.icon?.glyph ?? "", !authoring, "tile-glyph")}
     <label>REQUIRES STAGE</label>
@@ -1536,6 +1541,7 @@ function showCard(tile?: Tile) {
     draw();
   };
   wireItemSelects(cardBody, catalog.items, bridgeBase(), apply);
+  if (tile && !intro) wireDescriptionTools(cardBody);
   wireGlyphPicker(cardBody, "#chapter-glyph", apply);
   wireGlyphPicker(cardBody, "#tile-glyph", apply);
   cardBody.querySelectorAll("input,textarea").forEach((el) => {
@@ -1716,6 +1722,138 @@ function stageAsOne(type: string): string {
 
 function escapeAttr(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+/** The formatting toolbar above a quest's description: buttons that put the markup in for the author. */
+function descriptionToolsHtml(): string {
+  return `
+    <div class="desc-tools" id="desc-tools">
+      <div class="desc-tools-row">
+        <button type="button" data-fmt="bold" title="Bold: **text**"><b>B</b></button>
+        <button type="button" data-fmt="italic" title="Italic: *text*"><i>I</i></button>
+        <button type="button" data-fmt="underline" title="Underline: __text__"><u>U</u></button>
+        <button type="button" data-fmt="h1" title="Heading: # text">H1</button>
+        <button type="button" data-fmt="h2" title="Smaller heading: ## text">H2</button>
+        <button type="button" data-fmt="bullet" title="Bullet: - text">&bull;</button>
+        <button type="button" data-fmt="rule" title="Divider line: ---">&mdash;</button>
+        <input type="color" id="desc-color" value="#ffaa00" title="Text colour" aria-label="Text colour" />
+        <button type="button" data-fmt="color" title="Colour the selected text: {#RRGGBB}text{/#}">Colour</button>
+        <select id="desc-glyph" title="Insert a glyph" aria-label="Insert a glyph">
+          <option value="">Glyph…</option>${GLYPH_IDS.map((id) => `<option value="${id}">${id}</option>`).join("")}
+        </select>
+      </div>
+      <div class="desc-tools-row desc-tools-pics">
+        ${itemSelectHtml(`id="desc-item" data-tool="1"`, "", false, "ITEM ICON IN TEXT")}
+        <label>PICTURE (RESOURCE PACK TEXTURE)</label>
+        <div class="desc-pic-row">
+          <input id="desc-pic-path" placeholder="mypack:textures/quest/castle.png" />
+          <input id="desc-pic-caption" placeholder="caption (optional)" />
+          <button type="button" data-fmt="picture">Add picture</button>
+        </div>
+        <span id="desc-tools-note" class="hint-text" role="status"></span>
+      </div>
+    </div>`;
+}
+
+/** Wire the toolbar and the live preview to a quest's description box. Every edit goes through an input event. */
+function wireDescriptionTools(root: HTMLElement) {
+  const area = root.querySelector<HTMLTextAreaElement>("#tile-body");
+  if (!area) return;
+  const preview = root.querySelector<HTMLElement>("#desc-preview");
+  const problems = root.querySelector<HTMLElement>("#desc-problems");
+  const note = root.querySelector<HTMLElement>("#desc-tools-note");
+  const refresh = () => {
+    if (preview) preview.innerHTML = richToHtml(area.value, { iconUrl: (id) => iconUrl(bridgeBase(), id) });
+    if (problems) problems.innerHTML = descriptionProblems(area.value).map((p) => `<div>${escapeText(p)}</div>`).join("");
+  };
+  area.addEventListener("input", refresh);
+  const commit = () => {
+    area.focus();
+    area.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const surround = (open: string, close: string, placeholder: string) => {
+    const a = area.selectionStart;
+    const b = area.selectionEnd;
+    const picked = area.value.slice(a, b) || placeholder;
+    area.value = area.value.slice(0, a) + open + picked + close + area.value.slice(b);
+    area.setSelectionRange(a + open.length, a + open.length + picked.length);
+    commit();
+  };
+  const prefixLines = (prefix: string) => {
+    const a = area.selectionStart;
+    const b = area.selectionEnd;
+    const start = area.value.lastIndexOf("\n", a - 1) + 1;
+    const stop = area.value.indexOf("\n", b) < 0 ? area.value.length : area.value.indexOf("\n", b);
+    const block = area.value.slice(start, stop).split("\n")
+      .map((line) => prefix + line.replace(/^(#{1,2} |- )/, "")).join("\n");
+    area.value = area.value.slice(0, start) + block + area.value.slice(stop);
+    area.setSelectionRange(start, start + block.length);
+    commit();
+  };
+  const insert = (text: string, ownLine = false) => {
+    const a = area.selectionStart;
+    const before = area.value.slice(0, a);
+    const after = area.value.slice(area.selectionEnd);
+    const put = ownLine
+      ? (before && !before.endsWith("\n") ? "\n" : "") + text + (after && !after.startsWith("\n") ? "\n" : "")
+      : text;
+    area.value = before + put + after;
+    area.setSelectionRange(a + put.length, a + put.length);
+    commit();
+  };
+  const say = (text: string, bad = false) => {
+    if (!note) return;
+    note.textContent = text;
+    note.classList.toggle("bad", bad);
+  };
+  root.querySelectorAll<HTMLButtonElement>("#desc-tools [data-fmt]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      say("");
+      switch (button.dataset.fmt) {
+        case "bold": surround("**", "**", "bold text"); break;
+        case "italic": surround("*", "*", "italic text"); break;
+        case "underline": surround("__", "__", "underlined text"); break;
+        case "h1": prefixLines("# "); break;
+        case "h2": prefixLines("## "); break;
+        case "bullet": prefixLines("- "); break;
+        case "rule": insert("---", true); break;
+        case "color": {
+          const hex = (root.querySelector<HTMLInputElement>("#desc-color")?.value ?? "#ffaa00").slice(1).toUpperCase();
+          surround(`{#${hex}}`, "{/#}", "coloured text");
+          break;
+        }
+        case "picture": {
+          const path = root.querySelector<HTMLInputElement>("#desc-pic-path");
+          const caption = root.querySelector<HTMLInputElement>("#desc-pic-caption");
+          const value = path?.value.trim() ?? "";
+          if (!validTexture(value)) {
+            say("Use a resource pack texture path: namespace:textures/name.png", true);
+            break;
+          }
+          insert(`![${(caption?.value ?? "").trim()}](${value})`, true);
+          if (path) path.value = "";
+          if (caption) caption.value = "";
+          break;
+        }
+      }
+    });
+  });
+  root.querySelector<HTMLSelectElement>("#desc-glyph")?.addEventListener("change", (event) => {
+    const select = event.target as HTMLSelectElement;
+    if (select.value) insert(`{glyph:${select.value}}`);
+    select.value = "";
+  });
+  wireItemSelects(root, catalog.items, bridgeBase(), () => {
+    const host = root.querySelector<HTMLElement>(".item-select[data-tool]");
+    const id = host?.dataset.value ?? "";
+    if (!host || !id) return;
+    insert(`{item:${id}}`);
+    host.dataset.value = "";
+    const label = host.querySelector<HTMLElement>(".item-select-label");
+    if (label) label.textContent = "Select item…";
+    host.querySelector<HTMLImageElement>(".item-icon")?.style.setProperty("visibility", "hidden");
+  }, ".item-select[data-tool]");
 }
 
 function escapeText(value: string): string {

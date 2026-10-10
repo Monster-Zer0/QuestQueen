@@ -44,6 +44,26 @@ Each file's `"id"` should use that pack's namespace (`"<pack>:<name>"`). These i
 
 When the pack has its own chapters, the highest-priority `book.json` outside this mod's jar sets the sidebar title. Clicking a task item opens it in EMI, then REI, then JEI, whichever of those is installed.
 
+## Descriptions
+
+A quest's `"description"` is plain text, or text with markup. It scrolls when it is longer than the card, and the card's expand button opens it in a larger reader window.
+
+| Write | You get |
+|---|---|
+| `# Heading`, `## Smaller heading` | headings |
+| `**bold**`, `*italic*`, `__underline__` | emphasis |
+| `{#RRGGBB}text{/#}`, `{size:12}text{/size}` | colour, size (8 to 24) |
+| `- item` | a bullet |
+| `---` | a divider line |
+| `{item:minecraft:diamond}`, `{item:minecraft:iron_ingot x3}` | an item icon in the text; hover it for the name |
+| `{glyph:star}` | one of the built-in glyphs |
+| `![caption](mypack:textures/quest/castle.png)` | a picture, alone on its line |
+| `\*` | a literal `*` (works for any of the markup characters) |
+
+Pictures are ordinary textures: put the PNG in the pack's resource pack (or a mod) and give its full resource location, which starts with `textures/` and ends in `.png`. A picture that cannot be found is drawn as a labelled frame, and the log says which texture it was. Anything that is not valid markup, such as an unclosed tag, is shown as the characters you typed. Descriptions written before this keep working unchanged.
+
+The web editor has buttons for all of this above the description box, a live preview, and flags a picture path or item id that would show up as plain text.
+
 ## Stages
 
 Quest Queen works with a stage mod when one is installed: StageLock (mod id `stagelock`) first, otherwise ProgressiveStages. Neither is required. Stages are used by:

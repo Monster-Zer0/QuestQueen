@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -300,8 +301,40 @@ public class QuestBookScreen extends Screen {
     private int logContentH;
     /** Scroll offset for the CLAIM ALL preview list. */
     private int claimAllScroll;
+    /** Description scroll in the card (per open quest) and the viewport the wheel scrolls, as last painted. */
+    private int descScroll;
+    private String descScrollKey = "";
+    private int descContentH;
+    private int descViewH;
+    private int descX;
+    private int descY;
+    private int descW;
+    private final List<RichDraw.ItemHit> descItemHits = new ArrayList<>();
+    /** The expanded reader window: its own scroll, measured content and painted item icons. */
+    private int readerScroll;
+    private int readerContentH;
+    private int readerViewH;
+    private boolean draggingReaderThumb;
+    private final List<RichDraw.ItemHit> readerItemHits = new ArrayList<>();
+    private int hoverX;
+    private int hoverY;
+    private static final int CARD_IMAGE_MAX_H = 90;
+    private static final int READER_IMAGE_MAX_H = 200;
+    /** Width kept clear at the right of a scrolling description for its scrollbar. */
+    private static final int DESC_BAR = 5;
+    private static final int READER_BAR = 8;
+    /** The expand button sits this far left of the card's right edge, beside the close X. */
+    static final int EXPAND_FROM_RIGHT = 28;
+    private record RichKey(String body, int width, int maxImageH) {
+    }
+    private final Map<RichKey, RichLayout.Laid> richCache = new LinkedHashMap<>(16, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<RichKey, RichLayout.Laid> eldest) {
+            return size() > 48;
+        }
+    };
 
-    private enum ModalKind { NONE, GOTCHA, XOR, CLAIM_ALL }
+    private enum ModalKind { NONE, GOTCHA, XOR, CLAIM_ALL, READER }
 
     /**
      * Where the card footer puts things: reward slots left to right from the content inset, buttons right-aligned
@@ -437,6 +470,8 @@ public class QuestBookScreen extends Screen {
 
     @Override
     protected void init() {
+        richCache.clear();
+        RichDraw.clearCaches();
         // A fresh open creates this instance; every init after that is a re-entry (a child screen
         // returning, or a resize re-init). `closing` is set by removed() and was never cleared, so on
         // the way back the scale re-apply below early-returned (F8: the book drew at the player's
@@ -623,6 +658,8 @@ public class QuestBookScreen extends Screen {
         modal = ModalKind.NONE;
         modalTileId = "";
         claimAllScroll = 0;
+        readerScroll = 0;
+        draggingReaderThumb = false;
     }
 
     /** Locked sidebar / probe chapter — GOTCHA or fade-lock after the cap. */
@@ -1356,7 +1393,7 @@ public class QuestBookScreen extends Screen {
     static boolean matchesSearch(Tile tile, String needle, boolean descriptionVisible) {
         return tile.title().toLowerCase(Locale.ROOT).contains(needle)
                 || tile.id().toLowerCase(Locale.ROOT).contains(needle)
-                || (descriptionVisible && tile.description().toLowerCase(Locale.ROOT).contains(needle));
+                || (descriptionVisible && RichText.plain(tile.description()).toLowerCase(Locale.ROOT).contains(needle));
     }
 
     private void selectSearchHit(SearchHit hit) {
@@ -1497,6 +1534,8 @@ public class QuestBookScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        hoverX = mouseX;
+        hoverY = mouseY;
         try {
             bindChapterTheme();
             updateVisualEffects();
@@ -1855,7 +1894,7 @@ public class QuestBookScreen extends Screen {
                         }
                     }
                 }
-                int right = sidebarWidth() - SIDEBAR_THUMB_PAD;
+                int right = sidebarWidth() - SIDEBAR_RIGHT_PAD;
                 ClientQuestState.ChapterStats stats = locked ? ClientQuestState.ChapterStats.EMPTY
                         : ClientQuestState.chapterStats(entry);
                 int statsW = locked ? 0 : drawSidebarStats(graphics, entry, stats, textX, right, rowY, reveal, rowIndex[0]);
@@ -1975,7 +2014,8 @@ public class QuestBookScreen extends Screen {
     }
 
     static final int SIDEBAR_LABEL_MIN = 28;
-    private static final int SIDEBAR_THUMB_PAD = 8;
+    /** Right margin of the sidebar rows: clear of the collapse tab, which sits on the sidebar's edge. */
+    static final int SIDEBAR_RIGHT_PAD = TAB_W + 2;
 
     private String ellipsize(String text, int maxPx) {
         if (text == null || text.isEmpty() || maxPx < SIDEBAR_LABEL_MIN) {
@@ -2858,6 +2898,10 @@ public class QuestBookScreen extends Screen {
             drawClaimAllModal(graphics, box);
             return;
         }
+        if (modal == ModalKind.READER) {
+            drawReaderModal(graphics, box);
+            return;
+        }
         tinyString(graphics, box.tag(), box.x() + 6, box.y() + 2, MockChrome.tagInk(box.edge()));
         drawCentered(graphics, box.title(), box.x(), box.y() + 16, box.w(), QuestColors.COMPLETED);
         drawCentered(graphics, box.sub(), box.x(), box.y() + 30, box.w(), QuestColors.TEXT);
@@ -2909,6 +2953,9 @@ public class QuestBookScreen extends Screen {
     private ModalLayout modalLayout() {
         if (modal == ModalKind.CLAIM_ALL) {
             return claimAllLayout();
+        }
+        if (modal == ModalKind.READER) {
+            return readerLayout();
         }
         boolean xor = modal == ModalKind.XOR;
         int edge = xor ? QuestColors.XOR_EDGE : QuestColors.MODAL_PINK;
@@ -3060,6 +3107,176 @@ public class QuestBookScreen extends Screen {
                 y + headerBlock, bodyH);
     }
 
+    // ---- rich descriptions: the card body, the expand button and the reader window ------------------------
+
+    private RichLayout.Laid richLaid(String body, int width, int maxImageH) {
+        return richCache.computeIfAbsent(new RichKey(body, width, maxImageH), key -> RichLayout.layout(
+                RichText.parse(key.body()), key.width(), RichDraw.measure(font), RichDraw.sizer(), key.maxImageH()));
+    }
+
+    /**
+     * The description inside the card: whatever fits above the task rows, scrolled with the wheel. A body taller
+     * than that gets a thin scrollbar and is laid out a little narrower to make room for it.
+     */
+    private void drawCardBody(GuiGraphics graphics, String body, int x, int y, int w, int h, int top, int taskSlots) {
+        int bottom = taskSlots > 0 ? taskBlockTop(y, h, taskSlots) - 6 : y + h - FOOTER_FROM_BOTTOM - 9;
+        int viewH = Math.max(RichLayout.LINE, bottom - top);
+        int colW = w - 2 * CARD_PAD;
+        RichLayout.Laid laid = richLaid(body, colW, CARD_IMAGE_MAX_H);
+        boolean scrolls = laid.height() > viewH;
+        if (scrolls) {
+            laid = richLaid(body, colW - DESC_BAR, CARD_IMAGE_MAX_H);
+        }
+        descContentH = laid.height();
+        descViewH = viewH;
+        descX = x + CARD_PAD;
+        descY = top;
+        descW = colW;
+        descScroll = RichLayout.clampScroll(descScroll, descContentH, descViewH);
+        lastBodyBudget = viewH / 10;
+        descItemHits.clear();
+        graphics.enableScissor(x + CARD_PAD, top, x + w - CARD_PAD, top + viewH);
+        try {
+            RichDraw.draw(graphics, font, laid, x + CARD_PAD, top, descScroll, viewH, QuestColors.MUTED,
+                    QuestColors.SIDEBAR_HEADER, descItemHits);
+        } finally {
+            graphics.disableScissor();
+        }
+        if (descContentH > descViewH) {
+            drawScrollbar(graphics, x + w - CARD_PAD - 2, top, viewH, descContentH, descScroll);
+        }
+    }
+
+    private static void drawScrollbar(GuiGraphics graphics, int trackX, int top, int viewH, int contentH,
+                                      int scroll) {
+        int[] thumb = RichLayout.thumb(viewH, viewH, contentH, scroll);
+        MockChrome.box(graphics, trackX, top, 2, viewH, QuestColors.SIDEBAR_EDGE);
+        MockChrome.box(graphics, trackX, top + thumb[0], 2, thumb[1], QuestColors.SIDEBAR_HEADER);
+    }
+
+    private static void drawExpandButton(GuiGraphics graphics, int x, int y, boolean hover) {
+        MockChrome.readerIcon(graphics, x + 1, y + 1, hover ? QuestColors.TEXT : QuestColors.SIDEBAR_HEADER);
+    }
+
+    private boolean drawDescItemTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
+        if (!over(descX, descY, descW, descViewH, mouseX, mouseY)) {
+            return false;
+        }
+        for (RichDraw.ItemHit hit : descItemHits) {
+            if (over(hit.x(), hit.y(), hit.w(), hit.h(), mouseX, mouseY)) {
+                graphics.renderTooltip(font, new ItemStack(hit.item()), mouseX, mouseY);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void openReader(String tileId) {
+        readerScroll = 0;
+        readerContentH = 0;
+        readerViewH = 0;
+        openModal(ModalKind.READER, tileId);
+    }
+
+    /** The wheel, in pixels, for the reader when it is open and for the card's description otherwise. */
+    private void scrollDescription(int pixels) {
+        if (modal == ModalKind.READER) {
+            readerScroll = RichLayout.clampScroll(readerScroll + pixels, readerContentH, readerViewH);
+        } else {
+            descScroll = RichLayout.clampScroll(descScroll + pixels, descContentH, descViewH);
+        }
+    }
+
+    private boolean readerKey(int keyCode) {
+        int page = Math.max(20, readerViewH - 12);
+        switch (keyCode) {
+            case GLFW.GLFW_KEY_DOWN -> scrollDescription(18);
+            case GLFW.GLFW_KEY_UP -> scrollDescription(-18);
+            case GLFW.GLFW_KEY_PAGE_DOWN, GLFW.GLFW_KEY_SPACE -> scrollDescription(page);
+            case GLFW.GLFW_KEY_PAGE_UP -> scrollDescription(-page);
+            case GLFW.GLFW_KEY_HOME -> readerScroll = 0;
+            case GLFW.GLFW_KEY_END -> readerScroll = RichLayout.maxScroll(readerContentH, readerViewH);
+            default -> {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void clickReader(ModalLayout box, double mouseX, double mouseY) {
+        boolean inside = over(box.x(), box.y(), box.w(), box.h(), mouseX, mouseY);
+        if (!inside || over(box.btnX(), box.btnY(), box.btnW(), box.btnH(), mouseX, mouseY)
+                || over(box.x() + box.w() - 14, box.y() + 1, 12, 12, mouseX, mouseY)) {
+            dismissModal();
+            return;
+        }
+        if (readerContentH > readerViewH && over(box.x() + box.w() - 14, box.bodyTop(), 12, box.bodyH(), mouseX, mouseY)) {
+            draggingReaderThumb = true;
+            readerScroll = RichLayout.scrollForThumb((int) mouseY - box.bodyTop(), box.bodyH(), box.bodyH(),
+                    readerContentH);
+        }
+    }
+
+    private ModalLayout readerLayout() {
+        Tile tile = chapter.tile(modalTileId).orElse(null);
+        String body = tile == null ? "" : inspectBody(tile);
+        int w = Math.max(220, Math.min(460, contentWidth() - 40));
+        w = Math.min(w, Math.max(120, width - 8));
+        int btnH = 12;
+        int closeW = pillW("CLOSE");
+        int headerBlock = 46;
+        int footer = 8 + btnH + 8;
+        int content = richLaid(body, w - 28 - READER_BAR, READER_IMAGE_MAX_H).height();
+        int maxH = Math.max(headerBlock + footer + 36, height - 24);
+        int bodyH = Math.max(36, Math.min(content, maxH - headerBlock - footer));
+        int h = headerBlock + bodyH + footer;
+        int x = boardLeft() + Math.max(8, (contentWidth() - w) / 2);
+        x = Math.max(4, Math.min(x, Math.max(4, width - w - 4)));
+        int y = Math.max(8, (height - h) / 2);
+        TileVisual visual = tile == null ? TileVisual.CURRENT : ClientQuestState.visual(chapter, tile);
+        int edge = borderColor(visual) == 0 ? QuestColors.SIDEBAR_HEADER : borderColor(visual);
+        String tag = headerLabel(visual, tile);
+        String title = tile == null ? "" : (tile.title().isBlank() ? tile.id() : tile.title()).toUpperCase(Locale.ROOT);
+        String sub = chapter == null || chapter.title().isBlank() ? "" : chapter.title().toUpperCase(Locale.ROOT);
+        return new ModalLayout(x, y, w, h, x + (w - closeW) / 2, y + h - 8 - btnH, closeW, btnH, 0, 0,
+                tabWidth(tag, w - 20), edge, tag, title, sub, "CLOSE", List.of(), y + headerBlock, bodyH);
+    }
+
+    private void drawReaderModal(GuiGraphics graphics, ModalLayout box) {
+        tinyString(graphics, box.tag(), box.x() + 6, box.y() + 2, MockChrome.tagInk(box.edge()));
+        drawCentered(graphics, ellipsize(box.title(), box.w() - 40), box.x(), box.y() + 16, box.w(), QuestColors.TEXT);
+        if (!box.sub().isEmpty()) {
+            drawCentered(graphics, ellipsize(box.sub(), box.w() - 40), box.x(), box.y() + 30, box.w(),
+                    QuestColors.MUTED);
+        }
+        Tile tile = chapter.tile(modalTileId).orElse(null);
+        String body = tile == null ? "" : inspectBody(tile);
+        RichLayout.Laid laid = richLaid(body, box.w() - 28 - READER_BAR, READER_IMAGE_MAX_H);
+        readerContentH = laid.height();
+        readerViewH = box.bodyH();
+        readerScroll = RichLayout.clampScroll(readerScroll, readerContentH, readerViewH);
+        readerItemHits.clear();
+        graphics.enableScissor(box.x() + 14, box.bodyTop(), box.x() + box.w() - 14, box.bodyTop() + box.bodyH());
+        try {
+            RichDraw.draw(graphics, font, laid, box.x() + 14, box.bodyTop(), readerScroll, box.bodyH(),
+                    QuestColors.TEXT, QuestColors.SIDEBAR_HEADER, readerItemHits);
+        } finally {
+            graphics.disableScissor();
+        }
+        if (readerContentH > readerViewH) {
+            drawScrollbar(graphics, box.x() + box.w() - 10, box.bodyTop(), box.bodyH(), readerContentH, readerScroll);
+        }
+        drawButtonLabel(graphics, box.btnX(), box.btnY(), box.btnW(), box.btnH(), box.btn());
+        if (over(box.x() + 14, box.bodyTop(), box.w() - 28, box.bodyH(), hoverX, hoverY)) {
+            for (RichDraw.ItemHit hit : readerItemHits) {
+                if (over(hit.x(), hit.y(), hit.w(), hit.h(), hoverX, hoverY)) {
+                    graphics.renderTooltip(font, new ItemStack(hit.item()), hoverX, hoverY);
+                    break;
+                }
+            }
+        }
+    }
+
     private void drawClaimAllModal(GuiGraphics graphics, ModalLayout box) {
         tinyString(graphics, box.tag(), box.x() + 6, box.y() + 2, MockChrome.tagInk(box.edge()));
         drawCentered(graphics, box.title(), box.x(), box.y() + 16, box.w(), QuestColors.TEXT);
@@ -3195,14 +3412,24 @@ public class QuestBookScreen extends Screen {
         String title = tile.title().isBlank() ? tile.id().toUpperCase(Locale.ROOT) : tile.title().toUpperCase(Locale.ROOT);
         int cursor = drawWrapped(graphics, title, x + 10, y + 14, w - 20, QuestColors.TEXT);
         String body = inspectBody(tile);
+        String scrollKey = chapter.id() + "/" + tile.id();
+        if (!scrollKey.equals(descScrollKey)) {
+            descScrollKey = scrollKey;
+            descScroll = 0;
+        }
         int titlePush = cursor - y;
         // Rows we intend to show, never more than fit above the action bar. Computed from the shared helper
         // so the body budget, the draw and inspectFootY cannot drift apart.
         int taskSlots = cardTaskSlots(tile, cursor, y, h);
         lastBodyBudget = bodyLineBudget(h, taskSlots, titlePush);
         if (!body.isEmpty()) {
-            cursor = drawWrapped(graphics, body, x + 10, cursor + 4, w - 20, QuestColors.MUTED,
-                    lastBodyBudget) + 6;
+            drawCardBody(graphics, body, x, y, w, h, cursor + 4, taskSlots);
+            drawExpandButton(graphics, x + w - EXPAND_FROM_RIGHT, y + 2,
+                    over(x + w - EXPAND_FROM_RIGHT, y, 12, 12, mouseX, mouseY));
+        } else {
+            descContentH = 0;
+            descViewH = 0;
+            descItemHits.clear();
         }
         // Jerry: no Rewards: prose — counts live on icons as Nx
 
@@ -3459,6 +3686,9 @@ public class QuestBookScreen extends Screen {
 
     private void drawInspectTooltips(GuiGraphics graphics, int mouseX, int mouseY) {
         chapter.tile(inspectTileId()).ifPresent(tile -> {
+            if (drawDescItemTooltip(graphics, mouseX, mouseY)) {
+                return;
+            }
             if (drawTaskItemTooltip(graphics, mouseX, mouseY)) {
                 return;
             }
@@ -3942,6 +4172,10 @@ public class QuestBookScreen extends Screen {
         blurSearchIfOutside(mouseX, mouseY);
         if (modal != ModalKind.NONE) {
             ModalLayout box = modalLayout();
+            if (modal == ModalKind.READER) {
+                clickReader(box, mouseX, mouseY);
+                return true;
+            }
             if (modal == ModalKind.CLAIM_ALL) {
                 if (over(box.btnX(), box.btnY(), box.btnW(), box.btnH(), mouseX, mouseY)) {
                     confirmClaimAll();
@@ -4069,6 +4303,11 @@ public class QuestBookScreen extends Screen {
                 return true;
             }
             Tile tile = chapter.tile(inspectId).orElse(null);
+            if (tile != null && button == 0 && !inspectBody(tile).isEmpty()
+                    && over(x + w - EXPAND_FROM_RIGHT, y, 12, 12, mouseX, mouseY)) {
+                openReader(tile.id());
+                return true;
+            }
             if (tile != null && handleCardClick(tile, x, y, w, h, mouseX, mouseY)) {
                 return true;
             }
@@ -4148,11 +4387,18 @@ public class QuestBookScreen extends Screen {
         dragging = false;
         resizingSidebar = false;
         draggingInspect = false;
+        draggingReaderThumb = false;
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (draggingReaderThumb && modal == ModalKind.READER) {
+            ModalLayout box = modalLayout();
+            readerScroll = RichLayout.scrollForThumb((int) mouseY - box.bodyTop(), box.bodyH(), box.bodyH(),
+                    readerContentH);
+            return true;
+        }
         if (resizingSidebar) {
             setSidebarWidth((int) Math.round(mouseX));
             return true;
@@ -4178,6 +4424,16 @@ public class QuestBookScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (modal == ModalKind.READER) {
+            readerScroll = RichLayout.clampScroll(readerScroll - (int) Math.round(scrollY * 18), readerContentH,
+                    readerViewH);
+            return true;
+        }
+        if (modal == ModalKind.NONE && !logOpen && descContentH > descViewH && showInspectPanel()
+                && over(descX, descY, descW, descViewH, mouseX, mouseY)) {
+            descScroll = RichLayout.clampScroll(descScroll - (int) Math.round(scrollY * 14), descContentH, descViewH);
+            return true;
+        }
         if (modal == ModalKind.CLAIM_ALL) {
             ModalLayout box = modalLayout();
             int max = Math.max(0, claimAllContentH(claimAllLines()) - box.bodyH());
@@ -4230,8 +4486,11 @@ public class QuestBookScreen extends Screen {
             onClose();
             return true;
         }
-        if (modal == ModalKind.CLAIM_ALL && keyCode == GLFW.GLFW_KEY_ESCAPE) {
+        if ((modal == ModalKind.CLAIM_ALL || modal == ModalKind.READER) && keyCode == GLFW.GLFW_KEY_ESCAPE) {
             dismissModal();
+            return true;
+        }
+        if (modal == ModalKind.READER && readerKey(keyCode)) {
             return true;
         }
         if (search != null && search.isFocused() && keyCode == GLFW.GLFW_KEY_ESCAPE) {
@@ -4355,7 +4614,7 @@ public class QuestBookScreen extends Screen {
         if (!sidebarCollapsed) {
             for (SidebarRow row : sidebarRows) {
                 if (row.id().toString().equals(chapterId) && sidebarRowVisible(row)) {
-                    return new int[]{sidebarWidth() - SIDEBAR_THUMB_PAD - 8, row.y() + 4};
+                    return new int[]{sidebarWidth() - SIDEBAR_RIGHT_PAD - 8, row.y() + 4};
                 }
             }
             return new int[]{sidebarWidth() / 2, TOP_H + 4};
@@ -4463,7 +4722,7 @@ public class QuestBookScreen extends Screen {
             if (!ClientQuestState.isChapterListed(next)) {
                 return;
             }
-            if (modal == ModalKind.CLAIM_ALL) {
+            if (modal == ModalKind.CLAIM_ALL || modal == ModalKind.READER) {
                 dismissModal();
             }
             this.chapter = next;
@@ -4530,11 +4789,11 @@ public class QuestBookScreen extends Screen {
         String title = tile.title().isBlank() ? tile.id() : tile.title();
         int titleLines = wrapLineCount(title.toUpperCase(Locale.ROOT), cardW() - 20);
         String body = inspectBody(tile);
-        int bodyLines = body.isEmpty() ? 0 : wrapLineCount(body, cardW() - 20);
+        int bodyPx = body.isEmpty() ? 0 : richLaid(body, cardW() - 2 * CARD_PAD, CARD_IMAGE_MAX_H).height();
         // One 12px row per task, so a multi-item quest gets room for its icons instead of overlapping
         // the play bar.
         int taskRows = Math.min(tile.tasks().size(), MAX_TASK_ROWS);
-        int natural = 14 + titleLines * 10 + 4 + bodyLines * 10 + 4 + FOOTER_RESERVE + taskRows * 12;
+        int natural = 14 + titleLines * 10 + 4 + bodyPx + 4 + FOOTER_RESERVE + taskRows * 12;
         int h = Math.min(214, Math.max(88, natural));
         // Scale the height with the width on a narrow GUI so the card stays proportionate and on-screen.
         return Math.max(72, Math.round(h * cardScale()));
@@ -4612,7 +4871,7 @@ public class QuestBookScreen extends Screen {
 
     private String introBodyText() {
         String body = chapter.intro().map(ChapterIntro::body).orElse("");
-        String firstDesc = chapter.tiles().isEmpty() ? "" : chapter.tiles().getFirst().description();
+        String firstDesc = chapter.tiles().isEmpty() ? "" : RichText.plain(chapter.tiles().getFirst().description());
         return IntroMarkup.resolveBody(body, chapter.title(), firstDesc);
     }
 
@@ -5327,6 +5586,18 @@ public class QuestBookScreen extends Screen {
                 });
                 return;
             }
+            if (json.has("expand") && json.get("expand").getAsBoolean()) {
+                if (modal == ModalKind.READER) {
+                    dismissModal();
+                } else {
+                    chapter.tile(inspectTileId()).ifPresent(tile -> openReader(tile.id()));
+                }
+                return;
+            }
+            if (json.has("scroll")) {
+                scrollDescription(json.get("scroll").getAsInt());
+                return;
+            }
             if (json.has("confirm") && json.get("confirm").getAsBoolean()) {
                 ModalLayout box = modalLayout();
                 clickGui(box.btnX() + box.btnW() / 2.0, box.btnY() + box.btnH() / 2.0);
@@ -5715,6 +5986,13 @@ public class QuestBookScreen extends Screen {
         out.addProperty("failed", String.format("%08X", QuestColors.FAILED));
         out.addProperty("closed", String.format("%08X", QuestColors.CLOSED));
         out.addProperty("modalPink", String.format("%08X", QuestColors.MODAL_PINK));
+        out.addProperty("reader", modal == ModalKind.READER);
+        out.addProperty("descScroll", descScroll);
+        out.addProperty("descContentH", descContentH);
+        out.addProperty("descViewH", descViewH);
+        out.addProperty("readerScroll", readerScroll);
+        out.addProperty("readerContentH", readerContentH);
+        out.addProperty("readerViewH", readerViewH);
         if (modal != ModalKind.NONE) {
             ModalLayout box = modalLayout();
             out.addProperty("modalX", box.x());

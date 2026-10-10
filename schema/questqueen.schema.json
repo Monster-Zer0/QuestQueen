@@ -121,7 +121,10 @@
           }
         },
         "title": { "type": "string" },
-        "description": { "type": "string" },
+        "description": {
+          "type": "string",
+          "description": "The quest's text. Plain text, or markup: # heading, ## smaller heading, - bullet, --- rule, **bold**, *italic*, __underline__, {#RRGGBB}text{/#}, {size:N}text{/size}, {item:namespace:id} or {item:namespace:id xN}, {glyph:id}, and ![caption](namespace:textures/name.png) alone on a line for a resource-pack picture. A backslash keeps the next markup character literal. Long text scrolls in the card and opens in a larger reader window."
+        },
         "icon": {
           "$ref": "#/$defs/icon"
         },

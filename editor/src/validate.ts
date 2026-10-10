@@ -1,5 +1,6 @@
 // Every check the editor makes before a save or export, in one place. Mirrors what the mod's codecs require and
 // what makes a quest impossible to finish, so problems show in the editor instead of in game.
+import { descriptionProblems } from "./richtext";
 import { chapterGridHeight, chapterGridWidth, gateOp, parentLoops, type Chapter, type Reward, type Task } from "./types";
 
 /** A resource location, with or without its namespace (the game reads "stone" as minecraft:stone). */
@@ -112,6 +113,7 @@ export function validate(next: Chapter, all: Chapter[] = [next]): string[] {
     if (tile.hidden_until && STAGE_TYPES.has(tile.hidden_until.type)) checkStage(`${name} hidden until`, tile.hidden_until.id, errors);
     (tile.tasks ?? []).forEach((task, i) => checkTask(`${name} task ${i + 1} (${task.type})`, task, errors));
     (tile.rewards ?? []).forEach((reward, i) => checkReward(`${name} reward ${i + 1} (${reward.type})`, reward, errors));
+    descriptionProblems(tile.description).forEach((problem) => errors.push(`${name} description: ${problem}`));
   }
   for (const link of links) {
     if (!ids.has(link.from) || !ids.has(link.to)) errors.push(`Link ${link.from}->${link.to} missing tile`);
