@@ -715,3 +715,30 @@ main { flex: 1; position: relative; min-height: 0; overflow: hidden; display: fl
 #save-status.bad { color: #e8707a; cursor: help; }
 .dirty-dot { color: #f2c94c; margin-left: 6px; font-size: 10px; }
 .choice-option { border-left: 2px solid rgba(255, 255, 255, 0.08); padding-left: 6px; margin-bottom: 6px; }
+
+/* Quest description: formatting toolbar, live preview and its problems. */
+.desc-tools { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px; margin: 0 0 6px; display: grid; gap: 6px; background: var(--bg); }
+.desc-tools-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.desc-tools-pics { display: grid; gap: 4px; }
+.desc-tools button, .desc-tools select { font: inherit; font-size: 12px; padding: 2px 8px; min-width: 26px; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.desc-tools button:hover, .desc-tools select:hover { border-color: var(--accent); }
+.desc-tools input[type="color"] { width: 28px; height: 24px; padding: 0; border: 1px solid var(--border); background: none; cursor: pointer; }
+.desc-pic-row { display: flex; gap: 4px; flex-wrap: wrap; }
+.desc-pic-row input { flex: 1 1 140px; min-width: 0; }
+#desc-tools-note.bad { color: var(--bad, #e06070); }
+.desc-preview { border: 1px solid var(--border); border-radius: var(--radius-sm); background: #14101c; color: #a898b8; padding: 8px 10px; margin: 6px 0; font-size: 13px; line-height: 1.35; max-height: 260px; overflow: auto; }
+.desc-preview .desc-line { margin: 0; }
+.desc-preview .desc-title { color: #f5f0e0; }
+.desc-preview .desc-subtitle { color: #d8cce8; }
+.desc-preview .desc-bullet { padding-left: 14px; position: relative; }
+.desc-preview .desc-bullet::before { content: "\2022"; position: absolute; left: 3px; }
+.desc-preview .desc-gap { height: 10px; }
+.desc-preview hr { border: 0; border-top: 1px solid #3a3048; margin: 4px 0; }
+.desc-preview .desc-item { vertical-align: -2px; image-rendering: pixelated; }
+.desc-preview .desc-item-missing { display: inline-block; width: 14px; height: 14px; border: 1px solid #8c1a24; }
+.desc-preview .desc-count { font-size: 11px; color: #d8cce8; margin: 0 2px; }
+.desc-preview .desc-glyph svg { width: 14px; height: 14px; vertical-align: -2px; }
+.desc-preview .desc-pic { margin: 6px 0; text-align: center; }
+.desc-preview .desc-pic-frame { display: inline-block; max-width: 100%; padding: 14px 16px; border: 1px dashed #5a4a70; color: #d8cce8; font-size: 11px; overflow-wrap: anywhere; }
+.desc-preview figcaption { font-size: 11px; font-style: italic; color: #d8cce8; margin-top: 3px; }
+.desc-problems { color: #e06070; font-size: 12px; }
