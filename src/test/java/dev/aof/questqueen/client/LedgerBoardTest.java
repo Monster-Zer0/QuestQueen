@@ -203,4 +203,11 @@ class LedgerBoardTest {
                     "content at size " + size + " touches the rail or its hover width");
         }
     }
+
+    @Test
+    void sidebarRowsStopShortOfTheCollapseTab() {
+        // The tab sits on the sidebar's right edge, so a badge or count flush right ran underneath it.
+        assertTrue(QuestBookScreen.SIDEBAR_RIGHT_PAD >= QuestBookScreen.TAB_W,
+                "rows end at least a tab width from the edge: " + QuestBookScreen.SIDEBAR_RIGHT_PAD);
+    }
 }

@@ -37,6 +37,7 @@ export function wireItemSelects(
   items: CatalogEntry[],
   bridgeBase: string,
   onChange: () => void,
+  selector = ".item-select:not([data-tool])",
 ): void {
   if (!outsideBound) {
     outsideBound = true;
@@ -50,7 +51,7 @@ export function wireItemSelects(
     });
   }
 
-  root.querySelectorAll<HTMLElement>(".item-select").forEach((host) => {
+  root.querySelectorAll<HTMLElement>(selector).forEach((host) => {
     const trigger = host.querySelector<HTMLButtonElement>(".item-select-trigger");
     const panel = host.querySelector<HTMLElement>(".item-select-panel");
     const filter = host.querySelector<HTMLInputElement>(".item-select-filter");

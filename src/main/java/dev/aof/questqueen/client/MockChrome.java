@@ -350,6 +350,17 @@ public final class MockChrome {
         }
     }
 
+    /** Two corner brackets pointing apart: "open this bigger". 9x9. */
+    public static void readerIcon(GuiGraphics graphics, int x, int y, int color) {
+        box(graphics, x + 5, y, 4, 1, color);
+        box(graphics, x + 8, y, 1, 4, color);
+        box(graphics, x, y + 8, 4, 1, color);
+        box(graphics, x, y + 5, 1, 4, color);
+        for (int i = 0; i < 6; i++) {
+            box(graphics, x + 1 + i, y + 7 - i, 1, 1, color);
+        }
+    }
+
     public static void closeX(GuiGraphics graphics, int x, int y, int color) {
         box(graphics, x, y, 1, 1, color);
         box(graphics, x + 1, y + 1, 1, 1, color);
