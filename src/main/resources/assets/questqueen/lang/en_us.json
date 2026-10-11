@@ -22,7 +22,7 @@
   "questqueen.task.item_tag": "COLLECT",
   "questqueen.task.kill": "KILL",
   "questqueen.task.raid": "DEFEND",
-  "questqueen.task.advancement": "EARN",
+  "questqueen.task.advancement": "ADVANCEMENT",
   "questqueen.task.location": "EXPLORE",
   "questqueen.task.visit_structure": "EXPLORE",
   "questqueen.task.visit_dimension": "EXPLORE",

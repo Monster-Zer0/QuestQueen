@@ -37,7 +37,7 @@ public final class TaskVerbs {
             Map.entry("item_tag", "COLLECT"),
             Map.entry("kill", "KILL"),
             Map.entry("raid", "DEFEND"),
-            Map.entry("advancement", "EARN"),
+            Map.entry("advancement", "ADVANCEMENT"),
             Map.entry("location", "EXPLORE"),
             Map.entry("visit_structure", "EXPLORE"),
             Map.entry("visit_dimension", "EXPLORE"),
