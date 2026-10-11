@@ -275,6 +275,11 @@ public final class QuestTileWidget extends AbstractWidget {
         }
     }
 
+    /** A finished tile with rewards waiting gets the claim wash; a locked one never does. */
+    static boolean claimWash(boolean locked, boolean claimable) {
+        return claimable && !locked;
+    }
+
     /** Data D3: expand glyph is off on LOCKED everywhere. */
     static boolean showsExpand(boolean locked, boolean expand) {
         return expand && !locked;
@@ -287,7 +292,17 @@ public final class QuestTileWidget extends AbstractWidget {
      */
     private void drawLedgerChrome(GuiGraphics graphics, int x, int y, int size, float reveal, int extraRail) {
         MockChrome.box(graphics, x, y, size, size, face);
-        MockChrome.frame(graphics, x, y, size, size, QuestColors.SIDEBAR_EDGE);
+        if (claimWash(locked, claimable)) {
+            // Ready to claim: a gold wash and frame, so it reads from across the board on every zoom rung.
+            MockChrome.box(graphics, x, y, size, size, QuestColors.CLAIM_TINT);
+            MockChrome.frame(graphics, x, y, size, size, QuestColors.CLAIM_EDGE);
+            if (size < 48) {
+                // The small rungs have no CLAIM chip; a second frame line keeps the cue.
+                MockChrome.frame(graphics, x + 1, y + 1, size - 2, size - 2, UiFx.withAlpha(QuestColors.CLAIM_EDGE, 0.55f));
+            }
+        } else {
+            MockChrome.frame(graphics, x, y, size, size, QuestColors.SIDEBAR_EDGE);
+        }
         if (edge == 0) {
             return;
         }
@@ -376,6 +391,11 @@ public final class QuestTileWidget extends AbstractWidget {
         return size < 48;
     }
 
+    /** The state word overruns a compact tile; there the rail colour alone carries the state. */
+    static boolean showsHeader(int size) {
+        return !compact(size);
+    }
+
     static boolean stacked(int size, boolean hasIcon) {
         return hasIcon && size < 64;
     }
@@ -415,7 +435,7 @@ public final class QuestTileWidget extends AbstractWidget {
         int iconSize = iconPx(size);
         boolean compact = compact(size);
         boolean stacked = stacked(size, titleBeside && hasIconFace());
-        if (!header.isEmpty()) {
+        if (!header.isEmpty() && showsHeader(size)) {
             // The state word sits where the filled corner tab used to be, in the state colour.
             tiny(graphics, font, header, x + inset, y + 2, edge != 0 ? edge : headerInk);
         }

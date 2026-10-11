@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TaskTypeCoverageTest {
     /** The verbs the pack proposed, adopted as shipped. */
     private static final Map<String, String> EXPECTED = Map.ofEntries(
-            Map.entry("obtain", "FIND"),
+            Map.entry("obtain", "OBTAIN"),
             Map.entry("submit", "GIVE"),
             Map.entry("item_tag", "COLLECT"),
             Map.entry("kill", "KILL"),
@@ -175,7 +175,7 @@ class TaskTypeCoverageTest {
         assertEquals("SLEEP", TaskVerbs.verb(new StatTask(ResourceLocation.parse("minecraft:sleep_in_bed"), 1)));
         assertEquals("STAT", TaskVerbs.verb(new StatTask(ResourceLocation.parse("minecraft:deaths"), 1)));
         // A non-stat task must never borrow a stat sub-verb.
-        assertEquals("FIND", TaskVerbs.verb(new ObtainTask(ResourceLocation.parse("minecraft:dirt"), 1)));
+        assertEquals("OBTAIN", TaskVerbs.verb(new ObtainTask(ResourceLocation.parse("minecraft:dirt"), 1)));
     }
 
     @Test

@@ -73,7 +73,8 @@ public final class BookTheme {
                 0xFF16121C, 0xFFF5F0E0, 0xFFA898B8,
                 BookPalette.AUTH_LOCKED_EDGE, 0xFF6A6080, 0xFFFFF540, 0x66FFB84A, 0x668A82A0,
                 BookPalette.AUTH_MODAL_PINK, BookPalette.AUTH_LOCKED_EDGE,
-                0xFFC8C0D8, 0xFF4AD4FF, 0xFFFFF540, 0xFF488BD4, BookPalette.AUTH_MODAL_PINK
+                0xFFC8C0D8, 0xFF4AD4FF, 0xFFFFF540, 0xFF488BD4, BookPalette.AUTH_MODAL_PINK,
+                BookPalette.DEFAULT_CLAIM_TINT, BookPalette.DEFAULT_CLAIM_EDGE
         );
     }
 
@@ -86,7 +87,8 @@ public final class BookTheme {
                 0xFF0C1418, 0xFFE8F4F8, 0xFF88A8B4,
                 BookPalette.AUTH_LOCKED_EDGE, 0xFF5A7080, 0xFFE8F0FF, 0x663AA8E8, 0x66708898,
                 BookPalette.AUTH_MODAL_PINK, BookPalette.AUTH_LOCKED_EDGE,
-                0xFFA0C0C8, 0xFF4AD4FF, 0xFFE8F0FF, 0xFF3AA8E8, BookPalette.AUTH_MODAL_PINK
+                0xFFA0C0C8, 0xFF4AD4FF, 0xFFE8F0FF, 0xFF3AA8E8, BookPalette.AUTH_MODAL_PINK,
+                BookPalette.DEFAULT_CLAIM_TINT, BookPalette.DEFAULT_CLAIM_EDGE
         );
     }
 
@@ -99,7 +101,8 @@ public final class BookTheme {
                 0xFF100C08, 0xFFFFF0E0, 0xFFB89888,
                 BookPalette.AUTH_LOCKED_EDGE, 0xFF6A5850, 0xFFFFD080, 0x66E86828, 0x668A7060,
                 BookPalette.AUTH_MODAL_PINK, BookPalette.AUTH_LOCKED_EDGE,
-                0xFFC8B0A0, 0xFFFF9050, 0xFFFFD080, 0xFFE86828, BookPalette.AUTH_MODAL_PINK
+                0xFFC8B0A0, 0xFFFF9050, 0xFFFFD080, 0xFFE86828, BookPalette.AUTH_MODAL_PINK,
+                BookPalette.DEFAULT_CLAIM_TINT, BookPalette.DEFAULT_CLAIM_EDGE
         );
     }
 
@@ -112,7 +115,8 @@ public final class BookTheme {
                 0xFF0C140E, 0xFFF0F8E8, 0xFF90B098,
                 BookPalette.AUTH_LOCKED_EDGE, 0xFF587068, 0xFFFFE060, 0x664AC878, 0x66708870,
                 BookPalette.AUTH_MODAL_PINK, BookPalette.AUTH_LOCKED_EDGE,
-                0xFFB0C8B0, 0xFF50D090, 0xFFFFE060, 0xFF4AC878, BookPalette.AUTH_MODAL_PINK
+                0xFFB0C8B0, 0xFF50D090, 0xFFFFE060, 0xFF4AC878, BookPalette.AUTH_MODAL_PINK,
+                BookPalette.DEFAULT_CLAIM_TINT, BookPalette.DEFAULT_CLAIM_EDGE
         );
     }
 
@@ -125,7 +129,8 @@ public final class BookTheme {
                 0xFF18140C, 0xFFFFF8E8, 0xFFB8A888,
                 BookPalette.AUTH_LOCKED_EDGE, 0xFF706858, 0xFFFFE8A0, 0x6638B8D0, 0x66908068,
                 BookPalette.AUTH_MODAL_PINK, BookPalette.AUTH_LOCKED_EDGE,
-                0xFFD0C0A0, 0xFF50D0E0, 0xFFFFE8A0, 0xFF38B8D0, BookPalette.AUTH_MODAL_PINK
+                0xFFD0C0A0, 0xFF50D0E0, 0xFFFFE8A0, 0xFF38B8D0, BookPalette.AUTH_MODAL_PINK,
+                BookPalette.DEFAULT_CLAIM_TINT, BookPalette.DEFAULT_CLAIM_EDGE
         );
     }
 
@@ -138,7 +143,8 @@ public final class BookTheme {
                 0xFF0C1014, 0xFFF0F8FF, 0xFF98B0C0,
                 BookPalette.AUTH_LOCKED_EDGE, 0xFF607080, 0xFFF0F8FF, 0x6668A8E8, 0x66788898,
                 BookPalette.AUTH_MODAL_PINK, BookPalette.AUTH_LOCKED_EDGE,
-                0xFFB0C0D0, 0xFF70D0FF, 0xFFF0F8FF, 0xFF68A8E8, BookPalette.AUTH_MODAL_PINK
+                0xFFB0C0D0, 0xFF70D0FF, 0xFFF0F8FF, 0xFF68A8E8, BookPalette.AUTH_MODAL_PINK,
+                BookPalette.DEFAULT_CLAIM_TINT, BookPalette.DEFAULT_CLAIM_EDGE
         );
     }
 
@@ -151,7 +157,8 @@ public final class BookTheme {
                 0xFF0C0404, 0xFFFFF0E8, 0xFFB88878,
                 BookPalette.AUTH_LOCKED_EDGE, 0xFF685050, 0xFFFFC060, 0x66E84818, 0x66806050,
                 BookPalette.AUTH_MODAL_PINK, BookPalette.AUTH_LOCKED_EDGE,
-                0xFFC8A090, 0xFFFF7040, 0xFFFFC060, 0xFFE84818, BookPalette.AUTH_MODAL_PINK
+                0xFFC8A090, 0xFFFF7040, 0xFFFFC060, 0xFFE84818, BookPalette.AUTH_MODAL_PINK,
+                BookPalette.DEFAULT_CLAIM_TINT, BookPalette.DEFAULT_CLAIM_EDGE
         );
     }
 
@@ -164,7 +171,8 @@ public final class BookTheme {
                 0xFF100C18, 0xFFF8F0FF, 0xFFA890C0,
                 BookPalette.AUTH_LOCKED_EDGE, 0xFF685878, 0xFFF0C0FF, 0x6668C0FF, 0x668070A0,
                 BookPalette.AUTH_MODAL_PINK, BookPalette.AUTH_LOCKED_EDGE,
-                0xFFC0B0D8, 0xFF70D0FF, 0xFFF0C0FF, 0xFF68C0FF, BookPalette.AUTH_MODAL_PINK
+                0xFFC0B0D8, 0xFF70D0FF, 0xFFF0C0FF, 0xFF68C0FF, BookPalette.AUTH_MODAL_PINK,
+                BookPalette.DEFAULT_CLAIM_TINT, BookPalette.DEFAULT_CLAIM_EDGE
         );
     }
 
@@ -177,7 +185,8 @@ public final class BookTheme {
                 0xFF0C1410, 0xFFE8F8F0, 0xFF90B0A0,
                 BookPalette.AUTH_LOCKED_EDGE, 0xFF587068, 0xFFD0E8C0, 0x6640B8A0, 0x66708878,
                 BookPalette.AUTH_MODAL_PINK, BookPalette.AUTH_LOCKED_EDGE,
-                0xFFB0C8B8, 0xFF50D0C0, 0xFFD0E8C0, 0xFF40B8A0, BookPalette.AUTH_MODAL_PINK
+                0xFFB0C8B8, 0xFF50D0C0, 0xFFD0E8C0, 0xFF40B8A0, BookPalette.AUTH_MODAL_PINK,
+                BookPalette.DEFAULT_CLAIM_TINT, BookPalette.DEFAULT_CLAIM_EDGE
         );
     }
 
@@ -190,7 +199,8 @@ public final class BookTheme {
                 0xFF1C1810, 0xFFF8F0DC, 0xFFB0A488,
                 BookPalette.AUTH_LOCKED_EDGE, 0xFF6A6050, 0xFFD8B060, 0x666880A0, 0x668A8070,
                 BookPalette.AUTH_MODAL_PINK, BookPalette.AUTH_LOCKED_EDGE,
-                0xFFC8BCA0, 0xFF70A0C0, 0xFFD8B060, 0xFF6880A0, BookPalette.AUTH_MODAL_PINK
+                0xFFC8BCA0, 0xFF70A0C0, 0xFFD8B060, 0xFF6880A0, BookPalette.AUTH_MODAL_PINK,
+                BookPalette.DEFAULT_CLAIM_TINT, BookPalette.DEFAULT_CLAIM_EDGE
         );
     }
 

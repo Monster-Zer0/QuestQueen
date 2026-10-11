@@ -23,6 +23,10 @@ public final class QuestConfig {
     public static final ModConfigSpec.BooleanValue INTRO_TYPEWRITER;
     /** Per-theme drifting board particles (stars / embers / caustics). */
     public static final ModConfigSpec.BooleanValue AMBIENT_THEME_FX;
+    /** Hex ARGB wash over a claimable tile; empty = the theme's own. */
+    public static final ModConfigSpec.ConfigValue<String> CLAIM_TINT;
+    /** Hex ARGB frame of a claimable tile; empty = the theme's own. */
+    public static final ModConfigSpec.ConfigValue<String> CLAIM_EDGE;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -63,6 +67,15 @@ public final class QuestConfig {
         SIDEBAR_TITLE_SHADOW = builder
                 .comment("Override title shadow: -1 pack, 0 off, 1 on.")
                 .defineInRange("sidebarTitleShadow", -1, -1, 1);
+        builder.pop();
+        builder.push("claimChrome");
+        CLAIM_TINT = builder
+                .comment("Wash over a finished-but-unclaimed quest tile, as hex ARGB (default 33FFD54F, a light warm gold).",
+                        "Keep the alpha low so the tile's text still reads. Empty uses the chapter theme's.")
+                .define("claimTint", "");
+        CLAIM_EDGE = builder
+                .comment("Frame of a finished-but-unclaimed quest tile, as hex ARGB (default FFFFD54F). Empty uses the theme's.")
+                .define("claimEdge", "");
         builder.pop();
         SPEC = builder.build();
     }

@@ -37,6 +37,9 @@ public final class QuestColors {
     public static int GATE_XOR = 0xFFFFF540;
     public static int XOR_EDGE = NEW;
     public static int GATE_NOT = 0xFFE88AB0;
+    /** Done-but-unclaimed tiles: a wash over the face and a frame, so they stand out at every zoom. */
+    public static int CLAIM_TINT = BookPalette.DEFAULT_CLAIM_TINT;
+    public static int CLAIM_EDGE = BookPalette.DEFAULT_CLAIM_EDGE;
 
     private QuestColors() {
     }
@@ -74,6 +77,8 @@ public final class QuestColors {
         GATE_XOR = palette.gateXor();
         XOR_EDGE = palette.xorEdge();
         GATE_NOT = palette.gateNot();
+        CLAIM_TINT = palette.claimTint();
+        CLAIM_EDGE = palette.claimEdge();
     }
 
     public static void reset() {

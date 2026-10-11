@@ -42,6 +42,8 @@ Each file's `"id"` should use that pack's namespace (`"<pack>:<name>"`). These i
 
 `demoChapters` in the common config is `auto` (hide the Feature Showcase when the pack has chapters), `always`, or `never`. `includeDevChapters` loads the harness chapters; those files are only on the dev run classpath, not in the published jar.
 
+A quest that is done but not yet claimed gets a gold wash over its tile and a gold frame, on every zoom level. `[claimChrome]` in the common config changes them: `claimTint` (default `33FFD54F`) and `claimEdge` (default `FFFFD54F`), as hex ARGB. Leave them empty to use the chapter theme's colours.
+
 When the pack has its own chapters, the highest-priority `book.json` outside this mod's jar sets the sidebar title. Clicking a task item opens it in EMI, then REI, then JEI, whichever of those is installed.
 
 ## Descriptions

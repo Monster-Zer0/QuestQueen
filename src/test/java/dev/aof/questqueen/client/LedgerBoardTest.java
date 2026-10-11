@@ -210,4 +210,42 @@ class LedgerBoardTest {
         assertTrue(QuestBookScreen.SIDEBAR_RIGHT_PAD >= QuestBookScreen.TAB_W,
                 "rows end at least a tab width from the edge: " + QuestBookScreen.SIDEBAR_RIGHT_PAD);
     }
+
+    @Test
+    void claimableTilesGetTheWashAndLockedOnesNever() {
+        assertTrue(QuestTileWidget.claimWash(false, true));
+        assertFalse(QuestTileWidget.claimWash(false, false));
+        assertFalse(QuestTileWidget.claimWash(true, true));
+    }
+
+    @Test
+    void everyThemeCarriesClaimColoursAndTheConfigCanOverrideThem() {
+        for (BookTheme theme : BookTheme.all()) {
+            BookPalette palette = theme.palette();
+            assertEquals(BookPalette.DEFAULT_CLAIM_TINT, palette.claimTint(), theme.id());
+            assertEquals(BookPalette.DEFAULT_CLAIM_EDGE, palette.claimEdge(), theme.id());
+            assertTrue((palette.claimTint() >>> 24) < 0x80, "the wash is translucent so the tile text still reads");
+        }
+        assertEquals(0x4400FF00, BookPalette.parseArgb("4400FF00", 1));
+        assertEquals(0xFF123456, BookPalette.parseArgb("#123456", 1));
+        assertEquals(1, BookPalette.parseArgb("", 1));
+        assertEquals(1, BookPalette.parseArgb("nope", 1));
+        assertEquals(1, BookPalette.parseArgb("12345", 1));
+        BookPalette custom = BookTheme.MIDNIGHT_ROYALTY.palette().withClaim(0x22000000, 0xFF000000);
+        assertEquals(0x22000000, custom.claimTint());
+        assertEquals(BookTheme.MIDNIGHT_ROYALTY.palette().completed(), custom.completed());
+    }
+
+    @Test
+    void theZoomLadderReachesHalfAndKeepsGapsOnPixel() {
+        assertEquals(32, QuestBookScreen.TILE_STEPS[0]);
+        assertEquals(0.5f, QuestBookScreen.fitFloor(), 1e-6);
+        for (int step : QuestBookScreen.TILE_STEPS) {
+            assertEquals(0, QuestBookScreen.GAP * step % QuestBookScreen.TILE, "gap stays on-pixel at " + step);
+        }
+        // A 20-column chapter at the smallest rung, on a 1920-wide window at GUI scale 2 with the sidebar open.
+        int step = QuestBookScreen.TILE_STEPS[0];
+        int wide = 19 * (step + QuestBookScreen.GAP * step / QuestBookScreen.TILE) + step;
+        assertTrue(wide + 24 <= 960 - QuestBookScreen.SIDEBAR, "20 columns fit: " + wide);
+    }
 }
