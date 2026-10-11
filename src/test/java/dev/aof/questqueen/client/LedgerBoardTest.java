@@ -248,4 +248,21 @@ class LedgerBoardTest {
         int wide = 19 * (step + QuestBookScreen.GAP * step / QuestBookScreen.TILE) + step;
         assertTrue(wide + 24 <= 960 - QuestBookScreen.SIDEBAR, "20 columns fit: " + wide);
     }
+
+    @Test
+    void wheelZoomKeepsThePointUnderTheCursorInPlace() {
+        int[] steps = QuestBookScreen.TILE_STEPS;
+        double camera = -137.25;
+        for (int i = 0; i + 1 < steps.length; i++) {
+            float small = steps[i] / (float) QuestBookScreen.TILE;
+            float big = steps[i + 1] / (float) QuestBookScreen.TILE;
+            for (double offset : new double[]{0, 41, 333.5, 900}) {
+                double world = camera + offset / small;
+                double in = QuestBookScreen.anchoredCamera(camera, offset, small, big);
+                assertEquals(offset, (world - in) * big, 1e-6, "zoom in keeps the point at " + offset);
+                double out = QuestBookScreen.anchoredCamera(in, offset, big, small);
+                assertEquals(camera, out, 1e-6, "zooming back out returns to the same camera");
+            }
+        }
+    }
 }
