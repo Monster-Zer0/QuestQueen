@@ -84,6 +84,21 @@ public final class ClientQuestState {
      * An act intro is a parent chapter with no quests of its own. A parent that has quests keeps its board: a
      * child appearing (the Stage Wing loads only with ProgressiveStages) used to wipe the Feature Showcase board.
      */
+    /** What each quest advancement is, from the server (title, lines, icon), for the task row's hover. */
+    private static java.util.Map<net.minecraft.resources.ResourceLocation, dev.aof.questqueen.net.AdvancementInfoS2C.Entry> advancements = java.util.Map.of();
+
+    public static void setAdvancements(List<dev.aof.questqueen.net.AdvancementInfoS2C.Entry> entries) {
+        java.util.Map<net.minecraft.resources.ResourceLocation, dev.aof.questqueen.net.AdvancementInfoS2C.Entry> next = new java.util.HashMap<>();
+        for (var entry : entries) {
+            next.put(entry.id(), entry);
+        }
+        advancements = java.util.Map.copyOf(next);
+    }
+
+    public static Optional<dev.aof.questqueen.net.AdvancementInfoS2C.Entry> advancementInfo(net.minecraft.resources.ResourceLocation id) {
+        return Optional.ofNullable(advancements.get(id));
+    }
+
     public static boolean isIntroChapter(Chapter chapter) {
         return chapter != null && chapter.tiles().isEmpty() && ChapterTree.hasChildren(chapterTreeRoots(), chapter.id());
     }

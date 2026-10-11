@@ -25,11 +25,15 @@ public class QuestQueenClient {
         ClientSync.DEFINITIONS = ClientQuestState::setPack;
         ClientSync.PROGRESS = ClientQuestState::setProgress;
         ClientSync.EDITOR = EditorBridge::setEnabled;
+        ClientSync.ADVANCEMENTS = ClientQuestState::setAdvancements;
         ClientSync.OPEN_BOOK = QuestBookScreen::openFromNetwork;
         modEventBus.addListener(QuestQueenClient::onRegisterKeys);
         modEventBus.addListener(QuestQueenClient::onRegisterGuiLayers);
         NeoForge.EVENT_BUS.addListener(QuestQueenClient::onClientTick);
         NeoForge.EVENT_BUS.addListener(QuestQueenClient::onLoggingOut);
+        NeoForge.EVENT_BUS.addListener(dev.aof.questqueen.client.InventoryButton::onInit);
+        NeoForge.EVENT_BUS.addListener(dev.aof.questqueen.client.InventoryButton::onRender);
+        NeoForge.EVENT_BUS.addListener(QuestHudOverlay::onScreenRender);
     }
 
     /**

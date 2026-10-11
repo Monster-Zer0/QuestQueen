@@ -12,6 +12,8 @@ public final class ClientSync {
     };
     public static Consumer<Boolean> EDITOR = enabled -> {
     };
+    public static Consumer<java.util.List<AdvancementInfoS2C.Entry>> ADVANCEMENTS = entries -> {
+    };
     public static OpenBook OPEN_BOOK = (tileId, expanded, chapter) -> {
     };
 
@@ -29,6 +31,10 @@ public final class ClientSync {
 
     public static void applyProgress(ProgressSnapshot snapshot) {
         PROGRESS.accept(snapshot);
+    }
+
+    public static void applyAdvancements(java.util.List<AdvancementInfoS2C.Entry> entries) {
+        ADVANCEMENTS.accept(entries);
     }
 
     public static void applyEditor(boolean enabled) {
