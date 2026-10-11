@@ -98,6 +98,19 @@ try {
     await shot(`claim-0${px === 48 ? 2 : px === 64 ? 3 : 4}-${px}`);
   }
 
+  // ---- the wheel zooms toward the cursor ----
+  await click({ zoom: 1, cameraX: 0, cameraY: -40 }, 14);
+  p = await probe();
+  const [wx, wy] = p.tileCentres.o5;
+  for (const dir of [1, 1, -1, -1, -1, -1]) {
+    await click({ wheel: { x: wx, y: wy, dir } }, 10);
+    p = await probe();
+    const [tx, ty] = p.tileCentres.o5;
+    check(Math.abs(tx - wx) <= 2 && Math.abs(ty - wy) <= 2,
+      `wheel ${dir > 0 ? "in" : "out"} to ${p.tilePxNow} px keeps the tile under the cursor (${tx},${ty} vs ${wx},${wy})`);
+  }
+  await shot("claim-06-wheel-out");
+
   await click({ tile: "o0" }, 30);
   await shot("claim-05-obtain-verb");
   console.log(`${checks - failures.length}/${checks} checks passed`);
