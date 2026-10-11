@@ -37,8 +37,9 @@ public final class QuestNetwork {
     }
 
     public static void register(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar("2");
+        PayloadRegistrar registrar = event.registrar("3");
         registrar.playToClient(DefinitionChunkS2C.TYPE, DefinitionChunkS2C.STREAM_CODEC, QuestNetwork::handleDefinition);
+        registrar.playToClient(AdvancementInfoS2C.TYPE, AdvancementInfoS2C.STREAM_CODEC, QuestNetwork::handleAdvancementInfo);
         registrar.playToClient(ProgressS2C.TYPE, ProgressS2C.STREAM_CODEC, QuestNetwork::handleProgress);
         registrar.playToClient(EditorSessionS2C.TYPE, EditorSessionS2C.STREAM_CODEC, QuestNetwork::handleEditorSession);
         registrar.playToClient(OpenBookS2C.TYPE, OpenBookS2C.STREAM_CODEC, QuestNetwork::handleOpenBook);
@@ -64,6 +65,9 @@ public final class QuestNetwork {
             byte[] slice = new byte[end - start];
             System.arraycopy(bytes, start, slice, 0, slice.length);
             send(player, new DefinitionChunkS2C(session, i, total, slice));
+        }
+        if (player.server != null) {
+            send(player, AdvancementInfos.build(player.server, AdvancementInfos.referenced(QuestDefinitions.pack())));
         }
     }
 
@@ -138,6 +142,10 @@ public final class QuestNetwork {
 
     private static void handleProgress(ProgressS2C payload, IPayloadContext context) {
         context.enqueueWork(() -> ClientSync.applyProgress(payload.decode()));
+    }
+
+    private static void handleAdvancementInfo(AdvancementInfoS2C payload, IPayloadContext context) {
+        context.enqueueWork(() -> ClientSync.applyAdvancements(payload.entries()));
     }
 
     private static void handleEditorSession(EditorSessionS2C payload, IPayloadContext context) {
