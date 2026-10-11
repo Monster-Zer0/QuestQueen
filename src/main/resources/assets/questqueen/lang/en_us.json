@@ -17,7 +17,7 @@
   "questqueen.editor.url": "Web editor ready (%s items). Open %s",
   "questqueen.editor.ready": "Web editor ready. Pack catalog loaded.",
 
-  "questqueen.task.obtain": "FIND",
+  "questqueen.task.obtain": "OBTAIN",
   "questqueen.task.submit": "GIVE",
   "questqueen.task.item_tag": "COLLECT",
   "questqueen.task.kill": "KILL",

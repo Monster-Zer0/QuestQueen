@@ -146,8 +146,8 @@ class InventoryProgressTest {
                 Optional.empty(), Optional.empty());
         try {
             assertEquals("COLLECT 7/16", ClientQuestState.taskProgressLabel(chapter, tile, 0));
-            assertEquals("FIND 23/32", ClientQuestState.taskProgressLabel(chapter, tile, 1));
-            assertEquals("FIND 16/16", ClientQuestState.taskProgressLabel(chapter, tile, 2));
+            assertEquals("OBTAIN 23/32", ClientQuestState.taskProgressLabel(chapter, tile, 1));
+            assertEquals("OBTAIN 16/16", ClientQuestState.taskProgressLabel(chapter, tile, 2));
             assertEquals(7, ClientQuestState.progress.value(quest, "0"));
             assertEquals(23, ClientQuestState.progress.value(quest, "1"));
         } finally {
