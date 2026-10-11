@@ -258,6 +258,14 @@ public class QuestBookScreen extends Screen {
     private static final long PIN_FLASH_MS = 320L;
     /** Target icons painted on the inspect card this frame: drives their tooltip and the JEI click. */
     private final List<TaskIconHit> taskIconHits = new ArrayList<>();
+    /** Advancement task rows on the open card (icon and label), for the advancement hover. */
+    private record AdvancementHit(int x, int y, int w, int h, net.minecraft.resources.ResourceLocation id) {
+        boolean over(double mouseX, double mouseY) {
+            return mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
+        }
+    }
+
+    private final List<AdvancementHit> advancementHits = new ArrayList<>();
     /** Cap on task rows drawn on the inspect card; matches the authoring cap. */
     private static final int MAX_TASK_ROWS = 6;
     /** Most tag members drawn as a mosaic in one task row; the rest become the {@code +N} chip. */
@@ -3456,6 +3464,7 @@ public class QuestBookScreen extends Screen {
 
         String questId = chapter.id() + "/" + tile.id();
         taskIconHits.clear();
+        advancementHits.clear();
         // Reset every frame: a tile with no tasks (or none drawn) must not leave the previous tile's count
         // behind, or the click handler would offer rows that are not on screen.
         drawnTaskRows = 0;
@@ -3522,7 +3531,14 @@ public class QuestBookScreen extends Screen {
                     // Every task gets its own target icon so a multi-item quest is readable at a glance and
                     // each target can be hovered for its name and clicked through to JEI.
                     ItemStack stack = taskStack(task);
-                    if (!stack.isEmpty()) {
+                    Optional<net.minecraft.resources.ResourceLocation> advancement = task.advancementId();
+                    ItemStack advancementIcon = advancement.flatMap(ClientQuestState::advancementInfo)
+                            .map(info -> info.icon()).filter(icon -> !icon.isEmpty()).orElse(ItemStack.EMPTY);
+                    if (!advancementIcon.isEmpty()) {
+                        // The advancement's own icon; the row's hover (below) says what it is.
+                        graphics.renderItem(advancementIcon, x + STRIP_X, thisRowY);
+                        stack = advancementIcon;
+                    } else if (!stack.isEmpty()) {
                         graphics.renderItem(stack, x + STRIP_X, thisRowY);
                         taskIconHits.add(new TaskIconHit(x + STRIP_X, thisRowY, 16, 16, i, List.of(stack), 0));
                     } else {
@@ -3545,6 +3561,8 @@ public class QuestBookScreen extends Screen {
                 int labelW = Math.max(SIDEBAR_LABEL_MIN, countX - 6 - textX);
                 String shownVerb = ellipsize(verb, labelW);
                 pixel(graphics, Component.literal(shownVerb), textX, thisRowY + 4, ink);
+                task.advancementId().ifPresent(id -> advancementHits.add(new AdvancementHit(x + STRIP_X, thisRowY,
+                        Math.max(16, countRight - (x + STRIP_X)), 16, id)));
                 if (countW > 0) {
                     int leaderFrom = textX + font.width(shownVerb) + 3;
                     int leaderTo = countX - 3;
@@ -3712,6 +3730,9 @@ public class QuestBookScreen extends Screen {
             if (drawTaskItemTooltip(graphics, mouseX, mouseY)) {
                 return;
             }
+            if (drawAdvancementTooltip(graphics, mouseX, mouseY)) {
+                return;
+            }
             if (drawRewardItemTooltip(graphics, tile, mouseX, mouseY)) {
                 return;
             }
@@ -3726,6 +3747,33 @@ public class QuestBookScreen extends Screen {
      * <p>A tag row is named by how many members the task accepts and which of them are on screen, because
      * the icon alone only ever shows the first few: "Any of 199 items" / "Oak Log, Birch Log, …, …".
      */
+    /** An advancement task row: what the advancement is (title and description, or what it asks for). */
+    private boolean drawAdvancementTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
+        for (AdvancementHit hit : advancementHits) {
+            if (hit.over(mouseX, mouseY)) {
+                graphics.renderTooltip(font, advancementTooltip(hit.id()), mouseX, mouseY);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<net.minecraft.util.FormattedCharSequence> advancementTooltip(net.minecraft.resources.ResourceLocation id) {
+        List<net.minecraft.util.FormattedCharSequence> lines = new ArrayList<>();
+        var info = ClientQuestState.advancementInfo(id);
+        Component title = info.map(entry -> entry.title())
+                .orElseGet(() -> Component.literal(dev.aof.questqueen.data.AdvancementSummary.humanize(id)));
+        lines.addAll(font.split(title.copy().withStyle(ChatFormatting.YELLOW), 220));
+        info.ifPresent(entry -> {
+            for (Component line : entry.lines()) {
+                lines.addAll(font.split(line.copy().withStyle(ChatFormatting.GRAY), 220));
+            }
+        });
+        lines.add(Component.literal(TaskVerbs.translate("questqueen.adv.label", "Advancement")).withStyle(ChatFormatting.DARK_GRAY)
+                .getVisualOrderText());
+        return lines;
+    }
+
     private boolean drawTaskItemTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
         for (TaskIconHit hit : taskIconHits) {
             if (!hit.over(mouseX, mouseY) || hit.stack().isEmpty()) {
@@ -5938,6 +5986,19 @@ public class QuestBookScreen extends Screen {
             });
         }
         out.add("cardRewards", cardRewards);
+        com.google.gson.JsonArray advRows = new com.google.gson.JsonArray();
+        for (AdvancementHit hit : advancementHits) {
+            com.google.gson.JsonObject row = new com.google.gson.JsonObject();
+            row.addProperty("id", hit.id().toString());
+            row.addProperty("x", hit.x() + 8);
+            row.addProperty("y", hit.y() + 8);
+            row.addProperty("title", ClientQuestState.advancementInfo(hit.id()).map(info -> info.title().getString()).orElse(""));
+            com.google.gson.JsonArray lines = new com.google.gson.JsonArray();
+            ClientQuestState.advancementInfo(hit.id()).ifPresent(info -> info.lines().forEach(line -> lines.add(line.getString())));
+            row.add("lines", lines);
+            advRows.add(row);
+        }
+        out.add("advancementRows", advRows);
         int[] introPane = introBodyPane();
         com.google.gson.JsonArray introRect = new com.google.gson.JsonArray();
         for (int v : introPane) {

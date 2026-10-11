@@ -16,7 +16,6 @@
   "questqueen.editor.fail.port": "Web editor failed to start: port 47821 is already in use (another game or editor is running).",
   "questqueen.editor.url": "Web editor ready (%s items). Open %s",
   "questqueen.editor.ready": "Web editor ready. Pack catalog loaded.",
-
   "questqueen.task.obtain": "OBTAIN",
   "questqueen.task.submit": "GIVE",
   "questqueen.task.item_tag": "COLLECT",
@@ -40,7 +39,19 @@
   "questqueen.task.xp_levels": "SPEND",
   "questqueen.task.npc_dialog": "TALK",
   "questqueen.task.trigger": "DO",
-
   "questqueen.tag.any": "Any of %s items",
-  "questqueen.tag.hint": "Click: look one of them up in %s"
+  "questqueen.tag.hint": "Click: look one of them up in %s",
+  "questqueen.adv.have": "Have %s",
+  "questqueen.adv.consume": "Eat or drink %s",
+  "questqueen.adv.place": "Place %s",
+  "questqueen.adv.visit": "Go to %s",
+  "questqueen.adv.scripted": "Unlocked by an event in the story",
+  "questqueen.adv.trigger": "Trigger: %s",
+  "questqueen.adv.any_of": "Any of these:",
+  "questqueen.adv.all_of": "All of these:",
+  "questqueen.adv.any_tag": "any %s",
+  "questqueen.adv.or": " or ",
+  "questqueen.adv.missing": "No advancement with this id is loaded",
+  "questqueen.adv.label": "Advancement",
+  "questqueen.inventory.button": "Quest Book"
 }
