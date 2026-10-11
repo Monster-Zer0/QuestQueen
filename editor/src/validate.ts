@@ -1,5 +1,6 @@
 // Every check the editor makes before a save or export, in one place. Mirrors what the mod's codecs require and
 // what makes a quest impossible to finish, so problems show in the editor instead of in game.
+import { commandRewardProblems } from "./commandReward";
 import { descriptionProblems } from "./richtext";
 import { chapterGridHeight, chapterGridWidth, gateOp, parentLoops, type Chapter, type Reward, type Task } from "./types";
 
@@ -75,6 +76,7 @@ function checkReward(where: string, reward: Reward, errors: string[]) {
   checkRequired(where, reward as unknown as Record<string, unknown>, REWARD_REQUIRES[reward.type] ?? [], errors);
   if (reward.type === "item" && reward.count !== undefined && !(reward.count >= 1)) errors.push(`${where}: count must be at least 1`);
   if (reward.type === "xp" && !((reward.amount ?? 1) >= 1)) errors.push(`${where}: XP must be at least 1`);
+  if (reward.type === "command") for (const problem of commandRewardProblems(reward)) errors.push(`${where}: ${problem}`);
   if (reward.type === "xp_levels" && !((reward.levels ?? 1) >= 1)) errors.push(`${where}: levels must be at least 1`);
   if (reward.type === "choice") {
     const options = reward.options ?? [];
