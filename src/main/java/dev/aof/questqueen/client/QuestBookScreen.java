@@ -62,28 +62,19 @@ public class QuestBookScreen extends Screen {
     /** Mock density. Gutters stay empty; path arrows are border-port wedges. TILE_STEPS keep GAP*zoom integer. */
     public static final int GAP = 12;
     public static final int STRIDE = TILE + GAP;
-    /** Integer-friendly tile sizes so GAP*zoom and 1px frames stay on-pixel. */
-    private static final int[] TILE_STEPS = {48, 64, 80, 96, 112, 128};
-
     /**
-     * Dev-only preview rung for Troi's pre-registered 0.5-tier criterion (ledger 4739; Picard's queue
-     * addendum 10): 32 px tiles under a 0.5 fit floor, reachable ONLY through the probe channel -
-     * {@code qq-click.json} {@code {"previewZoom":0.5}} - the same dev path the count-mode comparison flag
-     * uses. OFF until asked: an ordinary session keeps the shipped ladder and the 0.75 floor, so this
-     * ships nothing. 0.25 stays refused (ledger 3975). A 0.5 rung is legal on the ladder's own rule -
-     * GAP * step / TILE = 12 * 32 / 64 = 6 is integer, so the 1 px frames stay on-pixel.
+     * Integer-friendly tile sizes so GAP*zoom and 1px frames stay on-pixel. The 32 px rung (zoom 0.5) lets a
+     * 20-column chapter fit on screen; its tiles drop secondary text and keep the state rail, icon and claim wash.
      */
-    private static volatile boolean previewHalf;
-    private static final int[] PREVIEW_TILE_STEPS = {32, 48, 64, 80, 96, 112, 128};
+    static final int[] TILE_STEPS = {32, 48, 64, 80, 96, 112, 128};
 
-    /** The rung ladder in force: the shipped one, or the preview ladder after the probe has asked for 0.5. */
     private static int[] tileSteps() {
-        return previewHalf ? PREVIEW_TILE_STEPS : TILE_STEPS;
+        return TILE_STEPS;
     }
 
-    /** The fit floor in force: 0.75 shipped; 0.5 only while the probe-held preview is on. */
-    private static float fitFloor() {
-        return previewHalf ? 0.5f : 0.75f;
+    /** Fit-to-chapter never zooms out past the smallest rung. */
+    static float fitFloor() {
+        return TILE_STEPS[0] / (float) TILE;
     }
     public static final int SIDEBAR = 148;
     private static final int SIDEBAR_MIN = 96;
@@ -846,12 +837,8 @@ public class QuestBookScreen extends Screen {
      *
      * <p>The zoom still fits the whole chapter where that is legible. The camera is then chosen by
      * {@link FitCamera}, which holds the anchor inside a margin band and treats the tile count only as its
-     * tie-breaker. The floor below is deliberately unchanged: Troi's T2 sets it by caption legibility
-     * rather than by tile count, and she would not sign a floor that makes tile text unreadable (0.25 is
-     * out, and 0.5 would be a bridge ruling). Tile count is not bought with legibility here. The ONE
-     * exception is her ordered dev-only 0.5 preview: while the probe holds {@link #previewHalf} the floor
-     * is 0.5 and the ladder gains its 32 px rung, so the frame her criterion is judged on can exist at
-     * all. That is an evidence build - it changes no default and ships nothing.
+     * tie-breaker. The floor is the smallest rung (0.5, 32 px tiles): play testing asked to see more of a
+     * wide chapter at once, and at that rung tiles keep their icon, rail and claim wash but drop secondary text.
      */
     private void fitAllContent() {
         int minX = chapter.tiles().stream().mapToInt(t -> t.pos().x()).min().orElse(0);
@@ -2357,7 +2344,7 @@ public class QuestBookScreen extends Screen {
     /** Mock cards use the quest title; progress only when the task is counted. */
     /**
      * The tile's caption: the quest title. Progress lives in the ledger footer (count and bar), so the caption no
-     * longer swaps itself for "FIND 0/4" — that hid the title and repeated the count right above the footer.
+     * longer swaps itself for "OBTAIN 0/4" — that hid the title and repeated the count right above the footer.
      */
     private String tileObjective(Tile tile) {
         String title = tile.title().isBlank() ? tile.id() : tile.title();
@@ -4965,7 +4952,17 @@ public class QuestBookScreen extends Screen {
     }
 
     private void bindChapterTheme() {
-        QuestColors.apply(BookPalette.resolveOrDefault(chapter));
+        BookPalette palette = BookPalette.resolveOrDefault(chapter);
+        String tint = "";
+        String edge = "";
+        try {
+            tint = QuestConfig.CLAIM_TINT.get();
+            edge = QuestConfig.CLAIM_EDGE.get();
+        } catch (IllegalStateException notLoaded) {
+            // Config not loaded yet: the theme's own claim colours stand.
+        }
+        QuestColors.apply(palette.withClaim(BookPalette.parseArgb(tint, palette.claimTint()),
+                BookPalette.parseArgb(edge, palette.claimEdge())));
     }
 
     /**
@@ -5713,6 +5710,8 @@ public class QuestBookScreen extends Screen {
                     setSidebarWidth(220);
                 } else if ("narrow".equals(mode)) {
                     setSidebarWidth(SIDEBAR_MIN);
+                } else if ("default".equals(mode)) {
+                    setSidebarWidth(SIDEBAR);
                 }
                 writeProbeJson();
                 return;
@@ -5729,18 +5728,6 @@ public class QuestBookScreen extends Screen {
                 clampSidebarScroll();
                 rebuildSidebarRows();
                 writeProbeJson();
-                return;
-            }
-            if (json.has("previewZoom")) {
-                // Dev-only 0.5 tier (Troi's pre-registered criterion, ledger 4739; Picard's queue addendum
-                // 10). Probe-only by construction: no keybind, no options entry and no player command
-                // reaches this flag, and while it is off the shipped ladder and floor are what everybody
-                // gets. 0.5 is the only accepted value - 0.25 stays refused. Logged loudly so the fit line
-                // of any frame shot under it can be read next to the gate state that produced it.
-                float want = json.get("previewZoom").getAsFloat();
-                previewHalf = want > 0.25f && want <= 0.5f;
-                QuestQueen.LOGGER.info("Quest book previewZoom={} halfRung={} floor={}",
-                        want, previewHalf, fitFloor());
                 return;
             }
             if (json.has("fitTarget")) {
@@ -5826,9 +5813,8 @@ public class QuestBookScreen extends Screen {
         out.addProperty("sidebarW", sidebarWidth());
         out.addProperty("boardLeftPx", boardLeft());
         out.addProperty("tilePxNow", tilePx());
-        // The dev 0.5 preview gate state: a frame can then be bound to the mode that produced it, and a
-        // reader can tell a preview capture from a shipped one instead of inferring it from the rung.
-        out.addProperty("previewHalf", previewHalf);
+        out.addProperty("tilesInView", isIntroChapter() ? 0 : inViewTileCount());
+        out.addProperty("tilesPlaced", chapter.tiles().size());
         out.addProperty("cardRight", cardX() + cardW());
         out.addProperty("cardBottom", cardY() + cardH());
         out.addProperty("cardScale", cardScale());

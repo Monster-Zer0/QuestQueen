@@ -25,7 +25,7 @@ class TaskTargetStackTest {
     @Test
     void recipeLookupOnlyForMakeOrFindTasks() {
         assertTrue(QuestBookScreen.opensRecipe(new ObtainTask(ResourceLocation.parse("minecraft:dirt"), 1)),
-                "FIND/obtain should open recipes");
+                "OBTAIN/obtain should open recipes");
         assertTrue(QuestBookScreen.opensRecipe(new SubmitTask(ResourceLocation.parse("minecraft:apple"), 1)),
                 "GIVE/submit should open recipes");
         assertFalse(QuestBookScreen.opensRecipe(new InteractBlockTask(ResourceLocation.parse("minecraft:furnace"), 1)),

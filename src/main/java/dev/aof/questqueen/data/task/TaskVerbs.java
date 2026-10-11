@@ -32,7 +32,7 @@ public final class TaskVerbs {
      * correctly even with no language file loaded (a dedicated server, a unit test, an early client).
      */
     static final Map<String, String> VERBS = Map.ofEntries(
-            Map.entry("obtain", "FIND"),
+            Map.entry("obtain", "OBTAIN"),
             Map.entry("submit", "GIVE"),
             Map.entry("item_tag", "COLLECT"),
             Map.entry("kill", "KILL"),
