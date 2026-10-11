@@ -1,0 +1,21 @@
+{
+  "id": "qqdev:command_probe",
+  "title": "Command Probe",
+  "tiles": [
+    {
+      "id": "sweet_dreams",
+      "pos": { "x": 0, "y": 0 },
+      "title": "Sweet Dreams",
+      "description": "Place a bed and sleep in it.",
+      "icon": { "item": "minecraft:red_bed" },
+      "tasks": [{ "type": "advancement", "advancement": "minecraft:adventure/sleep_in_bed" }],
+      "rewards": [
+        { "type": "command", "command": "give @s tacz:modern_kinetic_gun[minecraft:custom_data={GunId:\"tacz:glock_17\"}] 1", "name": "Academy Sidearm", "description": "A Glock 17, loaded.\nSave it for things that shoot back." },
+        { "type": "command", "command": "give @s minecraft:arrow[minecraft:custom_name='\"9mm\"'] 32" },
+        { "type": "command", "command": "effect give @s minecraft:speed 60", "icon": "glyph:flame", "name": "Quick Feet" },
+        { "type": "command", "command": "effect give @s minecraft:regeneration 30" }
+      ]
+    }
+  ],
+  "links": []
+}

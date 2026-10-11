@@ -38,6 +38,7 @@ import { snapshot as snapshotUndo, undo as undoChapter } from "./undo";
 import { iconUrl, itemSelectHtml, readItemSelect, wireItemSelects } from "./itemSelect";
 import { GLYPH_IDS, glyphPickerHtml, glyphSvg, previewIntroHtml, readGlyph, wireGlyphPicker } from "./glyphs";
 import { descriptionProblems, richToHtml, validTexture } from "./richtext";
+import { commandPreviewHtml, parseGive, rewardName } from "./commandReward";
 import {
   DEFAULT_THEME_ID,
   STOCK_BACKGROUNDS,
@@ -1178,7 +1179,18 @@ function rewardFields(reward: Reward, index: number, ro: string, disabled: boole
     case "xp_levels":
       return `<label>LEVELS</label><input data-reward="${index}" data-field="levels" type="number" min="1" value="${reward.levels ?? 1}" ${ro} />`;
     case "command":
-      return `<label>COMMAND</label><input data-reward="${index}" data-field="command" value="${escapeAttr(reward.command ?? "")}" ${ro} />`;
+      return `<label>COMMAND</label><input data-reward="${index}" data-field="command" value="${escapeAttr(reward.command ?? "")}" ${ro} />
+        <div class="reward-face-fields">
+          <label>ICON</label>
+          <input data-reward="${index}" data-field="icon" list="reward-icon-hints" placeholder="item, item[components], glyph:star or ns:textures/….png" value="${escapeAttr(reward.icon ?? "")}" ${ro} />
+          ${disabled ? "" : `<button type="button" data-icon-from-command="${index}">USE ITEM FROM COMMAND</button>`}
+          <label>NAME</label>
+          <input data-reward="${index}" data-field="name" placeholder="${escapeAttr(rewardName({ ...reward, name: "" }))}" value="${escapeAttr(reward.name ?? "")}" ${ro} />
+          <label>DESCRIPTION</label>
+          <textarea data-reward="${index}" data-field="description" rows="2" placeholder="Extra lines on hover" ${ro}>${escapeAttr(reward.description ?? "")}</textarea>
+          <label>PLAYERS SEE</label>
+          <div class="reward-preview" data-reward-preview="${index}">${commandPreviewHtml(reward, (id) => iconUrl(bridgeBase(), id))}</div>
+        </div>`;
     case "loot":
       return `<label>LOOT TABLE</label><input data-reward="${index}" data-field="table" list="pack-loot" value="${escapeAttr(reward.table ?? "")}" ${ro} />`;
     case "toast":
@@ -1334,6 +1346,7 @@ function showCard(tile?: Tile) {
   `;
   const chapterFields = `
     <datalist id="pack-entities">${listOptions(catalog.entities)}</datalist>
+    <datalist id="reward-icon-hints">${GLYPH_IDS.map((id) => `<option value="glyph:${id}"></option>`).join("")}</datalist>
     <datalist id="pack-blocks">${listOptions(catalog.blocks)}</datalist>
     <datalist id="pack-tags">${listOptions(catalog.tags)}</datalist>
     <datalist id="pack-advancements">${listOptions(catalog.advancements)}</datalist>
@@ -1524,9 +1537,15 @@ function showCard(tile?: Tile) {
       const field = input.dataset.field;
       if (["count", "amount", "levels"].includes(field)) {
         (reward as unknown as Record<string, number>)[field] = Number(input.value || 0);
+      } else if (["icon", "name", "description"].includes(field) && input.value.trim() === "") {
+        delete (reward as unknown as Record<string, string>)[field];
       } else {
         (reward as unknown as Record<string, string>)[field] = input.value;
       }
+    }
+    for (const preview of cardBody.querySelectorAll<HTMLElement>("[data-reward-preview]")) {
+      const reward = tile.rewards?.[Number(preview.dataset.rewardPreview)];
+      if (reward) preview.innerHTML = commandPreviewHtml(reward, (id) => iconUrl(bridgeBase(), id));
     }
     for (const host of cardBody.querySelectorAll<HTMLElement>(".item-select[data-reward]:not([data-option])")) {
       const reward = tile.rewards?.[Number(host.dataset.reward)];
@@ -1555,6 +1574,19 @@ function showCard(tile?: Tile) {
       const index = Number(select.dataset.taskType);
       tile.tasks = tile.tasks ?? [];
       tile.tasks[index] = defaultTask(select.value);
+      showCard(tile);
+      draw();
+    });
+  });
+  cardBody.querySelectorAll<HTMLButtonElement>("[data-icon-from-command]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const reward = tile.rewards?.[Number(button.dataset.iconFromCommand)];
+      const give = parseGive(reward?.command);
+      if (!reward || !give) {
+        button.textContent = "NOT A GIVE COMMAND";
+        return;
+      }
+      reward.icon = give.spec;
       showCard(tile);
       draw();
     });

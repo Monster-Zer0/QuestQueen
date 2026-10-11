@@ -25,7 +25,8 @@ class RewardIconsTest {
         assertEquals("paper", RewardIcons.iconId(new ToastReward("hi")).orElseThrow().getPath());
         assertEquals("chest", RewardIcons.iconId(
                 new LootTableReward(ResourceLocation.parse("minecraft:chests/simple_dungeon"))).orElseThrow().getPath());
-        assertEquals("command_block", RewardIcons.iconId(new CommandReward("say hi")).orElseThrow().getPath());
+        assertEquals("nether_star", RewardIcons.iconId(new CommandReward("say hi")).orElseThrow().getPath());
+        assertEquals("ammo", RewardIcons.iconId(new CommandReward("give @s tacz:ammo[minecraft:custom_data={AmmoId:\"tacz:9mm\"}] 32")).orElseThrow().getPath());
     }
 
     @Test
