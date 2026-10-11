@@ -29,6 +29,10 @@ export interface Reward {
   amount?: number;
   levels?: number;
   command?: string;
+  /** Command rewards: what players see instead of the command. icon is an item (id or id[components]), glyph:<id>, or ns:textures/….png. */
+  icon?: string;
+  name?: string;
+  description?: string;
   table?: string;
   message?: string;
   advancement?: string;

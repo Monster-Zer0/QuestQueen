@@ -67,6 +67,11 @@ runs {
         if (project.hasProperty('qq.e2e')) {
             systemProperty 'questqueen.editor.openBrowser', 'false'
         }
+        // -Pqq.marionettePort=25586: run Marionette on another port, so a game already using 25585 is never driven
+        // by the e2e scripts (they read MARIONETTE_PORT).
+        if (project.hasProperty('qq.marionettePort')) {
+            systemProperty 'marionette.port', project.property('qq.marionettePort')
+        }
     }
 
     server {

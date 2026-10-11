@@ -742,3 +742,11 @@ main { flex: 1; position: relative; min-height: 0; overflow: hidden; display: fl
 .desc-preview .desc-pic-frame { display: inline-block; max-width: 100%; padding: 14px 16px; border: 1px dashed #5a4a70; color: #d8cce8; font-size: 11px; overflow-wrap: anywhere; }
 .desc-preview figcaption { font-size: 11px; font-style: italic; color: #d8cce8; margin-top: 3px; }
 .desc-problems { color: #e06070; font-size: 12px; }
+.reward-face-fields { display: contents; }
+.reward-preview { display: flex; gap: 8px; align-items: flex-start; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #14101c; color: #a898b8; padding: 6px 8px; margin: 4px 0; font-size: 13px; line-height: 1.35; }
+.reward-preview-face { width: 16px; height: 16px; flex: none; }
+.reward-preview-face img, .reward-preview-face svg { width: 16px; height: 16px; image-rendering: pixelated; }
+.reward-face-frame { display: inline-block; width: 14px; height: 14px; border: 1px solid #8c1a24; font-size: 6px; text-align: center; color: #a898b8; }
+.reward-preview-title { color: #f5f0e0; }
+.reward-preview-line { color: #a8a8a8; }
+.reward-preview-note { color: #7a6a90; font-size: 11px; }
