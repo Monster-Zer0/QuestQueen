@@ -1025,6 +1025,31 @@ public class QuestBookScreen extends Screen {
         zoom = chosen / (float) TILE;
     }
 
+    /**
+     * One wheel step, keeping the board point under {@code (anchorX, anchorY)} (screen coordinates) where it is.
+     * The anchor is held inside the board, so a wheel over the top bar still zooms toward the nearest board edge.
+     */
+    private void stepZoom(int dir, double anchorX, double anchorY) {
+        float before = zoom;
+        stepZoom(dir);
+        if (zoom == before) {
+            return;
+        }
+        double ax = Math.max(0, Math.min(contentWidth(), anchorX - boardLeft()));
+        double ay = Math.max(TOP_H, Math.min(height, anchorY));
+        cameraX = anchoredCamera(cameraX, ax, before, zoom);
+        cameraY = anchoredCamera(cameraY, ay, before, zoom);
+    }
+
+    /**
+     * The camera after a zoom from {@code oldZoom} to {@code newZoom} that keeps the world point {@code offset}
+     * screen pixels from the board's origin fixed on screen ({@code screen = (world - camera) * zoom}).
+     */
+    static double anchoredCamera(double camera, double offset, float oldZoom, float newZoom) {
+        double world = camera + offset / oldZoom;
+        return world - offset / newZoom;
+    }
+
     private void stepZoom(int dir) {
         int px = tilePx();
         int[] steps = tileSteps();
@@ -4456,11 +4481,7 @@ public class QuestBookScreen extends Screen {
         if (isIntroChapter()) {
             return true;
         }
-        if (scrollY > 0) {
-            stepZoom(1);
-        } else {
-            stepZoom(-1);
-        }
+        stepZoom(scrollY > 0 ? 1 : -1, mouseX, mouseY);
         return true;
     }
 
@@ -5730,6 +5751,14 @@ public class QuestBookScreen extends Screen {
                 writeProbeJson();
                 return;
             }
+            if (json.has("wheel") && json.get("wheel").isJsonObject()) {
+                // The real wheel's board path: zoom one rung toward a screen point.
+                com.google.gson.JsonObject wheel = json.getAsJsonObject("wheel");
+                stepZoom(wheel.get("dir").getAsInt() > 0 ? 1 : -1, wheel.get("x").getAsDouble(),
+                        wheel.get("y").getAsDouble());
+                writeProbeJson();
+                return;
+            }
             if (json.has("fitTarget")) {
                 // Flag only, so both targets can be captured in frames for Troi's comparison. The default
                 // stays ANCHOR and this cannot change it by accident: an unknown value leaves it untouched.
@@ -5815,6 +5844,18 @@ public class QuestBookScreen extends Screen {
         out.addProperty("tilePxNow", tilePx());
         out.addProperty("tilesInView", isIntroChapter() ? 0 : inViewTileCount());
         out.addProperty("tilesPlaced", chapter.tiles().size());
+        com.google.gson.JsonObject tileCentres = new com.google.gson.JsonObject();
+        if (!isIntroChapter()) {
+            int half = tilePx() / 2;
+            for (Tile tile : chapter.tiles()) {
+                int[] at = screen(tile.pos().x(), tile.pos().y());
+                com.google.gson.JsonArray xy = new com.google.gson.JsonArray();
+                xy.add(at[0] + half);
+                xy.add(at[1] + half);
+                tileCentres.add(tile.id(), xy);
+            }
+        }
+        out.add("tileCentres", tileCentres);
         out.addProperty("cardRight", cardX() + cardW());
         out.addProperty("cardBottom", cardY() + cardH());
         out.addProperty("cardScale", cardScale());
