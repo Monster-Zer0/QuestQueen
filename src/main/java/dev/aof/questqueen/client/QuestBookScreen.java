@@ -306,6 +306,8 @@ public class QuestBookScreen extends Screen {
     private int readerContentH;
     private int readerViewH;
     private boolean draggingReaderThumb;
+    /** Dragging the chapter intro's scrollbar. */
+    private boolean draggingIntroThumb;
     private final List<RichDraw.ItemHit> readerItemHits = new ArrayList<>();
     private int hoverX;
     private int hoverY;
@@ -4290,6 +4292,11 @@ public class QuestBookScreen extends Screen {
             }
             return true;
         }
+        if (!logOpen && isIntroChapter() && button == 0 && overIntroThumbTrack(mouseX, mouseY)) {
+            draggingIntroThumb = true;
+            dragIntroThumb(mouseY);
+            return true;
+        }
         if (!logOpen && !isIntroChapter() && over(fitX(), 6, FIT_S, FIT_S, mouseX, mouseY)) {
             fitAllContent();
             return true;
@@ -4400,11 +4407,16 @@ public class QuestBookScreen extends Screen {
         resizingSidebar = false;
         draggingInspect = false;
         draggingReaderThumb = false;
+        draggingIntroThumb = false;
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (draggingIntroThumb && isIntroChapter()) {
+            dragIntroThumb(mouseY);
+            return true;
+        }
         if (draggingReaderThumb && modal == ModalKind.READER) {
             ModalLayout box = modalLayout();
             readerScroll = RichLayout.scrollForThumb((int) mouseY - box.bodyTop(), box.bodyH(), box.bodyH(),
@@ -4471,11 +4483,8 @@ public class QuestBookScreen extends Screen {
             return true;
         }
         if (isIntroChapter() && overIntroBody(mouseX, mouseY)) {
-            int max = Math.max(0, introBodyContentH - introBodyH());
-            if (max > 0) {
-                introBodyScroll -= (int) Math.round(scrollY * 18);
-                introBodyScroll = Math.max(0, Math.min(introBodyScroll, max));
-            }
+            introBodyScroll = RichLayout.clampScroll(introBodyScroll - (int) Math.round(scrollY * 18),
+                    introBodyContentH, introViewH());
             return true;
         }
         if (isIntroChapter()) {
@@ -4872,6 +4881,27 @@ public class QuestBookScreen extends Screen {
         return new int[]{left, top, w, h};
     }
 
+    /**
+     * The intro text's window: the body pane less its 6 px inset on each side. The wheel, the drag and the paint
+     * all measure against this one height (the wheel used the whole lower area, which is taller, so it never
+     * found anything to scroll).
+     */
+    private int introViewH() {
+        return Math.max(8, introBodyPane()[3] - 12);
+    }
+
+    /** The intro scrollbar's grab area: 8 px at the pane's right edge, as tall as the text window. */
+    private boolean overIntroThumbTrack(double mouseX, double mouseY) {
+        int[] p = introBodyPane();
+        return introBodyContentH > introViewH() && over(p[0] + p[2] - 8, p[1] + 6, 8, introViewH(), mouseX, mouseY);
+    }
+
+    private void dragIntroThumb(double mouseY) {
+        int[] p = introBodyPane();
+        introBodyScroll = RichLayout.scrollForThumb((int) Math.round(mouseY) - (p[1] + 6), introViewH(), introViewH(),
+                introBodyContentH);
+    }
+
     private boolean overIntroBody(double mouseX, double mouseY) {
         int[] p = introBodyPane();
         return over(p[0], p[1], p[2], p[3], mouseX, mouseY);
@@ -4894,11 +4924,11 @@ public class QuestBookScreen extends Screen {
         int innerX = text[0] + 6;
         int innerY = text[1] + 6;
         int innerW = Math.max(8, text[2] - 12);
-        int innerH = Math.max(8, text[3] - 12);
+        int innerH = introViewH();
         String body = introBodyText();
         introBodyContentH = IntroMarkup.contentHeight(font, body, innerW, QuestColors.TEXT);
-        int maxScroll = Math.max(0, introBodyContentH - innerH);
-        introBodyScroll = Math.max(0, Math.min(introBodyScroll, maxScroll));
+        int maxScroll = RichLayout.maxScroll(introBodyContentH, innerH);
+        introBodyScroll = RichLayout.clampScroll(introBodyScroll, introBodyContentH, innerH);
         // Typewriter reveal on first open of the chapter. Scrollbar measurements use the full body so the
         // thumb does not creep while the text types in.
         String drawnBody = body;
@@ -4921,10 +4951,11 @@ public class QuestBookScreen extends Screen {
         graphics.disableScissor();
         if (maxScroll > 0) {
             int trackX = text[0] + text[2] - 4;
-            int thumbH = Math.max(8, innerH * innerH / Math.max(innerH + maxScroll, 1));
-            int thumbY = innerY + (int) ((innerH - thumbH) * (introBodyScroll / (double) maxScroll));
+            int[] thumb = RichLayout.thumb(innerH, innerH, introBodyContentH, introBodyScroll);
+            boolean hot = draggingIntroThumb || overIntroThumbTrack(hoverX, hoverY);
             MockChrome.box(graphics, trackX, innerY, 2, innerH, QuestColors.SIDEBAR_EDGE);
-            MockChrome.box(graphics, trackX, thumbY, 2, thumbH, QuestColors.SIDEBAR_HEADER);
+            MockChrome.box(graphics, trackX - (hot ? 1 : 0), innerY + thumb[0], hot ? 3 : 2, thumb[1],
+                    hot ? QuestColors.TEXT : QuestColors.SIDEBAR_HEADER);
         }
     }
 
@@ -5638,6 +5669,19 @@ public class QuestBookScreen extends Screen {
                 });
                 return;
             }
+            if (json.has("mouseDrag") && json.get("mouseDrag").isJsonObject()) {
+                // A left-button press, drag and release through the real mouse handlers.
+                com.google.gson.JsonObject drag = json.getAsJsonObject("mouseDrag");
+                double x0 = drag.get("x").getAsDouble();
+                double y0 = drag.get("y").getAsDouble();
+                double x1 = drag.has("toX") ? drag.get("toX").getAsDouble() : x0;
+                double y1 = drag.has("toY") ? drag.get("toY").getAsDouble() : y0;
+                mouseClicked(x0, y0, 0);
+                mouseDragged(x1, y1, 0, x1 - x0, y1 - y0);
+                mouseReleased(x1, y1, 0);
+                writeProbeJson();
+                return;
+            }
             if (json.has("inspectDrag") && json.get("inspectDrag").isJsonObject() && showInspectPanel()) {
                 com.google.gson.JsonObject drag = json.getAsJsonObject("inspectDrag");
                 int dx = drag.has("dx") ? drag.get("dx").getAsInt() : 0;
@@ -5752,10 +5796,10 @@ public class QuestBookScreen extends Screen {
                 return;
             }
             if (json.has("wheel") && json.get("wheel").isJsonObject()) {
-                // The real wheel's board path: zoom one rung toward a screen point.
+                // The real wheel, at a screen point: whatever is under it (board zoom, intro body, sidebar) handles it.
                 com.google.gson.JsonObject wheel = json.getAsJsonObject("wheel");
-                stepZoom(wheel.get("dir").getAsInt() > 0 ? 1 : -1, wheel.get("x").getAsDouble(),
-                        wheel.get("y").getAsDouble());
+                mouseScrolled(wheel.get("x").getAsDouble(), wheel.get("y").getAsDouble(), 0,
+                        wheel.get("dir").getAsInt() > 0 ? 1 : -1);
                 writeProbeJson();
                 return;
             }
@@ -5856,6 +5900,15 @@ public class QuestBookScreen extends Screen {
             }
         }
         out.add("tileCentres", tileCentres);
+        int[] introPane = introBodyPane();
+        com.google.gson.JsonArray introRect = new com.google.gson.JsonArray();
+        for (int v : introPane) {
+            introRect.add(v);
+        }
+        out.add("introPane", introRect);
+        out.addProperty("introScroll", introBodyScroll);
+        out.addProperty("introContentH", introBodyContentH);
+        out.addProperty("introViewH", introViewH());
         out.addProperty("cardRight", cardX() + cardW());
         out.addProperty("cardBottom", cardY() + cardH());
         out.addProperty("cardScale", cardScale());
