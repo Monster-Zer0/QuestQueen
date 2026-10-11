@@ -42,6 +42,10 @@ Each file's `"id"` should use that pack's namespace (`"<pack>:<name>"`). These i
 
 `demoChapters` in the common config is `auto` (hide the Feature Showcase when the pack has chapters), `always`, or `never`. `includeDevChapters` loads the harness chapters; those files are only on the dev run classpath, not in the published jar.
 
+The pinned quest shows on the HUD at `[pinnedQuest] position` (`top_left` by default; also `top_center`, `top_right`, `middle_left`, `middle_right`, `bottom_left`, `bottom_right`), nudged by `offsetX` / `offsetY`. With the cursor free (chat, the inventory or any other screen), hovering it shows the quest's description, tasks and rewards. The survival inventory has a quest book button in its top-right corner; `[inventoryButton]` turns it off (`enabled`) or moves it (`offsetX`, `offsetY`) to clear another mod's button.
+
+An advancement task's row says what the advancement is when hovered: its title and description, or for a tracking advancement with no display, what it asks for ("Have any Logs", "Place Hospital Bed", "Go to Crashed Main Ship").
+
 A quest that is done but not yet claimed gets a gold wash over its tile and a gold frame, on every zoom level. `[claimChrome]` in the common config changes them: `claimTint` (default `33FFD54F`) and `claimEdge` (default `FFFFD54F`), as hex ARGB. Leave them empty to use the chapter theme's colours.
 
 When the pack has its own chapters, the highest-priority `book.json` outside this mod's jar sets the sidebar title. Clicking a task item opens it in EMI, then REI, then JEI, whichever of those is installed.

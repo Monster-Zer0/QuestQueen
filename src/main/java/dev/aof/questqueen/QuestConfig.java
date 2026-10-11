@@ -27,6 +27,14 @@ public final class QuestConfig {
     public static final ModConfigSpec.ConfigValue<String> CLAIM_TINT;
     /** Hex ARGB frame of a claimable tile; empty = the theme's own. */
     public static final ModConfigSpec.ConfigValue<String> CLAIM_EDGE;
+    /** Where the pinned quest sits on the HUD: top_left (default), top_center, top_right, middle_left, middle_right, bottom_left, bottom_right. */
+    /** Quest book button in the survival inventory. */
+    public static final ModConfigSpec.BooleanValue INVENTORY_BUTTON;
+    public static final ModConfigSpec.IntValue INVENTORY_BUTTON_X;
+    public static final ModConfigSpec.IntValue INVENTORY_BUTTON_Y;
+    public static final ModConfigSpec.ConfigValue<String> PIN_POSITION;
+    public static final ModConfigSpec.IntValue PIN_OFFSET_X;
+    public static final ModConfigSpec.IntValue PIN_OFFSET_Y;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -67,6 +75,29 @@ public final class QuestConfig {
         SIDEBAR_TITLE_SHADOW = builder
                 .comment("Override title shadow: -1 pack, 0 off, 1 on.")
                 .defineInRange("sidebarTitleShadow", -1, -1, 1);
+        builder.pop();
+        builder.push("inventoryButton");
+        INVENTORY_BUTTON = builder
+                .comment("Show a quest book button in the survival inventory (top right, above the crafting output).")
+                .define("enabled", true);
+        INVENTORY_BUTTON_X = builder
+                .comment("Move the button sideways from its spot, in GUI pixels (negative is left), e.g. to clear another mod's button.")
+                .defineInRange("offsetX", 0, -400, 400);
+        INVENTORY_BUTTON_Y = builder
+                .comment("Move the button up or down from its spot, in GUI pixels (negative is up).")
+                .defineInRange("offsetY", 0, -400, 400);
+        builder.pop();
+        builder.push("pinnedQuest");
+        PIN_POSITION = builder
+                .comment("Where the pinned quest shows on screen: top_left, top_center, top_right, middle_left,",
+                        "middle_right, bottom_left or bottom_right. Hover it with the cursor free (e.g. chat open) for details.")
+                .define("position", "top_left");
+        PIN_OFFSET_X = builder
+                .comment("Nudge the pinned quest sideways, in GUI pixels (positive moves it away from its edge).")
+                .defineInRange("offsetX", 0, -1000, 1000);
+        PIN_OFFSET_Y = builder
+                .comment("Nudge the pinned quest up or down, in GUI pixels (positive moves it away from its edge).")
+                .defineInRange("offsetY", 0, -1000, 1000);
         builder.pop();
         builder.push("claimChrome");
         CLAIM_TINT = builder
