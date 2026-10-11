@@ -17,6 +17,11 @@ public final class RewardIcons {
         if (item.isPresent()) {
             return item;
         }
+        if (reward instanceof CommandReward command) {
+            // The book draws command rewards through the client's RewardFaces; this is the plain-id fallback.
+            return Optional.of(command.give().map(GiveCommand::itemId)
+                    .orElse(ResourceLocation.parse("minecraft:nether_star")));
+        }
         if (reward instanceof ChoiceReward choice && !choice.options().isEmpty()) {
             return Optional.of(choice.options().getFirst().item());
         }
@@ -25,7 +30,6 @@ public final class RewardIcons {
             case "advancement" -> ResourceLocation.parse("minecraft:knowledge_book");
             case "stage", "stagelock", "progression", "progressivestages" -> ResourceLocation.parse("minecraft:amethyst_shard");
             case "toast" -> ResourceLocation.parse("minecraft:paper");
-            case "command" -> ResourceLocation.parse("minecraft:command_block");
             case "loot", "loot_table" -> ResourceLocation.parse("minecraft:chest");
             case "choice" -> ResourceLocation.parse("minecraft:chest");
             default -> null;

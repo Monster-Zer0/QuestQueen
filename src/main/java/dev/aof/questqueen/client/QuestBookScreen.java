@@ -13,6 +13,7 @@ import dev.aof.questqueen.data.QuestDefinitions;
 import dev.aof.questqueen.data.Scroll;
 import dev.aof.questqueen.data.Tile;
 import dev.aof.questqueen.data.reward.ChoiceReward;
+import dev.aof.questqueen.data.reward.CommandReward;
 import dev.aof.questqueen.data.reward.Reward;
 import dev.aof.questqueen.data.reward.RewardIcons;
 import dev.aof.questqueen.data.task.Task;
@@ -465,6 +466,7 @@ public class QuestBookScreen extends Screen {
     protected void init() {
         richCache.clear();
         RichDraw.clearCaches();
+        RewardFaces.clearCaches();
         // A fresh open creates this instance; every init after that is a re-entry (a child screen
         // returning, or a resize re-init). `closing` is set by removed() and was never cleared, so on
         // the way back the scale re-apply below early-returned (F8: the book drew at the player's
@@ -1605,7 +1607,8 @@ public class QuestBookScreen extends Screen {
                 if (showInspectPanel()) {
                     pose.pushPose();
                     pose.translate(0, 0, 500);
-                    drawInspectTooltips(graphics, mouseX, mouseY);
+                    drawInspectTooltips(graphics, hoverOverrideX != Integer.MIN_VALUE ? hoverOverrideX : mouseX,
+                            hoverOverrideY != Integer.MIN_VALUE ? hoverOverrideY : mouseY);
                     pose.popPose();
                 }
             }
@@ -1775,6 +1778,9 @@ public class QuestBookScreen extends Screen {
     private static ItemStack rewardFace(Reward reward) {
         if (reward == null) {
             return ItemStack.EMPTY;
+        }
+        if (reward instanceof CommandReward command) {
+            return RewardFaces.face(command);
         }
         return RewardIcons.iconId(reward)
                 .flatMap(BuiltInRegistries.ITEM::getOptional)
@@ -3072,7 +3078,7 @@ public class QuestBookScreen extends Screen {
                     }
                 }
             } else {
-                lines.add(new ClaimLine(reward.describe(), rewardFace(reward), false));
+                lines.add(new ClaimLine(RewardFaces.label(reward), rewardFace(reward), false));
             }
         }
         for (ResourceLocation scroll : tile.scrolls()) {
@@ -3313,7 +3319,7 @@ public class QuestBookScreen extends Screen {
                         graphics.drawString(font, line.text(), box.x() + 12, ly + 1, QuestColors.SIDEBAR_HEADER, false);
                     } else {
                         if (!line.icon().isEmpty()) {
-                            graphics.renderItem(line.icon(), box.x() + 12, ly);
+                            RewardFaces.render(graphics, line.icon(), box.x() + 12, ly);
                             drawRewardCountOver(graphics, line.icon(), box.x() + 12, ly);
                         }
                         int textX = line.icon().isEmpty() ? box.x() + 12 : box.x() + 32;
@@ -3583,7 +3589,7 @@ public class QuestBookScreen extends Screen {
                     MockChrome.frame(graphics, sx - 2, iconY - 2, 20, 20, QuestColors.MUTED);
                 }
             }
-            graphics.renderItem(slot.face(), sx, iconY);
+            RewardFaces.render(graphics, slot.face(), sx, iconY);
             String n = rewardCountText(slot.reward());
             if (!n.isEmpty()) {
                 pixel(graphics, Component.literal(n), sx + 18, iconY + 4, QuestColors.TEXT);
@@ -3813,6 +3819,15 @@ public class QuestBookScreen extends Screen {
             graphics.renderTooltip(font, face, mouseX, mouseY);
             return;
         }
+        if (reward instanceof CommandReward command) {
+            List<FormattedCharSequence> lines = RewardFaces.tooltip(font, command, face);
+            if (lines.isEmpty()) {
+                graphics.renderTooltip(font, face, mouseX, mouseY);
+            } else {
+                graphics.renderTooltip(font, lines, mouseX, mouseY);
+            }
+            return;
+        }
         drawCompactTooltip(graphics, Component.literal(reward.describe()), 140, iconX, cardTop + 14, iconY);
     }
 
@@ -4025,7 +4040,7 @@ public class QuestBookScreen extends Screen {
                     pose.pushPose();
                     pose.translate(x + 16, ry - 2, 0);
                     pose.scale(0.6f, 0.6f, 1f);
-                    graphics.renderItem(face, 0, 0);
+                    RewardFaces.render(graphics, face, 0, 0);
                     pose.popPose();
                 }
                 int ink = UiFx.scaleAlpha(row.color(), Math.max(0.2f, lp));
@@ -4130,7 +4145,7 @@ public class QuestBookScreen extends Screen {
                 for (Reward reward : tile.rewards()) {
                     int taken = takenOption.applyAsInt(tile);
                     Reward shown = reward;
-                    String text = reward.describe();
+                    String text = RewardFaces.label(reward);
                     if (reward instanceof ChoiceReward choice && taken >= 0 && taken < choice.options().size()) {
                         shown = choice.options().get(taken);
                         text = "took " + shown.describe();
@@ -4657,7 +4672,7 @@ public class QuestBookScreen extends Screen {
             pose.pushPose();
             pose.translate(at[0], at[1], 0);
             pose.scale(scale, scale, 1f);
-            graphics.renderItem(flight.face(), 0, 0);
+            RewardFaces.render(graphics, flight.face(), 0, 0);
             pose.popPose();
         }
     }
@@ -5900,6 +5915,29 @@ public class QuestBookScreen extends Screen {
             }
         }
         out.add("tileCentres", tileCentres);
+        // The open card's footer rewards: what each shows (name, icon kind) and where, for hover checks.
+        com.google.gson.JsonArray cardRewards = new com.google.gson.JsonArray();
+        if (showInspectPanel()) {
+            chapter.tile(selectedId).ifPresent(tile -> {
+                List<RewardSlot> slots = footerSlots(tile);
+                FooterLayout layout = playBar(tile, cardX(), cardY(), cardW(), cardH()).layout();
+                int iconY = inspectFootY(tile, cardX(), cardY(), cardW(), cardH());
+                for (int i = 0; i < slots.size(); i++) {
+                    RewardSlot slot = slots.get(i);
+                    com.google.gson.JsonObject r = new com.google.gson.JsonObject();
+                    r.addProperty("label", RewardFaces.label(slot.reward()));
+                    r.addProperty("realItem", RewardFaces.realItem(slot.face()));
+                    r.addProperty("item", BuiltInRegistries.ITEM.getKey(slot.face().getItem()).toString());
+                    r.addProperty("shown", i < layout.shown());
+                    if (i < layout.shown()) {
+                        r.addProperty("x", layout.slotX()[i] + 8);
+                        r.addProperty("y", iconY + 8);
+                    }
+                    cardRewards.add(r);
+                }
+            });
+        }
+        out.add("cardRewards", cardRewards);
         int[] introPane = introBodyPane();
         com.google.gson.JsonArray introRect = new com.google.gson.JsonArray();
         for (int v : introPane) {

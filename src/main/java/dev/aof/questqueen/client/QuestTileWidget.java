@@ -608,7 +608,7 @@ public final class QuestTileWidget extends AbstractWidget {
         pose.pushPose();
         pose.translate(x, y, 0);
         pose.scale(itemScale, itemScale, 1f);
-        graphics.renderItem(stack, 0, 0);
+        RewardFaces.render(graphics, stack, 0, 0);
         pose.popPose();
         if (scissor) {
             graphics.disableScissor();

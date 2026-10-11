@@ -66,6 +66,26 @@ Pictures are ordinary textures: put the PNG in the pack's resource pack (or a mo
 
 The web editor has buttons for all of this above the description box, a live preview, and flags a picture path or item id that would show up as plain text.
 
+## Command rewards
+
+A `command` reward runs its command when the quest is claimed. Players never see the command itself. Three optional fields set what the book shows instead:
+
+```json
+{
+  "type": "command",
+  "command": "give @s tacz:modern_kinetic_gun[minecraft:custom_data={GunId:\"tacz:glock_17\"}] 1",
+  "icon": "tacz:modern_kinetic_gun[minecraft:custom_data={GunId:\"tacz:glock_17\"}]",
+  "name": "Academy Sidearm",
+  "description": "A Glock 17, loaded.\nSave it for things that shoot back."
+}
+```
+
+- `icon` is an item written as in `/give` (`minecraft:diamond`, or `id[components]` so an item that draws itself from its data shows its real model), `glyph:<id>` for a built-in glyph, or a resource-pack picture (`<namespace>:textures/….png`).
+- `name` is the hover title, and the line in the claim-all list and the log.
+- `description` adds lines under the name on hover; `\n` starts a new line.
+
+Any field left out falls back on its own. A `give` command (`give @s <item>[components] [count]`) shows the item it gives: its icon, its own tooltip and the count. Any other command shows a star and "Bonus reward". The web editor has the three fields under each command reward, a **Use item from command** button, and a preview of the hover.
+
 ## Stages
 
 Quest Queen works with a stage mod when one is installed: StageLock (mod id `stagelock`) first, otherwise ProgressiveStages. Neither is required. Stages are used by:
