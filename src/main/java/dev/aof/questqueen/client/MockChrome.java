@@ -98,6 +98,16 @@ public final class MockChrome {
         }
     }
 
+    /** A 1px frame drawn every other pixel, for something that is not open yet. */
+    public static void dottedFrame(GuiGraphics graphics, int x, int y, int w, int h, int color) {
+        dottedLine(graphics, x, x + w, y, color);
+        dottedLine(graphics, x, x + w, y + h - 1, color);
+        for (int py = y + (y & 1); py < y + h; py += 2) {
+            box(graphics, x, py, 1, 1, color);
+            box(graphics, x + w - 1, py, 1, 1, color);
+        }
+    }
+
     public static void panel(GuiGraphics graphics, int x, int y, int w, int h, int face, int edge) {
         panel(graphics, x, y, w, h, face, edge, Math.min(72, w / 3));
     }
