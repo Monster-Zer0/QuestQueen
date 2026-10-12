@@ -750,3 +750,5 @@ main { flex: 1; position: relative; min-height: 0; overflow: hidden; display: fl
 .reward-preview-title { color: #f5f0e0; }
 .reward-preview-line { color: #a8a8a8; }
 .reward-preview-note { color: #7a6a90; font-size: 11px; }
+.desc-preview .desc-recipe { border: 1px dashed #4a3c62; border-radius: 3px; padding: 6px 8px; margin: 4px 0; color: #c8bad8; font-size: 12px; }
+.desc-preview .desc-recipe code { color: #f5f0e0; }

@@ -71,6 +71,20 @@ public interface Task {
 
     Task withCount(int count);
 
+    /**
+     * An item the book shows on this task's row, written as in {@code /give} ({@code minecraft:ender_eye}, or with
+     * {@code [components]}). For tasks with no item of their own (advancement, stat, kill, trigger, checkmark,
+     * interact, visit, ...); a click on it opens the item's recipe.
+     */
+    default Optional<String> displayItem() {
+        return Optional.empty();
+    }
+
+    /** The task itself, without a display item wrapper, for code that needs its concrete type. */
+    static Task unwrap(Task task) {
+        return task instanceof DisplayedTask displayed ? displayed.task() : task;
+    }
+
     default String describe() {
         return type() + itemId().map(id -> " " + id.getPath()).orElse("")
                 + entityId().map(id -> " " + id.getPath()).orElse("")

@@ -64,11 +64,27 @@ A quest's `"description"` is plain text, or text with markup. It scrolls when it
 | `{item:minecraft:diamond}`, `{item:minecraft:iron_ingot x3}` | an item icon in the text; hover it for the name |
 | `{glyph:star}` | one of the built-in glyphs |
 | `![caption](mypack:textures/quest/castle.png)` | a picture, alone on its line |
+| `{recipe:minecraft:furnace}` | the recipe that makes the item, alone on its line |
+| `{recipe:id=minecraft:iron_ingot_from_smelting_iron_ore}` | one recipe by its id, alone on its line |
 | `\*` | a literal `*` (works for any of the markup characters) |
+
+Recipes come from the game's own recipe list, so recipes added or changed by datapacks or KubeJS show after `/reload`. Crafting, smelting (and the other furnaces), stonecutting and smithing are drawn with their own slot layouts; any other (modded) recipe is drawn as its inputs, an arrow and the output. An ingredient that accepts several items, like any log, cycles through them. A recipe that does not exist draws a "missing recipe" frame. `{recipe:<item>}` picks the item's crafting recipe first, then a furnace recipe, then any other.
+
+Item icons in descriptions, including the slots of a recipe, open the item in the installed recipe viewer (EMI, REI or JEI): left-click for its recipes, right-click for its uses. With no recipe viewer they only show their name on hover.
 
 Pictures are ordinary textures: put the PNG in the pack's resource pack (or a mod) and give its full resource location, which starts with `textures/` and ends in `.png`. A picture that cannot be found is drawn as a labelled frame, and the log says which texture it was. Anything that is not valid markup, such as an unclosed tag, is shown as the characters you typed. Descriptions written before this keep working unchanged.
 
 The web editor has buttons for all of this above the description box, a live preview, and flags a picture path or item id that would show up as plain text.
+
+## Task display items
+
+Tasks that have no item of their own (advancement, stat, kill, trigger, checkmark, interact, visit, location, observation, raid, xp levels, NPC dialog) can name one with `"icon"`:
+
+```json
+{ "type": "advancement", "advancement": "minecraft:story/mine_stone", "icon": "minecraft:stone_pickaxe" }
+```
+
+The task row shows that item, hovering it shows its name, and clicking it opens its recipe in the installed recipe viewer. `icon` is an item id, optionally with `[components]` as in `/give`. The web editor has a DISPLAY ITEM picker on those task types.
 
 ## Command rewards
 
