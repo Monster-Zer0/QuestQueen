@@ -25,6 +25,7 @@ export type Inline =
 export type Block =
   | { kind: "para"; heading: Heading; bullet: boolean; inlines: Inline[] }
   | { kind: "image"; texture: string; caption: string }
+  | { kind: "recipe"; target: string; byId: boolean }
   | { kind: "rule" }
   | { kind: "gap" };
 
@@ -82,6 +83,8 @@ function parseLine(raw: string): Block {
   if (line.length >= 3 && /^-+$/.test(line)) return { kind: "rule" };
   const image = parseImage(line);
   if (image) return image;
+  const recipe = parseRecipe(line);
+  if (recipe) return recipe;
   let heading: Heading = "none";
   let bullet = false;
   let rest = raw.replace(/^\s+/, "");
@@ -112,6 +115,18 @@ function parseImage(line: string): Block | null {
   const path = line.slice(captionEnd + 2, line.length - 1).trim();
   if (!validTexture(path)) return null;
   return { kind: "image", texture: location(path), caption: line.slice(2, captionEnd).trim() };
+}
+
+/** {recipe:ns:item} or {recipe:id=ns:recipe} filling the whole line (the namespace is required). */
+function parseRecipe(line: string): Block | null {
+  if (!line.startsWith("{recipe:") || !line.endsWith("}")) return null;
+  let body = line.slice(8, -1).trim();
+  const byId = body.startsWith("id=");
+  if (byId) body = body.slice(3).trim();
+  if (!body || body.indexOf(":") <= 0 || body.endsWith(":")) return null;
+  const loc = parseLocation(body);
+  if (!loc || !loc.path) return null;
+  return { kind: "recipe", target: `${loc.namespace}:${loc.path}`, byId };
 }
 
 function parseInline(s: string, start: number, end: number, st: State, out: Inline[]): void {
@@ -272,6 +287,9 @@ export function descriptionProblems(source: string | null | undefined): string[]
   const problems: string[] = [];
   for (const raw of (source ?? "").replace(/\r\n?/g, "\n").split("\n")) {
     const line = raw.trim();
+    if (line.startsWith("{recipe:") && line.endsWith("}") && !parseRecipe(line)) {
+      problems.push(`${line} is not a recipe: use {recipe:minecraft:furnace} or {recipe:id=minecraft:iron_ingot_from_smelting_iron_ore}`);
+    }
     if (line.startsWith("![") && line.includes("](") && line.endsWith(")")) {
       const path = line.slice(line.indexOf("](") + 2, -1).trim();
       if (!validTexture(path)) {
@@ -334,6 +352,11 @@ export function richToHtml(source: string | null | undefined, options: PreviewOp
       html.push('<div class="desc-gap"></div>');
     } else if (block.kind === "rule") {
       html.push("<hr />");
+    } else if (block.kind === "recipe") {
+      html.push(`<div class="desc-recipe" title="Drawn in game from the recipe list">`
+        + `${block.byId ? "Recipe" : "Recipe for"} <code>${esc(block.target)}</code>`
+        + (!block.byId && options.iconUrl ? ` <img class="desc-item" alt="" src="${esc(options.iconUrl(block.target))}" width="14" height="14" />` : "")
+        + "</div>");
     } else if (block.kind === "image") {
       html.push(`<figure class="desc-pic"><div class="desc-pic-frame" title="${esc(block.texture)}">${esc(block.texture)}</div>`
         + (block.caption ? `<figcaption>${esc(block.caption)}</figcaption>` : "") + "</figure>");
@@ -353,6 +376,7 @@ export function toShape(blocks: Block[]): unknown[] {
     if (block.kind === "gap") return "gap";
     if (block.kind === "rule") return "rule";
     if (block.kind === "image") return { img: block.texture, cap: block.caption };
+    if (block.kind === "recipe") return { recipe: block.target, byId: block.byId };
     return {
       h: block.heading,
       bullet: block.bullet,

@@ -324,6 +324,7 @@ public class QuestBookScreen extends Screen {
     /** Dragging the chapter intro's scrollbar. */
     private boolean draggingIntroThumb;
     private final List<RichDraw.ItemHit> readerItemHits = new ArrayList<>();
+
     private int hoverX;
     private int hoverY;
     private static final int CARD_IMAGE_MAX_H = 90;
@@ -333,7 +334,8 @@ public class QuestBookScreen extends Screen {
     private static final int READER_BAR = 8;
     /** The expand button sits this far left of the card's right edge, beside the close X. */
     static final int EXPAND_FROM_RIGHT = 28;
-    private record RichKey(String body, int width, int maxImageH) {
+    /** {@code recipes} is {@link RecipeBlocks#generation()}, so a /reload that changes recipes re-lays the text. */
+    private record RichKey(String body, int width, int maxImageH, int recipes) {
     }
     private final Map<RichKey, RichLayout.Laid> richCache = new LinkedHashMap<>(16, 0.75f, true) {
         @Override
@@ -3156,8 +3158,9 @@ public class QuestBookScreen extends Screen {
     // ---- rich descriptions: the card body, the expand button and the reader window ------------------------
 
     private RichLayout.Laid richLaid(String body, int width, int maxImageH) {
-        return richCache.computeIfAbsent(new RichKey(body, width, maxImageH), key -> RichLayout.layout(
-                RichText.parse(key.body()), key.width(), RichDraw.measure(font), RichDraw.sizer(), key.maxImageH()));
+        return richCache.computeIfAbsent(new RichKey(body, width, maxImageH, RecipeBlocks.generation()),
+                key -> RichLayout.layout(RichText.parse(key.body()), key.width(), RichDraw.measure(font),
+                        RichDraw.sizer(), RecipeBlocks.sizer(), key.maxImageH()));
     }
 
     /**
@@ -3211,7 +3214,34 @@ public class QuestBookScreen extends Screen {
         }
         for (RichDraw.ItemHit hit : descItemHits) {
             if (over(hit.x(), hit.y(), hit.w(), hit.h(), mouseX, mouseY)) {
-                graphics.renderTooltip(font, new ItemStack(hit.item()), mouseX, mouseY);
+                renderDescItemTooltip(graphics, hit, mouseX, mouseY);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** An item in a description: its tooltip, plus how to look it up when a recipe viewer is installed. */
+    private void renderDescItemTooltip(GuiGraphics graphics, RichDraw.ItemHit hit, int mouseX, int mouseY) {
+        List<Component> lines = new ArrayList<>(Screen.getTooltipFromItem(minecraft, hit.stack()));
+        if (RecipeViewer.available()) {
+            lines.add(Component.literal(TaskVerbs.translate("questqueen.desc.lookup",
+                    "Left-click: recipe   Right-click: uses")).withStyle(ChatFormatting.DARK_GRAY));
+        }
+        graphics.renderComponentTooltip(font, lines, mouseX, mouseY);
+    }
+
+    /**
+     * A click on an item in a description (card or reader): left opens its recipes, right its uses, in the
+     * installed recipe viewer. False when nothing was hit or no viewer is installed (the icons stay hover-only).
+     */
+    private boolean clickDescItem(List<RichDraw.ItemHit> hits, double mouseX, double mouseY, int button) {
+        if (!RecipeViewer.available() || (button != 0 && button != 1)) {
+            return false;
+        }
+        for (RichDraw.ItemHit hit : hits) {
+            if (over(hit.x(), hit.y(), hit.w(), hit.h(), mouseX, mouseY)) {
+                RecipeViewer.show(hit.stack(), button == 0);
                 return true;
             }
         }
@@ -3250,7 +3280,11 @@ public class QuestBookScreen extends Screen {
         return true;
     }
 
-    private void clickReader(ModalLayout box, double mouseX, double mouseY) {
+    private void clickReader(ModalLayout box, double mouseX, double mouseY, int button) {
+        if (over(box.x() + 14, box.bodyTop(), box.w() - 28, box.bodyH(), mouseX, mouseY)
+                && clickDescItem(readerItemHits, mouseX, mouseY, button)) {
+            return;
+        }
         boolean inside = over(box.x(), box.y(), box.w(), box.h(), mouseX, mouseY);
         if (!inside || over(box.btnX(), box.btnY(), box.btnW(), box.btnH(), mouseX, mouseY)
                 || over(box.x() + box.w() - 14, box.y() + 1, 12, 12, mouseX, mouseY)) {
@@ -3317,7 +3351,7 @@ public class QuestBookScreen extends Screen {
         if (over(box.x() + 14, box.bodyTop(), box.w() - 28, box.bodyH(), hoverX, hoverY)) {
             for (RichDraw.ItemHit hit : readerItemHits) {
                 if (over(hit.x(), hit.y(), hit.w(), hit.h(), hoverX, hoverY)) {
-                    graphics.renderTooltip(font, new ItemStack(hit.item()), hoverX, hoverY);
+                    renderDescItemTooltip(graphics, hit, hoverX, hoverY);
                     break;
                 }
             }
@@ -3552,10 +3586,19 @@ public class QuestBookScreen extends Screen {
                     // Every task gets its own target icon so a multi-item quest is readable at a glance and
                     // each target can be hovered for its name and clicked through to JEI.
                     ItemStack stack = taskStack(task);
+                    // A display item ("icon") stands in for tasks with no item of their own.
+                    ItemStack shown = stack.isEmpty() ? task.displayItem().map(RewardFaces::item).orElse(ItemStack.EMPTY)
+                            : ItemStack.EMPTY;
+                    if (!shown.isEmpty()) {
+                        stack = shown;
+                    }
                     Optional<net.minecraft.resources.ResourceLocation> advancement = task.advancementId();
                     ItemStack advancementIcon = advancement.flatMap(ClientQuestState::advancementInfo)
                             .map(info -> info.icon()).filter(icon -> !icon.isEmpty()).orElse(ItemStack.EMPTY);
-                    if (!advancementIcon.isEmpty()) {
+                    if (!shown.isEmpty()) {
+                        graphics.renderItem(stack, x + STRIP_X, thisRowY);
+                        taskIconHits.add(new TaskIconHit(x + STRIP_X, thisRowY, 16, 16, i, List.of(stack), 0));
+                    } else if (!advancementIcon.isEmpty()) {
                         // The advancement's own icon; the row's hover (below) says what it is.
                         graphics.renderItem(advancementIcon, x + STRIP_X, thisRowY);
                         stack = advancementIcon;
@@ -3951,6 +3994,10 @@ public class QuestBookScreen extends Screen {
             return;
         }
         ItemStack stack = taskStack(task.get());
+        if (stack.isEmpty()) {
+            // A task with no item of its own looks up its display item, if it names one.
+            stack = task.get().displayItem().map(RewardFaces::item).orElse(ItemStack.EMPTY);
+        }
         if (stack.isEmpty()) {
             return;
         }
@@ -4371,7 +4418,7 @@ public class QuestBookScreen extends Screen {
         if (modal != ModalKind.NONE) {
             ModalLayout box = modalLayout();
             if (modal == ModalKind.READER) {
-                clickReader(box, mouseX, mouseY);
+                clickReader(box, mouseX, mouseY, button);
                 return true;
             }
             if (modal == ModalKind.CLAIM_ALL) {
@@ -4399,6 +4446,11 @@ public class QuestBookScreen extends Screen {
         if (!sidebarCollapsed && overResize(mouseX, mouseY) && button == 0) {
             resizingSidebar = true;
             lastMx = mouseX;
+            return true;
+        }
+        // Description items: left opens recipes, right opens uses, so this runs before right-drag panning.
+        if (modal == ModalKind.NONE && !logOpen && showInspectPanel() && over(descX, descY, descW, descViewH, mouseX, mouseY)
+                && clickDescItem(descItemHits, mouseX, mouseY, button)) {
             return true;
         }
         if (button == 1) {
@@ -5296,7 +5348,8 @@ public class QuestBookScreen extends Screen {
      * item and we can name it. "Get X" opens X's crafting recipes; everything else opens its usages.
      */
     static boolean opensRecipe(Task task) {
-        return task != null && ("obtain".equals(task.type()) || "submit".equals(task.type()));
+        return task != null && ("obtain".equals(task.type()) || "submit".equals(task.type())
+                || task.displayItem().isPresent());
     }
 
     /** Open a modal and stamp its entrance time so the shimmer sweep starts with the panel. */
@@ -5896,6 +5949,20 @@ public class QuestBookScreen extends Screen {
                 writeProbeJson();
                 return;
             }
+            if (json.has("pretendViewer")) {
+                RecipeViewer.pretend = json.get("pretendViewer").getAsBoolean();
+                RecipeViewer.lastLookup = "";
+                writeProbeJson();
+                return;
+            }
+            if (json.has("descClick") && json.get("descClick").isJsonObject()) {
+                // A real click on the description: {x, y, button} through mouseClicked.
+                com.google.gson.JsonObject click = json.getAsJsonObject("descClick");
+                mouseClicked(click.get("x").getAsDouble(), click.get("y").getAsDouble(),
+                        click.has("button") ? click.get("button").getAsInt() : 0);
+                writeProbeJson();
+                return;
+            }
             if (json.has("jei")) {
                 int idx = json.get("jei").isJsonPrimitive() && json.get("jei").getAsJsonPrimitive().isNumber()
                         ? json.get("jei").getAsInt() : 0;
@@ -6127,6 +6194,24 @@ public class QuestBookScreen extends Screen {
             advRows.add(row);
         }
         out.add("advancementRows", advRows);
+        out.addProperty("lastLookup", RecipeViewer.lastLookup);
+        com.google.gson.JsonArray descItems = new com.google.gson.JsonArray();
+        for (RichDraw.ItemHit hit : descItemHits) {
+            com.google.gson.JsonObject item = new com.google.gson.JsonObject();
+            item.addProperty("item", BuiltInRegistries.ITEM.getKey(hit.stack().getItem()).toString());
+            item.addProperty("x", hit.x() + hit.w() / 2);
+            item.addProperty("y", hit.y() + hit.h() / 2);
+            descItems.add(item);
+        }
+        out.add("descItems", descItems);
+        com.google.gson.JsonArray taskIcons = new com.google.gson.JsonArray();
+        for (TaskIconHit hit : taskIconHits) {
+            com.google.gson.JsonObject icon = new com.google.gson.JsonObject();
+            icon.addProperty("task", hit.taskIndex());
+            icon.addProperty("item", BuiltInRegistries.ITEM.getKey(hit.stack().getItem()).toString());
+            taskIcons.add(icon);
+        }
+        out.add("taskIcons", taskIcons);
         int[] introPane = introBodyPane();
         com.google.gson.JsonArray introRect = new com.google.gson.JsonArray();
         for (int v : introPane) {
