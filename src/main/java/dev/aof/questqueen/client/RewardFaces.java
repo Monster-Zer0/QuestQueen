@@ -157,6 +157,15 @@ public final class RewardFaces {
         return lines;
     }
 
+    /** An item written as in {@code /give} ({@code id} or {@code id[components]}), or empty when it is not one. */
+    public static ItemStack item(String spec) {
+        try {
+            return spec == null || spec.isBlank() ? ItemStack.EMPTY : parse(spec.trim());
+        } catch (RuntimeException | LinkageError noGame) {
+            return ItemStack.EMPTY;
+        }
+    }
+
     private static ItemStack parse(String spec) {
         ItemStack known = PARSED.get(spec);
         if (known != null) {
