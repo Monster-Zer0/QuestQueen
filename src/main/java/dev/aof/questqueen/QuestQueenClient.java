@@ -34,6 +34,8 @@ public class QuestQueenClient {
         NeoForge.EVENT_BUS.addListener(dev.aof.questqueen.client.InventoryButton::onInit);
         NeoForge.EVENT_BUS.addListener(dev.aof.questqueen.client.InventoryButton::onRender);
         NeoForge.EVENT_BUS.addListener(QuestHudOverlay::onScreenRender);
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RecipesUpdatedEvent event) ->
+                dev.aof.questqueen.client.RecipeBlocks.clear());
     }
 
     /**

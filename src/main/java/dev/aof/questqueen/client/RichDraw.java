@@ -22,7 +22,10 @@ import java.util.Set;
 /** Paints a {@link RichLayout.Laid} and measures pictures. The client half of the description markup. */
 final class RichDraw {
     /** Where an inline item icon was painted this frame, for its hover tooltip. */
-    record ItemHit(int x, int y, int w, int h, Item item) {
+    record ItemHit(int x, int y, int w, int h, Item item, ItemStack stack) {
+        ItemHit(int x, int y, int w, int h, Item item) {
+            this(x, y, w, h, item, new ItemStack(item));
+        }
     }
 
     private static final int[] MISSING = new int[0];
@@ -98,6 +101,14 @@ final class RichDraw {
                 case RichLayout.GlyphPiece glyph -> QuestGlyphs.draw(graphics, glyph.id(), x + glyph.x(), top,
                         RichLayout.ICON, glyph.color() == 0 ? defaultColor : glyph.color());
                 case RichLayout.ImagePiece image -> drawImage(graphics, font, image, x + image.x(), top, mutedColor);
+                case RichLayout.RecipePiece recipe -> {
+                    if (recipe.missing()) {
+                        missingFrame(graphics, font, x + recipe.x(), top, recipe.w(), recipe.h(), "missing recipe",
+                                mutedColor);
+                    } else {
+                        RecipeBlocks.draw(graphics, recipe, x + recipe.x(), top, itemHits);
+                    }
+                }
                 case RichLayout.RulePiece rule -> MockChrome.box(graphics, x + rule.x(), top, rule.w(), 1,
                         QuestColors.SIDEBAR_EDGE);
             }
@@ -141,16 +152,19 @@ final class RichDraw {
         itemHits.add(new ItemHit(x, y, RichLayout.ICON, RichLayout.ICON, item.get()));
     }
 
+    private static void missingFrame(GuiGraphics graphics, Font font, int x, int y, int w, int h, String label,
+                                     int mutedColor) {
+        MockChrome.box(graphics, x, y, w, 1, QuestColors.LOCKED_EDGE);
+        MockChrome.box(graphics, x, y + h - 1, w, 1, QuestColors.LOCKED_EDGE);
+        MockChrome.box(graphics, x, y, 1, h, QuestColors.LOCKED_EDGE);
+        MockChrome.box(graphics, x + w - 1, y, 1, h, QuestColors.LOCKED_EDGE);
+        graphics.drawString(font, label, x + Math.max(2, (w - font.width(label)) / 2), y + (h - 8) / 2, mutedColor, false);
+    }
+
     private static void drawImage(GuiGraphics graphics, Font font, RichLayout.ImagePiece image, int x, int y,
                                   int mutedColor) {
         if (image.missing()) {
-            MockChrome.box(graphics, x, y, image.w(), 1, QuestColors.LOCKED_EDGE);
-            MockChrome.box(graphics, x, y + image.h() - 1, image.w(), 1, QuestColors.LOCKED_EDGE);
-            MockChrome.box(graphics, x, y, 1, image.h(), QuestColors.LOCKED_EDGE);
-            MockChrome.box(graphics, x + image.w() - 1, y, 1, image.h(), QuestColors.LOCKED_EDGE);
-            String label = "missing picture";
-            graphics.drawString(font, label, x + Math.max(2, (image.w() - font.width(label)) / 2),
-                    y + (image.h() - 8) / 2, mutedColor, false);
+            missingFrame(graphics, font, x, y, image.w(), image.h(), "missing picture", mutedColor);
             return;
         }
         graphics.blit(image.texture(), x, y, image.w(), image.h(), 0f, 0f, image.texW(), image.texH(),

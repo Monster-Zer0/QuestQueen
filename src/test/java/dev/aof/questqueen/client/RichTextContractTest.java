@@ -35,6 +35,12 @@ class RichTextContractTest {
             switch (block) {
                 case RichText.Gap ignored -> out.add("gap");
                 case RichText.Rule ignored -> out.add("rule");
+                case RichText.Recipe recipe -> {
+                    JsonObject o = new JsonObject();
+                    o.addProperty("recipe", recipe.target().toString());
+                    o.addProperty("byId", recipe.byId());
+                    out.add(o);
+                }
                 case RichText.Image image -> {
                     JsonObject o = new JsonObject();
                     o.addProperty("img", image.texture().toString());

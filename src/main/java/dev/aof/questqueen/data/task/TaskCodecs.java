@@ -48,12 +48,29 @@ final class TaskCodecs {
     private TaskCodecs() {
     }
 
+    private static final Map<String, MapCodec<Task>> WITH_ICON = new java.util.concurrent.ConcurrentHashMap<>();
+
     static MapCodec<? extends Task> forType(String type) {
         String key = type.toLowerCase(Locale.ROOT);
-        MapCodec<? extends Task> codec = CODECS.get(ALIASES.getOrDefault(key, key));
+        String canonical = ALIASES.getOrDefault(key, key);
+        MapCodec<? extends Task> codec = CODECS.get(canonical);
         if (codec == null) {
             throw new IllegalArgumentException("Unknown quest task type: " + type);
         }
-        return codec;
+        return WITH_ICON.computeIfAbsent(canonical, ignored -> withIcon(codec));
+    }
+
+    /**
+     * Every task type also reads an optional {@code "icon"}: the item shown on its row. A task that sets one comes
+     * back as a {@link DisplayedTask} around the plain task; one that does not is the plain task, as before.
+     */
+    @SuppressWarnings("unchecked")
+    private static MapCodec<Task> withIcon(MapCodec<? extends Task> codec) {
+        MapCodec<Task> plain = (MapCodec<Task>) codec;
+        return com.mojang.serialization.codecs.RecordCodecBuilder.mapCodec(instance -> instance.group(
+                plain.forGetter(Task::unwrap),
+                com.mojang.serialization.Codec.STRING.optionalFieldOf("icon").forGetter(Task::displayItem)
+        ).apply(instance, (task, icon) -> icon.filter(s -> !s.isBlank())
+                .<Task>map(s -> new DisplayedTask(task, s)).orElse(task)));
     }
 }
