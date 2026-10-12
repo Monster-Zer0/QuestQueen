@@ -5,6 +5,7 @@ import {
   REWARD_TYPES,
   STARTER,
   TASK_TYPES,
+  ICON_TASK_TYPES,
   chapterGridHeight,
   chapterGridWidth,
   chapterTree,
@@ -1326,6 +1327,7 @@ function showCard(tile?: Tile) {
           ${TASK_TYPES.map((type) => `<option value="${type}" ${task.type === type ? "selected" : ""}>${type}</option>`).join("")}
         </select>
         ${taskFields(task, index, ro, !authoring)}
+        ${ICON_TASK_TYPES.has(task.type) ? itemSelectHtml(`data-task="${index}" data-field="icon"`, task.icon ?? "", !authoring, "DISPLAY ITEM (OPTIONAL)") : ""}
         ${authoring ? `<button type="button" data-remove-task="${index}">REMOVE TASK</button>` : ""}
       </fieldset>
     `).join("")}
@@ -1506,7 +1508,9 @@ function showCard(tile?: Tile) {
       const task = tile.tasks?.[Number(host.dataset.task)];
       const field = host.dataset.field;
       if (!task || !field) continue;
-      (task as unknown as Record<string, string>)[field] = host.dataset.value ?? "";
+      const value = host.dataset.value ?? "";
+      if (field === "icon" && !value) delete task.icon;
+      else (task as unknown as Record<string, string>)[field] = value;
     }
     const requiredStage = (document.getElementById("tile-required-stage") as HTMLInputElement | null)?.value.trim() ?? "";
     if (requiredStage) tile.required_stage = requiredStage;

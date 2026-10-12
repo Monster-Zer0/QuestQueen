@@ -18,6 +18,7 @@ import java.util.Locale;
  * - a bullet                  ---   (a rule)
  * {item:minecraft:diamond}    {item:minecraft:iron_ingot x3}    {glyph:sword}
  * ![caption](mypack:textures/quest/castle.png)      (a picture, alone on its line)
+ * {recipe:minecraft:furnace}   {recipe:id=minecraft:iron_ingot_from_smelting_iron_ore}   (alone on its line)
  * \*  a backslash keeps the next markup character literal
  * </pre>
  *
@@ -55,7 +56,7 @@ public final class RichText {
     }
 
     /** A vertical piece of the description. */
-    public sealed interface Block permits Paragraph, Image, Rule, Gap {
+    public sealed interface Block permits Paragraph, Image, Recipe, Rule, Gap {
     }
 
     public record Paragraph(Heading heading, boolean bullet, List<Inline> inlines) implements Block {
@@ -70,6 +71,13 @@ public final class RichText {
         public Image {
             caption = caption == null ? "" : caption;
         }
+    }
+
+    /**
+     * A recipe drawn from the game's recipe list. {@code byId} false: the first recipe that makes the item
+     * {@code target}; true: the recipe whose id is {@code target}.
+     */
+    public record Recipe(ResourceLocation target, boolean byId) implements Block {
     }
 
     public record Rule() implements Block {
@@ -118,6 +126,10 @@ public final class RichText {
         if (image != null) {
             return image;
         }
+        Recipe recipe = parseRecipe(line);
+        if (recipe != null) {
+            return recipe;
+        }
         Heading heading = Heading.NONE;
         boolean bullet = false;
         String rest = raw.stripLeading();
@@ -155,6 +167,23 @@ public final class RichText {
             return null;
         }
         return new Image(ResourceLocation.parse(path), line.substring(2, captionEnd).strip());
+    }
+
+    /** {@code {recipe:ns:item}} or {@code {recipe:id=ns:recipe}} filling the whole line. */
+    private static Recipe parseRecipe(String line) {
+        if (!line.startsWith("{recipe:") || !line.endsWith("}")) {
+            return null;
+        }
+        String body = line.substring(8, line.length() - 1).trim();
+        boolean byId = body.startsWith("id=");
+        if (byId) {
+            body = body.substring(3).trim();
+        }
+        if (body.isEmpty() || body.indexOf(':') <= 0 || body.endsWith(":")) {
+            return null;
+        }
+        ResourceLocation id = ResourceLocation.tryParse(body);
+        return id == null ? null : new Recipe(id, byId);
     }
 
     private static void parseInline(String s, int start, int end, State st, List<Inline> out) {
@@ -332,6 +361,7 @@ public final class RichText {
                     yield text.toString();
                 }
                 case Image image -> image.caption();
+                case Recipe ignored -> "";
                 case Rule ignored -> "";
                 case Gap ignored -> "";
             };

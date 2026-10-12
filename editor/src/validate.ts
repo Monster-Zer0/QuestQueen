@@ -1,7 +1,7 @@
 // Every check the editor makes before a save or export, in one place. Mirrors what the mod's codecs require and
 // what makes a quest impossible to finish, so problems show in the editor instead of in game.
 import { commandRewardProblems } from "./commandReward";
-import { descriptionProblems } from "./richtext";
+import { descriptionProblems, validItemId } from "./richtext";
 import { chapterGridHeight, chapterGridWidth, gateOp, parentLoops, type Chapter, type Reward, type Task } from "./types";
 
 /** A resource location, with or without its namespace (the game reads "stone" as minecraft:stone). */
@@ -67,6 +67,9 @@ function checkRequired(where: string, record: Record<string, unknown>, required:
 
 function checkTask(where: string, task: Task, errors: string[]) {
   checkRequired(where, task as unknown as Record<string, unknown>, TASK_REQUIRES[task.type] ?? [], errors);
+  if (task.icon !== undefined && task.icon.trim() && !validItemId(task.icon.trim().split("[")[0])) {
+    errors.push(`${where}: display item "${task.icon}" is not an item id`);
+  }
   if (COUNTED.has(task.type) && task.count !== undefined && !(task.count >= 1)) errors.push(`${where}: count must be at least 1`);
   if (task.type === "raid" && !((task.waves ?? 1) >= 1)) errors.push(`${where}: waves must be at least 1`);
   if (task.type === "xp_levels" && !((task.levels ?? 1) >= 1)) errors.push(`${where}: levels must be at least 1`);
