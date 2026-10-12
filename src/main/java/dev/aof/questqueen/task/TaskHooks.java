@@ -394,7 +394,7 @@ public final class TaskHooks {
 
     private static void scanLocation(ServerPlayer player) {
         forEachOfTypes(player, List.of("location"), (chapter, tile, index, task) -> {
-            if (task instanceof LocationTask location) {
+            if (dev.aof.questqueen.data.task.Task.unwrap(task) instanceof LocationTask location) {
                 if (!location.dimension().isEmpty() && !player.level().dimension().location().toString().equals(location.dimension())) {
                     return;
                 }

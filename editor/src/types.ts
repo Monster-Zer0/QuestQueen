@@ -3,6 +3,8 @@ export interface Icon { item?: string; glyph?: string; }
 export interface Task {
   type: string;
   item?: string;
+  /** An item to show on the row of a task that has none of its own (advancement, stat, kill, ...). */
+  icon?: string;
   tag?: string;
   entity?: string;
   count?: number;
@@ -399,3 +401,9 @@ export function startsOf(chapter: Chapter): Set<string> {
   const inbound = new Set((chapter.links ?? []).map((link) => link.to));
   return new Set(chapter.tiles.filter((tile) => !inbound.has(tile.id)).map((tile) => tile.id));
 }
+
+/** Task types that name no item of their own, so a display item ("icon") can stand in on their row. */
+export const ICON_TASK_TYPES = new Set([
+  "advancement", "stat", "kill", "trigger", "checkmark", "interact_block", "interact_entity",
+  "visit_structure", "visit_dimension", "visit_biome", "location", "observation", "raid", "xp_levels", "npc_dialog",
+]);

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Wrapping, spacing, pictures and scroll maths, against a fixed-width font (6px a letter, 7 when bold). */
@@ -145,4 +146,23 @@ class RichLayoutTest {
         assertEquals(60, RichLayout.scrollForThumb(40, 40, 40, 100));
         assertEquals(30, RichLayout.scrollForThumb(20, 40, 40, 100));
     }
+
+    @Test
+    void recipeBlocksTakeTheSizerSizeOrAMissingFrame() {
+        var blocks = RichText.parse("Make one:\n{recipe:minecraft:furnace}\nDone.");
+        RichLayout.Laid laid = RichLayout.layout(blocks, 200, FONT, t -> new int[]{64, 32},
+                (recipe, column) -> new int[]{104, 54}, 200);
+        RichLayout.RecipePiece piece = laid.pieces().stream().filter(p -> p instanceof RichLayout.RecipePiece)
+                .map(p -> (RichLayout.RecipePiece) p).findFirst().orElseThrow();
+        assertEquals(104, piece.w());
+        assertEquals(54, piece.h());
+        assertEquals((200 - 104) / 2, piece.x());
+        assertFalse(piece.missing());
+        RichLayout.RecipePiece missing = RichLayout.layout(RichText.parse("{recipe:minecraft:nope}"), 200, FONT,
+                t -> null, (recipe, column) -> null, 200).pieces().stream()
+                .map(p -> (RichLayout.RecipePiece) p).findFirst().orElseThrow();
+        assertTrue(missing.missing());
+        assertEquals(RichLayout.MISSING_RECIPE_H, missing.h());
+    }
 }
+

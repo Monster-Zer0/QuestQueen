@@ -29,7 +29,16 @@ public final class RichLayout {
         int[] size(ResourceLocation texture);
     }
 
-    public sealed interface Piece permits TextPiece, ItemPiece, GlyphPiece, ImagePiece, RulePiece {
+    /** A recipe's drawn size within {@code column} pixels, or {@code null} when there is no such recipe. */
+    public interface RecipeSizer {
+        int[] size(RichText.Recipe recipe, int column);
+    }
+
+    /** The drawn size of a "missing recipe" frame. */
+    static final int MISSING_RECIPE_W = 112;
+    static final int MISSING_RECIPE_H = 28;
+
+    public sealed interface Piece permits TextPiece, ItemPiece, GlyphPiece, ImagePiece, RecipePiece, RulePiece {
         int y();
 
         int height();
@@ -66,6 +75,15 @@ public final class RichLayout {
         }
     }
 
+    /** A recipe block; {@code missing} is drawn as a labelled empty frame, like a missing picture. */
+    public record RecipePiece(int x, int y, int w, int h, RichText.Recipe recipe, boolean missing, int column)
+            implements Piece {
+        @Override
+        public int height() {
+            return h;
+        }
+    }
+
     public record RulePiece(int x, int y, int w) implements Piece {
         @Override
         public int height() {
@@ -87,6 +105,11 @@ public final class RichLayout {
      */
     public static Laid layout(List<RichText.Block> blocks, int width, Measure measure, ImageSizer sizer,
                               int maxImageH) {
+        return layout(blocks, width, measure, sizer, null, maxImageH);
+    }
+
+    public static Laid layout(List<RichText.Block> blocks, int width, Measure measure, ImageSizer sizer,
+                              RecipeSizer recipes, int maxImageH) {
         int column = Math.max(16, width);
         List<Piece> out = new ArrayList<>();
         int y = 0;
@@ -99,6 +122,15 @@ public final class RichLayout {
                     y += 4;
                 }
                 case RichText.Image image -> y = image(out, image, y, column, measure, sizer, maxImageH);
+                case RichText.Recipe recipe -> {
+                    int[] size = recipes == null ? null : recipes.size(recipe, column);
+                    boolean missing = size == null || size[0] <= 0 || size[1] <= 0;
+                    int w = missing ? Math.min(column, MISSING_RECIPE_W) : Math.min(column, size[0]);
+                    int h = missing ? MISSING_RECIPE_H : size[1];
+                    y += 2;
+                    out.add(new RecipePiece(Math.max(0, (column - w) / 2), y, w, h, recipe, missing, column));
+                    y += h + 4;
+                }
                 case RichText.Paragraph paragraph -> y = paragraph(out, paragraph, y, column, measure);
             }
         }
