@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build web editor
+        run: cd editor && npm ci && npm run build
+      - name: Build
+        run: |
+          sed -i '/^org.gradle.java.home=/d' gradle.properties
+          chmod +x gradlew
+          ./gradlew build --no-daemon
+      # Release notes are the annotated tag's message, plus the jar's checksum.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          git fetch -f origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          jar=$(ls build/libs/*-all.jar)
+          git tag -l --format='%(contents:body)' "$GITHUB_REF_NAME" > notes.md
+          printf '\n`%s` sha256 `%s`\n' "$(basename "$jar")" "$(sha256sum "$jar" | cut -d' ' -f1)" >> notes.md
+          gh release create "$GITHUB_REF_NAME" "$jar" --title "QuestQueen ${GITHUB_REF_NAME#v}" --notes-file notes.md
