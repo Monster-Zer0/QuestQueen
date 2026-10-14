@@ -382,4 +382,13 @@ public final class MockChrome {
         box(graphics, x + 1, y + 3, 1, 1, color);
         box(graphics, x, y + 4, 1, 1, color);
     }
+
+    /** A small keyboard in a 14×14 button: a key-cap outline with two rows of keys and a space bar. */
+    public static void keysIcon(GuiGraphics graphics, int x, int y, int color) {
+        frame(graphics, x + 2, y + 4, 10, 7, color);
+        box(graphics, x + 4, y + 6, 1, 1, color);
+        box(graphics, x + 6, y + 6, 1, 1, color);
+        box(graphics, x + 8, y + 6, 1, 1, color);
+        box(graphics, x + 5, y + 8, 4, 1, color);
+    }
 }
