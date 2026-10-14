@@ -76,6 +76,30 @@ Pictures are ordinary textures: put the PNG in the pack's resource pack (or a mo
 
 The web editor has buttons for all of this above the description box, a live preview, and flags a picture path or item id that would show up as plain text.
 
+## Keyboard
+
+The quest book can be driven entirely from the keyboard. Every key below is rebindable under **Controls > Key Binds > Quest Queen**, and the keyboard icon in the book's top bar lists the current bindings on hover (click it, or press F1, for a larger list). `[keyboard] showKeyHelpIcon` hides the icon.
+
+| Key | Does |
+|---|---|
+| Arrow keys | move to the nearest quest in that direction (the camera follows) |
+| Enter | open the selected quest's card; again to move focus into the card; on a focused part, click it |
+| Esc | back out one step: card focus, then the card, then the book |
+| C / Shift+C | claim or submit / claim all |
+| P | pin or unpin |
+| E | read the description in the large reader |
+| R / U | recipes / uses of the focused item, in EMI, REI or JEI |
+| Page Up / Page Down | previous / next chapter (inside a card: scroll its description) |
+| = / − / F | zoom in / out / fit the chapter |
+| Shift+arrows | pan the board |
+| / | search |
+| L | quest log |
+| F1 | the key list |
+
+Inside a card the arrows move between its parts: item icons and recipe slots in the description, task rows, what the quest unlocks, rewards, and the buttons. The focused part shows its tooltip.
+
+While the book is open, Quest Queen handles its own keys before any other mod, so a recipe viewer's R/U or an inventory mod's keys never act on them; keys the book does not use pass through as usual. Everything typed into the book's search box stays there too.
+
 ## Task display items
 
 Tasks that have no item of their own (advancement, stat, kill, trigger, checkmark, interact, visit, location, observation, raid, xp levels, NPC dialog) can name one with `"icon"`:
