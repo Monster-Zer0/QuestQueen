@@ -34,6 +34,19 @@ public class QuestQueenClient {
         NeoForge.EVENT_BUS.addListener(dev.aof.questqueen.client.InventoryButton::onInit);
         NeoForge.EVENT_BUS.addListener(dev.aof.questqueen.client.InventoryButton::onRender);
         NeoForge.EVENT_BUS.addListener(QuestHudOverlay::onScreenRender);
+        // In the quest book, Quest Queen's keys are handled first and go no further: no other mod (recipe viewers'
+        // R/U, inventory sorters, ...) acts on them. Keys that are not Quest Queen's pass through untouched.
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, QuestQueenClient::onBookKeyPressed);
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, QuestQueenClient::onBookKeyReleased);
+        if (QuestBookScreen.TEST_HOOKS) {
+            // Dev runs only: a stand-in for "another mod" listening for keys on any screen, so the e2e can check
+            // it never receives the book's keys.
+            NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.ScreenEvent.KeyPressed.Pre event) -> {
+                if (event.getScreen() instanceof QuestBookScreen) {
+                    QuestBookScreen.OTHER_MOD_KEYS.add(event.getKeyCode());
+                }
+            });
+        }
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RecipesUpdatedEvent event) ->
                 dev.aof.questqueen.client.RecipeBlocks.clear());
     }
@@ -47,8 +60,29 @@ public class QuestQueenClient {
         QuestNetwork.clearClientChunks();
     }
 
+    private static void onBookKeyPressed(net.neoforged.neoforge.client.event.ScreenEvent.KeyPressed.Pre event) {
+        if (!(event.getScreen() instanceof QuestBookScreen book)) {
+            return;
+        }
+        if (book.typingInSearch()) {
+            // Typing in the book's search box: the box gets every key, and no other mod sees them.
+            book.keyPressed(event.getKeyCode(), event.getScanCode(), event.getModifiers());
+            event.setCanceled(true);
+        } else if (book.handleQuestKey(event.getKeyCode(), event.getScanCode(), event.getModifiers())) {
+            event.setCanceled(true);
+        }
+    }
+
+    private static void onBookKeyReleased(net.neoforged.neoforge.client.event.ScreenEvent.KeyReleased.Pre event) {
+        if (event.getScreen() instanceof QuestBookScreen book
+                && book.consumesKey(event.getKeyCode(), event.getScanCode(), event.getModifiers())) {
+            event.setCanceled(true);
+        }
+    }
+
     private static void onRegisterKeys(RegisterKeyMappingsEvent event) {
         event.register(QuestKeybinds.OPEN_BOOK);
+        QuestKeybinds.BOOK.forEach(event::register);
     }
 
     private static void onRegisterGuiLayers(RegisterGuiLayersEvent event) {

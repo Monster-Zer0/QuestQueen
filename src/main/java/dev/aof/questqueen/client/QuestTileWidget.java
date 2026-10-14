@@ -164,6 +164,13 @@ public final class QuestTileWidget extends AbstractWidget {
         this.selectionHalo = selectionHalo;
     }
 
+    /** The keyboard's selection: a steady ring that shows even with animations off. */
+    private boolean keyFocus;
+
+    public void setKeyFocus(boolean keyFocus) {
+        this.keyFocus = keyFocus;
+    }
+
     public void setShown(boolean shown) {
         this.visible = shown;
     }
@@ -229,6 +236,10 @@ public final class QuestTileWidget extends AbstractWidget {
             float breath = UiFx.wave(2100L, (x * 31L) ^ (y * 17L));
             int halo = UiFx.withAlpha(edge, 0.22f + 0.38f * breath);
             MockChrome.frame(graphics, x - 1, y - 1, size + 2, size + 2, halo);
+        }
+        if (keyFocus) {
+            MockChrome.frame(graphics, x - 3, y - 3, size + 6, size + 6, QuestColors.EDIT);
+            MockChrome.frame(graphics, x - 2, y - 2, size + 4, size + 4, UiFx.withAlpha(QuestColors.EDIT, 0.45f));
         }
         if (showsExpand(locked, expand) && edge != 0 && size >= 22) {
             // Data D3: LOCKED never gets the expand glyph, even if chrome asked for it.
