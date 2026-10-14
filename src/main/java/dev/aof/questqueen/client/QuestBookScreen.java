@@ -169,6 +169,19 @@ public class QuestBookScreen extends Screen {
     private ResourceLocation occupiedChapterId;
     private int occupiedTileCount = -1;
     private int hoverOverrideX = Integer.MIN_VALUE;
+    /** The last input was a key: the selected tile shows a focus ring. A mouse move turns it off. */
+    private boolean keyboardMode;
+    /** Keyboard focus is inside the open card, on {@link #cardFocusIndex} of {@link #cardTargets()}. */
+    private boolean cardFocus;
+    private int cardFocusIndex;
+    /** The key help panel (help key, or a click on the keyboard icon). */
+    private boolean helpOpen;
+    private static final int KEYS_S = 14;
+    /**
+     * Dev runs only: key codes a stand-in "other mod" listener saw on this screen, to prove Quest Queen's keys
+     * never reach other mods (see {@code QuestQueenClient}).
+     */
+    public static final List<Integer> OTHER_MOD_KEYS = java.util.Collections.synchronizedList(new ArrayList<>());
     private int hoverOverrideY = Integer.MIN_VALUE;
     /** Soft fade-lock padlock after GOTCHA cap (screen-space, tile center or sidebar row). */
     private int fadeLockX;
@@ -1351,6 +1364,8 @@ public class QuestBookScreen extends Screen {
             tileWidgets.get(i).setOverlayClip(showInspect, cx, cy + inspectFxOffsetY(), cw, ch);
             tileWidgets.get(i).setSelectionHalo(tile.id().equals(selectedId)
                     && !drawingLog() && !isIntroChapter());
+            tileWidgets.get(i).setKeyFocus(keyboardMode && !cardFocus && tile.id().equals(selectedId)
+                    && !drawingLog() && !isIntroChapter());
             i++;
         }
     }
@@ -1635,8 +1650,16 @@ public class QuestBookScreen extends Screen {
                 if (showInspectPanel()) {
                     pose.pushPose();
                     pose.translate(0, 0, 500);
-                    drawInspectTooltips(graphics, hoverOverrideX != Integer.MIN_VALUE ? hoverOverrideX : mouseX,
-                            hoverOverrideY != Integer.MIN_VALUE ? hoverOverrideY : mouseY);
+                    Optional<FocusTarget> focus = focusedTarget();
+                    focus.ifPresent(f -> {
+                        MockChrome.frame(graphics, f.x() - 2, f.y() - 2, f.w() + 4, f.h() + 4, QuestColors.EDIT);
+                        MockChrome.frame(graphics, f.x() - 1, f.y() - 1, f.w() + 2, f.h() + 2, UiFx.withAlpha(QuestColors.EDIT, 0.4f));
+                    });
+                    int tipX = focus.map(FocusTarget::centreX)
+                            .orElse(hoverOverrideX != Integer.MIN_VALUE ? hoverOverrideX : mouseX);
+                    int tipY = focus.map(FocusTarget::centreY)
+                            .orElse(hoverOverrideY != Integer.MIN_VALUE ? hoverOverrideY : mouseY);
+                    drawInspectTooltips(graphics, tipX, tipY);
                     pose.popPose();
                 }
             }
@@ -1672,6 +1695,22 @@ public class QuestBookScreen extends Screen {
                 drawSidebarTab(graphics);
                 drawSidebarLabels(graphics, mouseX, mouseY);
                 drawSidebarTitle(graphics);
+                pose.popPose();
+            }
+            int keyHx = hoverOverrideX != Integer.MIN_VALUE ? hoverOverrideX : mouseX;
+            int keyHy = hoverOverrideY != Integer.MIN_VALUE ? hoverOverrideY : mouseY;
+            if (!logOpen && !helpOpen && keyHelpIconShown() && over(keysX(), 6, KEYS_S, KEYS_S, keyHx, keyHy)) {
+                var pose = graphics.pose();
+                pose.pushPose();
+                pose.translate(0, 0, 600);
+                drawKeyHelpTooltip(graphics, keyHx, keyHy);
+                pose.popPose();
+            }
+            if (helpOpen) {
+                var pose = graphics.pose();
+                pose.pushPose();
+                pose.translate(0, 0, 650);
+                drawHelpPanel(graphics);
                 pose.popPose();
             }
             drawFadeLock(graphics, partialTick);
@@ -2199,6 +2238,10 @@ public class QuestBookScreen extends Screen {
                 MockChrome.box(graphics, fitX(), 6, FIT_S, FIT_S, QuestColors.CARD);
                 MockChrome.frame(graphics, fitX(), 6, FIT_S, FIT_S, QuestColors.SIDEBAR_EDGE);
             }
+            if (keyHelpIconShown()) {
+                MockChrome.box(graphics, keysX(), 6, KEYS_S, KEYS_S, QuestColors.CARD);
+                MockChrome.frame(graphics, keysX(), 6, KEYS_S, KEYS_S, helpOpen ? QuestColors.EDIT : QuestColors.SIDEBAR_EDGE);
+            }
             if (claimAllShown()) {
                 MockChrome.box(graphics, claimAllX(), 6, claimAllW(), 14, QuestColors.CARD);
                 MockChrome.frame(graphics, claimAllX(), 6, claimAllW(), 14, QuestColors.CURRENT);
@@ -2368,6 +2411,9 @@ public class QuestBookScreen extends Screen {
             MockChrome.chevron(graphics, tabX() + 3, tabY() + TAB_H / 2 - 2, !sidebarCollapsed, QuestColors.SIDEBAR_HEADER);
             if (!isIntroChapter()) {
                 MockChrome.fitIcon(graphics, fitX(), 6, QuestColors.SIDEBAR_TEXT);
+            }
+            if (keyHelpIconShown()) {
+                MockChrome.keysIcon(graphics, keysX(), 6, QuestColors.SIDEBAR_TEXT);
             }
         }
         drawButtonLabel(graphics, logX(), 6, LOG_W, 14, logOpen ? "BOOK" : "LOG", QuestColors.SIDEBAR_TEXT);
@@ -4411,6 +4457,10 @@ public class QuestBookScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (helpOpen && !(keyHelpIconShown() && over(keysX(), 6, KEYS_S, KEYS_S, mouseX, mouseY))) {
+            helpOpen = false;
+            return true;
+        }
         if (clickSearchSuggestion(mouseX, mouseY)) {
             return true;
         }
@@ -4510,27 +4560,16 @@ public class QuestBookScreen extends Screen {
             return true;
         }
         if (over(logX(), 6, LOG_W, 14, mouseX, mouseY)) {
-            if (fxLogClosing) {
-                // Re-open mid-close: cancel the exit and slide back in.
-                fxLogClosing = false;
-                logOpen = true;
-                fxLogAt = UiFx.nowMs();
-            } else if (!logOpen) {
-                logOpen = true;
-                fxLogClosing = false;
-                fxLogAt = UiFx.nowMs();
-                logScroll = 0;
-            } else if (UiFx.enabled()) {
-                fxLogClosing = true;
-                fxLogAt = UiFx.nowMs();
-            } else {
-                logOpen = false;
-            }
+            toggleLog();
             return true;
         }
         if (!logOpen && isIntroChapter() && button == 0 && overIntroThumbTrack(mouseX, mouseY)) {
             draggingIntroThumb = true;
             dragIntroThumb(mouseY);
+            return true;
+        }
+        if (!logOpen && keyHelpIconShown() && over(keysX(), 6, KEYS_S, KEYS_S, mouseX, mouseY)) {
+            helpOpen = !helpOpen;
             return true;
         }
         if (!logOpen && !isIntroChapter() && over(fitX(), 6, FIT_S, FIT_S, mouseX, mouseY)) {
@@ -4583,41 +4622,7 @@ public class QuestBookScreen extends Screen {
             }
             int[] s = screen(tile.pos().x(), tile.pos().y());
             if (mouseX >= s[0] && mouseY >= s[1] && mouseX < s[0] + tilePx() && mouseY < s[1] + tilePx()) {
-                TileVisual visual = ClientQuestState.visual(chapter, tile);
-                if (visual == TileVisual.LOCKED) {
-                    List<Link> incomplete = ClientQuestState.incompleteParents(chapter, tile);
-                    if (incomplete.size() >= 1) {
-                        int[] pos = tileCuePos(tile);
-                        cueLocked(tile.id(), pos[0], pos[1]);
-                        selectedId = tile.id();
-                        expanded = false;
-                        return true;
-                    }
-                }
-                if (visual == TileVisual.CLOSED) {
-                    return true;
-                }
-                if (isPinnedTile(tile)) {
-                    pinnedCardHidden = false;
-                }
-                if (expanded && selectedId.equals(tile.id())) {
-                    if (isPinnedTile(tile)) {
-                        return true;
-                    }
-                    expanded = false;
-                    return true;
-                }
-                selectedId = tile.id();
-                bounce = 0f;
-                if (xorPromptDue(tile)) {
-                    expanded = false;
-                    openModal(ModalKind.XOR, tile.id());
-                } else {
-                    // Keep the description panel open; pinned card stays at its screen position.
-                    expanded = true;
-                    modal = ModalKind.NONE;
-                    modalTileId = "";
-                }
+                activateTile(tile);
                 return true;
             }
         }
@@ -4628,6 +4633,620 @@ public class QuestBookScreen extends Screen {
             return true;
         }
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    // ---- keyboard --------------------------------------------------------------------------------------
+
+    /** Typing in the search box: every key belongs to it. */
+    public boolean typingInSearch() {
+        return search != null && search.isFocused();
+    }
+
+    /**
+     * Is this key one Quest Queen takes on this screen? Used for key releases, so other mods never see half of a
+     * press either.
+     */
+    public boolean consumesKey(int keyCode, int scanCode, int mods) {
+        return typingInSearch() || QuestKeybinds.anyBook(keyCode, scanCode, mods) || keyCode == GLFW.GLFW_KEY_ESCAPE;
+    }
+
+    /**
+     * Every keyboard command of the book. True when the key was one of Quest Queen's (even if it had nothing to
+     * act on right now): the caller then stops it reaching other mods.
+     */
+    public boolean handleQuestKey(int keyCode, int scanCode, int mods) {
+        if (typingInSearch()) {
+            return false;
+        }
+        boolean escape = keyCode == GLFW.GLFW_KEY_ESCAPE && (mods & 7) == 0;
+        boolean ours = escape || QuestKeybinds.anyBook(keyCode, scanCode, mods);
+        if (!ours) {
+            return false;
+        }
+        keyboardMode = true;
+        if (helpOpen) {
+            helpOpen = false;
+            return true;
+        }
+        if (modal != ModalKind.NONE) {
+            modalKey(keyCode, scanCode, mods, escape);
+            return true;
+        }
+        if (logOpen) {
+            logKey(keyCode, scanCode, mods, escape);
+            return true;
+        }
+        if (escape) {
+            if (cardFocus) {
+                exitCardFocus();
+                return true;
+            }
+            if (expanded && showInspectPanel() && !inspectPinned()) {
+                expanded = false;
+                return true;
+            }
+            // Nothing left to back out of: the screen's own Esc closes the book.
+            return false;
+        }
+        if (is(QuestKeybinds.HELP, keyCode, scanCode, mods)) {
+            helpOpen = true;
+            return true;
+        }
+        if (is(QuestKeybinds.LOG, keyCode, scanCode, mods)) {
+            exitCardFocus();
+            toggleLog();
+            return true;
+        }
+        if (is(QuestKeybinds.SEARCH, keyCode, scanCode, mods)) {
+            exitCardFocus();
+            if (search != null) {
+                setFocused(search);
+                search.setFocused(true);
+                // The key that opened search must not also land in it as a character.
+                swallowNextChar = true;
+            }
+            return true;
+        }
+        if (is(QuestKeybinds.CLAIM_ALL, keyCode, scanCode, mods)) {
+            if (claimAllShown()) {
+                exitCardFocus();
+                openClaimAll();
+            }
+            return true;
+        }
+        if (is(QuestKeybinds.PREV_CHAPTER, keyCode, scanCode, mods) || is(QuestKeybinds.NEXT_CHAPTER, keyCode, scanCode, mods)) {
+            if (cardFocus) {
+                // Inside the card the page keys scroll a long description instead.
+                scrollDescription(is(QuestKeybinds.NEXT_CHAPTER, keyCode, scanCode, mods) ? 40 : -40);
+            } else {
+                stepChapter(is(QuestKeybinds.NEXT_CHAPTER, keyCode, scanCode, mods) ? 1 : -1);
+            }
+            return true;
+        }
+        if (isIntroChapter()) {
+            return true;
+        }
+        if (cardFocus) {
+            cardKey(keyCode, scanCode, mods);
+            return true;
+        }
+        boardKey(keyCode, scanCode, mods);
+        return true;
+    }
+
+    private static boolean is(net.minecraft.client.KeyMapping mapping, int keyCode, int scanCode, int mods) {
+        return QuestKeybinds.pressed(mapping, keyCode, scanCode, mods);
+    }
+
+    private void modalKey(int keyCode, int scanCode, int mods, boolean escape) {
+        if (modal == ModalKind.READER) {
+            if (escape || is(QuestKeybinds.EXPAND, keyCode, scanCode, mods)) {
+                dismissModal();
+            } else {
+                readerKey(keyCode);
+            }
+            return;
+        }
+        if (modal == ModalKind.CLAIM_ALL) {
+            if (is(QuestKeybinds.SELECT, keyCode, scanCode, mods)) {
+                confirmClaimAll();
+            } else if (escape) {
+                dismissModal();
+            }
+            return;
+        }
+        if (escape || is(QuestKeybinds.SELECT, keyCode, scanCode, mods)) {
+            dismissModal();
+        }
+    }
+
+    private void logKey(int keyCode, int scanCode, int mods, boolean escape) {
+        if (escape || is(QuestKeybinds.LOG, keyCode, scanCode, mods)) {
+            toggleLog();
+            return;
+        }
+        int step = is(QuestKeybinds.UP, keyCode, scanCode, mods) ? -20 : is(QuestKeybinds.DOWN, keyCode, scanCode, mods) ? 20
+                : is(QuestKeybinds.PREV_CHAPTER, keyCode, scanCode, mods) ? -120
+                : is(QuestKeybinds.NEXT_CHAPTER, keyCode, scanCode, mods) ? 120 : 0;
+        if (step != 0) {
+            logScroll = Math.max(0, Math.min(logMaxScroll(), logScroll + step));
+        }
+    }
+
+    /** Keys on the board: move the selection, open its card, act on it, zoom and pan. */
+    private void boardKey(int keyCode, int scanCode, int mods) {
+        for (var pan : List.of(QuestKeybinds.PAN_UP, QuestKeybinds.PAN_DOWN, QuestKeybinds.PAN_LEFT, QuestKeybinds.PAN_RIGHT)) {
+            if (is(pan, keyCode, scanCode, mods)) {
+                double step = STRIDE;
+                if (pan == QuestKeybinds.PAN_UP) cameraY -= step;
+                if (pan == QuestKeybinds.PAN_DOWN) cameraY += step;
+                if (pan == QuestKeybinds.PAN_LEFT) cameraX -= step;
+                if (pan == QuestKeybinds.PAN_RIGHT) cameraX += step;
+                return;
+            }
+        }
+        KeyNav.Dir dir = is(QuestKeybinds.UP, keyCode, scanCode, mods) ? KeyNav.Dir.UP
+                : is(QuestKeybinds.DOWN, keyCode, scanCode, mods) ? KeyNav.Dir.DOWN
+                : is(QuestKeybinds.LEFT, keyCode, scanCode, mods) ? KeyNav.Dir.LEFT
+                : is(QuestKeybinds.RIGHT, keyCode, scanCode, mods) ? KeyNav.Dir.RIGHT : null;
+        if (dir != null) {
+            moveSelection(dir);
+            return;
+        }
+        if (is(QuestKeybinds.ZOOM_IN, keyCode, scanCode, mods) || is(QuestKeybinds.ZOOM_OUT, keyCode, scanCode, mods)) {
+            int[] at = selectedId.isEmpty() || chapter.tile(selectedId).isEmpty()
+                    ? new int[]{boardLeft() + contentWidth() / 2, TOP_H + contentHeight() / 2}
+                    : chapter.tile(selectedId).map(this::tileCentre).orElseThrow();
+            stepZoom(is(QuestKeybinds.ZOOM_IN, keyCode, scanCode, mods) ? 1 : -1, at[0], at[1]);
+            return;
+        }
+        if (is(QuestKeybinds.FIT, keyCode, scanCode, mods)) {
+            fitAllContent();
+            return;
+        }
+        Tile selected = chapter.tile(selectedId).orElse(null);
+        if (is(QuestKeybinds.SELECT, keyCode, scanCode, mods)) {
+            if (selected == null) {
+                selectStart();
+            } else if (showInspectPanel() && inspectTileId().equals(selected.id())) {
+                cardFocus = true;
+                cardFocusIndex = 0;
+            } else {
+                activateTile(selected);
+            }
+            return;
+        }
+        Tile card = showInspectPanel() ? chapter.tile(inspectTileId()).orElse(null) : null;
+        Tile target = card != null ? card : selected;
+        if (target == null) {
+            return;
+        }
+        if (is(QuestKeybinds.CLAIM, keyCode, scanCode, mods)) {
+            if (playBar(target, cardX(), cardY(), cardW(), cardH()).action()) {
+                clickDone(target);
+            }
+        } else if (is(QuestKeybinds.PIN, keyCode, scanCode, mods)) {
+            TileVisual visual = ClientQuestState.visual(chapter, target);
+            if (visual != TileVisual.LOCKED && visual != TileVisual.CLOSED && visual != TileVisual.COMPLETED
+                    && visual != TileVisual.FAILED) {
+                togglePin(target);
+            }
+        } else if (is(QuestKeybinds.EXPAND, keyCode, scanCode, mods)) {
+            if (!inspectBody(target).isEmpty() && ClientQuestState.visual(chapter, target) != TileVisual.LOCKED) {
+                openReader(target.id());
+            }
+        }
+    }
+
+    /** Select the chapter's starting tile (the one FIT anchors on) without opening it. */
+    private void selectStart() {
+        FitCamera.Cell anchor = anchorCell();
+        if (anchor == null) {
+            return;
+        }
+        chapter.tiles().stream()
+                .filter(tile -> tile.pos().x() == anchor.x() && tile.pos().y() == anchor.y())
+                .findFirst()
+                .ifPresent(tile -> {
+                    selectedId = tile.id();
+                    keepInView(tile);
+                });
+    }
+
+    private void moveSelection(KeyNav.Dir dir) {
+        Tile from = chapter.tile(selectedId).orElse(null);
+        if (from == null || ClientQuestState.isConcealed(chapter, from)) {
+            selectStart();
+            return;
+        }
+        List<KeyNav.Point> points = new ArrayList<>();
+        for (Tile tile : chapter.tiles()) {
+            if (!ClientQuestState.isConcealed(chapter, tile)) {
+                points.add(new KeyNav.Point(tile.id(), tile.pos().x(), tile.pos().y()));
+            }
+        }
+        KeyNav.next(points, new KeyNav.Point(from.id(), from.pos().x(), from.pos().y()), dir)
+                .flatMap(point -> chapter.tile(point.id()))
+                .ifPresent(next -> {
+                    boolean cardWasOpen = expanded && selectedId.equals(inspectTileId());
+                    selectedId = next.id();
+                    bounce = 0f;
+                    TileVisual visual = ClientQuestState.visual(chapter, next);
+                    // A card that was open follows the selection, as clicking another tile would.
+                    expanded = cardWasOpen && visual != TileVisual.LOCKED && visual != TileVisual.CLOSED
+                            && !xorPromptDue(next);
+                    keepInView(next);
+                });
+    }
+
+    private int[] tileCentre(Tile tile) {
+        int[] s = screen(tile.pos().x(), tile.pos().y());
+        return new int[]{s[0] + tilePx() / 2, s[1] + tilePx() / 2};
+    }
+
+    /** Move the camera only as far as needed to show {@code tile} with a margin; no jump when it is in view. */
+    private void keepInView(Tile tile) {
+        int margin = 16;
+        int[] s = screen(tile.pos().x(), tile.pos().y());
+        int left = boardLeft() + margin;
+        int right = width - margin;
+        int top = TOP_H + margin;
+        int bottom = height - margin;
+        double dx = 0;
+        double dy = 0;
+        if (s[0] < left) {
+            dx = s[0] - left;
+        } else if (s[0] + tilePx() > right) {
+            dx = s[0] + tilePx() - right;
+        }
+        if (s[1] < top) {
+            dy = s[1] - top;
+        } else if (s[1] + tilePx() > bottom) {
+            dy = s[1] + tilePx() - bottom;
+        }
+        cameraX += dx / zoom;
+        cameraY += dy / zoom;
+    }
+
+    /** The previous or next chapter in the sidebar's order; a locked one shows why instead. */
+    private void stepChapter(int dir) {
+        exitCardFocus();
+        if (sidebarRows.isEmpty()) {
+            return;
+        }
+        int at = 0;
+        for (int i = 0; i < sidebarRows.size(); i++) {
+            if (sidebarRows.get(i).id().equals(chapter.id())) {
+                at = i;
+                break;
+            }
+        }
+        int next = at + dir;
+        if (next < 0 || next >= sidebarRows.size()) {
+            return;
+        }
+        SidebarRow row = sidebarRows.get(next);
+        if (row.locked()) {
+            cueLocked("", 10 + row.depth() * 10, row.y() + 8);
+            return;
+        }
+        openChapter(row.id());
+        if (!isIntroChapter()) {
+            selectStart();
+        }
+    }
+
+    // ---- focus inside the card ----------------------------------------------------------------------------
+
+    /** A part of the open card the keyboard can focus: where it is, and the item it stands for (if any). */
+    private record FocusTarget(int x, int y, int w, int h, ItemStack stack) {
+        int centreX() {
+            return x + w / 2;
+        }
+
+        int centreY() {
+            return y + h / 2;
+        }
+    }
+
+    /**
+     * The open card's focusable parts, as painted last frame: description items and recipe slots, task rows,
+     * what the quest unlocks, reward slots, then the action, choice, pin and expand buttons.
+     */
+    private List<FocusTarget> cardTargets() {
+        List<FocusTarget> out = new ArrayList<>();
+        if (!showInspectPanel()) {
+            return out;
+        }
+        Tile tile = chapter.tile(inspectTileId()).orElse(null);
+        if (tile == null) {
+            return out;
+        }
+        for (RichDraw.ItemHit hit : descItemHits) {
+            if (over(descX, descY, descW, descViewH, hit.x() + hit.w() / 2.0, hit.y() + hit.h() / 2.0)) {
+                out.add(new FocusTarget(hit.x(), hit.y(), hit.w(), hit.h(), hit.stack()));
+            }
+        }
+        java.util.Set<Integer> iconRows = new java.util.HashSet<>();
+        for (TaskIconHit hit : taskIconHits) {
+            out.add(new FocusTarget(hit.x(), hit.y(), hit.w(), hit.h(), hit.stack()));
+            iconRows.add(hit.y());
+        }
+        for (AdvancementHit hit : advancementHits) {
+            if (!iconRows.contains(hit.y())) {
+                out.add(new FocusTarget(hit.x(), hit.y(), Math.min(hit.w(), 120), hit.h(), ItemStack.EMPTY));
+            }
+        }
+        for (UnlockHit hit : unlockHits) {
+            out.add(new FocusTarget(hit.x(), hit.y(), hit.w(), hit.h(), ItemStack.EMPTY));
+        }
+        int x = cardX();
+        int y = cardY();
+        int w = cardW();
+        int h = cardH();
+        PlayBar bar = playBar(tile, x, y, w, h);
+        List<RewardSlot> slots = footerSlots(tile);
+        int iconY = inspectFootY(tile, x, y, w, h);
+        for (int i = 0; i < bar.layout().shown() && i < slots.size(); i++) {
+            ItemStack face = slots.get(i).face();
+            out.add(new FocusTarget(bar.layout().slotX()[i], iconY, 16, 16,
+                    RewardFaces.realItem(face) ? face : ItemStack.EMPTY));
+        }
+        if (bar.action()) {
+            out.add(new FocusTarget(bar.actionX(), bar.y(), bar.actionW(), 12, ItemStack.EMPTY));
+        }
+        if (bar.choice()) {
+            out.add(new FocusTarget(bar.choiceX(), bar.y(), bar.choiceW(), 12, ItemStack.EMPTY));
+        }
+        if (bar.pin()) {
+            out.add(new FocusTarget(bar.pinX(), bar.y(), bar.pinW(), 12, ItemStack.EMPTY));
+        }
+        if (!inspectBody(tile).isEmpty()) {
+            out.add(new FocusTarget(x + w - EXPAND_FROM_RIGHT, y, 12, 12, ItemStack.EMPTY));
+        }
+        return out;
+    }
+
+    private Optional<FocusTarget> focusedTarget() {
+        if (!cardFocus) {
+            return Optional.empty();
+        }
+        List<FocusTarget> targets = cardTargets();
+        if (targets.isEmpty()) {
+            return Optional.empty();
+        }
+        cardFocusIndex = Math.max(0, Math.min(targets.size() - 1, cardFocusIndex));
+        return Optional.of(targets.get(cardFocusIndex));
+    }
+
+    private void cardKey(int keyCode, int scanCode, int mods) {
+        if (!showInspectPanel()) {
+            exitCardFocus();
+            return;
+        }
+        List<FocusTarget> targets = cardTargets();
+        Optional<FocusTarget> focused = focusedTarget();
+        KeyNav.Dir dir = is(QuestKeybinds.UP, keyCode, scanCode, mods) ? KeyNav.Dir.UP
+                : is(QuestKeybinds.DOWN, keyCode, scanCode, mods) ? KeyNav.Dir.DOWN
+                : is(QuestKeybinds.LEFT, keyCode, scanCode, mods) ? KeyNav.Dir.LEFT
+                : is(QuestKeybinds.RIGHT, keyCode, scanCode, mods) ? KeyNav.Dir.RIGHT : null;
+        if (dir != null && focused.isPresent()) {
+            List<KeyNav.Point> points = new ArrayList<>();
+            for (int i = 0; i < targets.size(); i++) {
+                points.add(new KeyNav.Point(Integer.toString(i), targets.get(i).centreX(), targets.get(i).centreY()));
+            }
+            FocusTarget f = focused.get();
+            KeyNav.next(points, new KeyNav.Point(Integer.toString(cardFocusIndex), f.centreX(), f.centreY()), dir)
+                    .ifPresent(point -> cardFocusIndex = Integer.parseInt(point.id()));
+            return;
+        }
+        if (focused.isEmpty()) {
+            return;
+        }
+        FocusTarget f = focused.get();
+        if (is(QuestKeybinds.SELECT, keyCode, scanCode, mods)) {
+            clickGui(f.centreX(), f.centreY());
+        } else if (is(QuestKeybinds.RECIPES, keyCode, scanCode, mods) || is(QuestKeybinds.USES, keyCode, scanCode, mods)) {
+            if (!f.stack().isEmpty()) {
+                boolean recipes = is(QuestKeybinds.RECIPES, keyCode, scanCode, mods);
+                if (!RecipeViewer.show(f.stack(), recipes) && minecraft != null && minecraft.player != null) {
+                    minecraft.player.displayClientMessage(Component.literal(RecipeViewer.loaded()
+                            ? RecipeViewer.label() + " could not open that item right now."
+                            : "Install EMI, REI, or JEI to look up items."), true);
+                }
+            }
+        } else if (is(QuestKeybinds.CLAIM, keyCode, scanCode, mods)) {
+            chapter.tile(inspectTileId()).ifPresent(tile -> {
+                if (playBar(tile, cardX(), cardY(), cardW(), cardH()).action()) {
+                    clickDone(tile);
+                }
+            });
+        } else if (is(QuestKeybinds.PIN, keyCode, scanCode, mods)) {
+            chapter.tile(inspectTileId()).ifPresent(tile -> {
+                if (playBar(tile, cardX(), cardY(), cardW(), cardH()).pin()) {
+                    togglePin(tile);
+                }
+            });
+        } else if (is(QuestKeybinds.EXPAND, keyCode, scanCode, mods)) {
+            chapter.tile(inspectTileId()).filter(tile -> !inspectBody(tile).isEmpty())
+                    .ifPresent(tile -> openReader(tile.id()));
+        }
+    }
+
+    private void exitCardFocus() {
+        cardFocus = false;
+        cardFocusIndex = 0;
+    }
+
+    @Override
+    public void mouseMoved(double mouseX, double mouseY) {
+        // Back to the mouse: drop the keyboard rings so hover takes over again.
+        if (keyboardMode && (Math.abs(mouseX - hoverX) > 2 || Math.abs(mouseY - hoverY) > 2)) {
+            keyboardMode = false;
+            exitCardFocus();
+        }
+        super.mouseMoved(mouseX, mouseY);
+    }
+
+    // ---- key help -------------------------------------------------------------------------------------------
+
+    private boolean keyHelpIconShown() {
+        try {
+            return QuestConfig.SHOW_KEY_HELP_ICON.get();
+        } catch (IllegalStateException notLoaded) {
+            return true;
+        }
+    }
+
+    private int keysX() {
+        int right = isIntroChapter() ? logX() : fitX();
+        return right - 6 - KEYS_S;
+    }
+
+    /** "Up Arrow / Down Arrow …" for a help row, as the keys are bound now. */
+    private static String bindingText(QuestKeybinds.HelpRow row) {
+        if (row.mappings().isEmpty()) {
+            return "Esc";
+        }
+        List<String> keys = new ArrayList<>();
+        for (var mapping : row.mappings()) {
+            keys.add(mapping.getTranslatedKeyMessage().getString());
+        }
+        return compactKeys(keys);
+    }
+
+    /**
+     * "Up Arrow / Down Arrow" → "Up / Down", and a modifier every key shares is said once:
+     * "SHIFT + Up / Down / Left / Right".
+     */
+    static String compactKeys(List<String> keys) {
+        List<String> names = new ArrayList<>();
+        for (String key : keys) {
+            names.add(key.endsWith(" Arrow") ? key.substring(0, key.length() - 6) : key);
+        }
+        int plus = names.isEmpty() ? -1 : names.getFirst().lastIndexOf(" + ");
+        if (names.size() > 1 && plus > 0) {
+            String prefix = names.getFirst().substring(0, plus + 3);
+            if (names.stream().allMatch(name -> name.startsWith(prefix))) {
+                List<String> rest = new ArrayList<>();
+                for (String name : names) {
+                    rest.add(name.substring(prefix.length()));
+                }
+                return prefix + String.join(" / ", rest);
+            }
+        }
+        return String.join(" / ", names);
+    }
+
+    private List<Component[]> helpLines() {
+        List<Component[]> lines = new ArrayList<>();
+        for (QuestKeybinds.HelpRow row : QuestKeybinds.HELP_ROWS) {
+            lines.add(new Component[]{Component.translatableWithFallback(row.key(), row.fallback()),
+                    Component.literal(bindingText(row))});
+        }
+        return lines;
+    }
+
+    private void drawKeyHelpTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
+        List<Component> lines = new ArrayList<>();
+        lines.add(Component.translatableWithFallback("questqueen.keys.title", "Keyboard").withStyle(ChatFormatting.YELLOW));
+        for (Component[] line : helpLines()) {
+            lines.add(Component.empty().append(line[1].copy().withStyle(ChatFormatting.WHITE))
+                    .append(Component.literal("  " + line[0].getString()).withStyle(ChatFormatting.GRAY)));
+        }
+        lines.add(Component.translatableWithFallback("questqueen.keys.rebind", "Change them in Controls > Key Binds")
+                .withStyle(ChatFormatting.DARK_GRAY));
+        graphics.renderComponentTooltip(font, lines, mouseX, mouseY);
+    }
+
+    private void drawHelpPanel(GuiGraphics graphics) {
+        List<Component[]> lines = helpLines();
+        int keyW = 0;
+        int labelW = 0;
+        for (Component[] line : lines) {
+            labelW = Math.max(labelW, font.width(line[0]));
+            keyW = Math.max(keyW, font.width(line[1]));
+        }
+        int w = Math.min(width - 16, labelW + keyW + 36);
+        int h = 30 + lines.size() * 11 + 12;
+        int x = (width - w) / 2;
+        int y = Math.max(TOP_H + 4, (height - h) / 2);
+        MockChrome.box(graphics, 0, 0, width, height, 0x88000000);
+        MockChrome.box(graphics, x, y, w, h, QuestColors.CARD);
+        MockChrome.frame(graphics, x, y, w, h, QuestColors.EDIT);
+        graphics.drawString(font, Component.translatableWithFallback("questqueen.keys.title", "Keyboard"), x + 10, y + 8,
+                QuestColors.EDIT, false);
+        int ly = y + 24;
+        for (Component[] line : lines) {
+            graphics.drawString(font, line[0], x + 10, ly, QuestColors.TEXT, false);
+            graphics.drawString(font, font.plainSubstrByWidth(line[1].getString(), w - labelW - 30), x + 20 + labelW, ly,
+                    QuestColors.CURRENT, false);
+            ly += 11;
+        }
+        graphics.drawString(font, Component.translatableWithFallback("questqueen.keys.close", "Any key closes this. Rebind in Controls."),
+                x + 10, y + h - 12, QuestColors.MUTED, false);
+    }
+
+    /** Open the log, or close it (sliding out when animations are on); a re-open mid-close slides back in. */
+    private void toggleLog() {
+        if (fxLogClosing) {
+            fxLogClosing = false;
+            logOpen = true;
+            fxLogAt = UiFx.nowMs();
+        } else if (!logOpen) {
+            logOpen = true;
+            fxLogClosing = false;
+            fxLogAt = UiFx.nowMs();
+            logScroll = 0;
+        } else if (UiFx.enabled()) {
+            fxLogClosing = true;
+            fxLogAt = UiFx.nowMs();
+        } else {
+            logOpen = false;
+        }
+    }
+
+    /**
+     * What clicking a tile does, shared by the mouse and the keyboard's select key: a locked tile shows why, a
+     * closed one does nothing, an open card on the same tile closes, otherwise the tile is selected and its card
+     * (or its XOR prompt) opens.
+     */
+    private void activateTile(Tile tile) {
+        TileVisual visual = ClientQuestState.visual(chapter, tile);
+        if (visual == TileVisual.LOCKED) {
+            List<Link> incomplete = ClientQuestState.incompleteParents(chapter, tile);
+            if (incomplete.size() >= 1) {
+                int[] pos = tileCuePos(tile);
+                cueLocked(tile.id(), pos[0], pos[1]);
+                selectedId = tile.id();
+                expanded = false;
+                return;
+            }
+        }
+        if (visual == TileVisual.CLOSED) {
+            return;
+        }
+        if (isPinnedTile(tile)) {
+            pinnedCardHidden = false;
+        }
+        if (expanded && selectedId.equals(tile.id())) {
+            if (isPinnedTile(tile)) {
+                return;
+            }
+            expanded = false;
+            return;
+        }
+        selectedId = tile.id();
+        bounce = 0f;
+        if (xorPromptDue(tile)) {
+            expanded = false;
+            openModal(ModalKind.XOR, tile.id());
+        } else {
+            // Keep the description panel open; pinned card stays at its screen position.
+            expanded = true;
+            modal = ModalKind.NONE;
+            modalTileId = "";
+        }
     }
 
     @Override
@@ -4750,6 +5369,9 @@ public class QuestBookScreen extends Screen {
             blurSearch();
             return true;
         }
+        if (handleQuestKey(keyCode, scanCode, modifiers)) {
+            return true;
+        }
         if (search != null && search.isFocused() && searchDropdownOpen()) {
             if (keyCode == GLFW.GLFW_KEY_DOWN) {
                 searchIndex = (searchIndex + 1) % searchHits.size();
@@ -4767,8 +5389,19 @@ public class QuestBookScreen extends Screen {
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
+    /** Set when a key focused the search box, so its own character is not typed into it. */
+    private boolean swallowNextChar;
+
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
+        if (swallowNextChar) {
+            swallowNextChar = false;
+            return true;
+        }
+        if (!typingInSearch() && !Character.isISOControl(codePoint)) {
+            // Letters that are book keys (C, P, E, ...) must not reach anything else either.
+            return true;
+        }
         return super.charTyped(codePoint, modifiers);
     }
 
@@ -5540,7 +6173,7 @@ public class QuestBookScreen extends Screen {
     }
 
     private int searchW() {
-        int right = isIntroChapter() ? logX() - 8 : fitX() - 8;
+        int right = keyHelpIconShown() ? keysX() - 8 : isIntroChapter() ? logX() - 8 : fitX() - 8;
         return Math.max(48, right - searchX());
     }
 
@@ -5787,7 +6420,7 @@ public class QuestBookScreen extends Screen {
      * The qq-click.json test hook drives the book (clicks, claims, pins) from a file in the temp folder. It is for
      * dev runs and Marionette checks only: a released jar ignores it unless {@code -Dquestqueen.testHooks=true}.
      */
-    static final boolean TEST_HOOKS = !net.neoforged.fml.loading.FMLEnvironment.production
+    public static final boolean TEST_HOOKS = !net.neoforged.fml.loading.FMLEnvironment.production
             || Boolean.getBoolean("questqueen.testHooks");
 
     private void drainTestClick() {
@@ -5946,6 +6579,52 @@ public class QuestBookScreen extends Screen {
                         clickGui(bar.actionX() + 20, bar.y() + 6);
                     }
                 });
+                writeProbeJson();
+                return;
+            }
+            if (json.has("key")) {
+                // A key press (and release) through the same path as the real keyboard: the screen key events
+                // first (where Quest Queen and other mods listen), then the screen if nothing cancelled it.
+                String name = json.get("key").getAsString().toUpperCase(Locale.ROOT);
+                int mods = json.has("mods") ? json.get("mods").getAsInt() : 0;
+                int code;
+                try {
+                    code = GLFW.class.getField("GLFW_KEY_" + name).getInt(null);
+                } catch (ReflectiveOperationException unknown) {
+                    QuestQueen.LOGGER.warn("qq-click.json: unknown key {}", name);
+                    return;
+                }
+                int scan = GLFW.glfwGetKeyScancode(code);
+                if (!net.neoforged.neoforge.client.ClientHooks.onScreenKeyPressedPre(this, code, scan, mods)) {
+                    if (!keyPressed(code, scan, mods)) {
+                        net.neoforged.neoforge.client.ClientHooks.onScreenKeyPressedPost(this, code, scan, mods);
+                    }
+                }
+                if (json.has("char")) {
+                    // The character a real key press also sends (GLFW delivers it after the key).
+                    for (char c : json.get("char").getAsString().toCharArray()) {
+                        if (!net.neoforged.neoforge.client.ClientHooks.onScreenCharTypedPre(this, c, mods)) {
+                            charTyped(c, mods);
+                        }
+                    }
+                }
+                if (!net.neoforged.neoforge.client.ClientHooks.onScreenKeyReleasedPre(this, code, scan, mods)) {
+                    keyReleased(code, scan, mods);
+                }
+                if (minecraft != null && minecraft.screen == this) {
+                    writeProbeJson();
+                }
+                return;
+            }
+            if (json.has("type")) {
+                for (char c : json.get("type").getAsString().toCharArray()) {
+                    charTyped(c, 0);
+                }
+                writeProbeJson();
+                return;
+            }
+            if (json.has("resetOtherMod")) {
+                OTHER_MOD_KEYS.clear();
                 writeProbeJson();
                 return;
             }
@@ -6195,6 +6874,33 @@ public class QuestBookScreen extends Screen {
         }
         out.add("advancementRows", advRows);
         out.addProperty("lastLookup", RecipeViewer.lastLookup);
+        out.addProperty("selected", selectedId);
+        out.addProperty("expanded", expanded);
+        out.addProperty("cardFocus", cardFocus);
+        out.addProperty("cardFocusIndex", cardFocusIndex);
+        out.addProperty("cardTargets", cardTargets().size());
+        focusedTarget().ifPresent(f -> {
+            out.addProperty("focusItem", f.stack().isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(f.stack().getItem()).toString());
+            out.addProperty("focusX", f.centreX());
+            out.addProperty("focusY", f.centreY());
+        });
+        out.addProperty("keyboardMode", keyboardMode);
+        out.addProperty("pin", ClientQuestState.progress.pinTile().orElse(""));
+        out.addProperty("helpOpen", helpOpen);
+        out.addProperty("logOpen", logOpen);
+        out.addProperty("searchFocused", typingInSearch());
+        out.addProperty("searchText", search == null ? "" : search.getValue());
+        out.addProperty("keysIconX", keysX() + KEYS_S / 2);
+        com.google.gson.JsonArray otherKeys = new com.google.gson.JsonArray();
+        synchronized (OTHER_MOD_KEYS) {
+            OTHER_MOD_KEYS.forEach(otherKeys::add);
+        }
+        out.add("otherModKeys", otherKeys);
+        com.google.gson.JsonArray help = new com.google.gson.JsonArray();
+        for (QuestKeybinds.HelpRow row : QuestKeybinds.HELP_ROWS) {
+            help.add(row.fallback() + " = " + bindingText(row));
+        }
+        out.add("keyHelp", help);
         com.google.gson.JsonArray descItems = new com.google.gson.JsonArray();
         for (RichDraw.ItemHit hit : descItemHits) {
             com.google.gson.JsonObject item = new com.google.gson.JsonObject();

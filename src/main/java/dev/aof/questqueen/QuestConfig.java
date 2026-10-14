@@ -28,6 +28,8 @@ public final class QuestConfig {
     /** Hex ARGB frame of a claimable tile; empty = the theme's own. */
     public static final ModConfigSpec.ConfigValue<String> CLAIM_EDGE;
     /** Where the pinned quest sits on the HUD: top_left (default), top_center, top_right, middle_left, middle_right, bottom_left, bottom_right. */
+    /** The keyboard icon in the book's top bar that lists the keys on hover. */
+    public static final ModConfigSpec.BooleanValue SHOW_KEY_HELP_ICON;
     /** Quest book button in the survival inventory. */
     public static final ModConfigSpec.BooleanValue INVENTORY_BUTTON;
     public static final ModConfigSpec.IntValue INVENTORY_BUTTON_X;
@@ -75,6 +77,12 @@ public final class QuestConfig {
         SIDEBAR_TITLE_SHADOW = builder
                 .comment("Override title shadow: -1 pack, 0 off, 1 on.")
                 .defineInRange("sidebarTitleShadow", -1, -1, 1);
+        builder.pop();
+        builder.push("keyboard");
+        SHOW_KEY_HELP_ICON = builder
+                .comment("Show the keyboard icon in the quest book's top bar; hovering it lists the book's keys.",
+                        "The keys themselves are rebound in Controls > Key Binds > Quest Queen.")
+                .define("showKeyHelpIcon", true);
         builder.pop();
         builder.push("inventoryButton");
         INVENTORY_BUTTON = builder
