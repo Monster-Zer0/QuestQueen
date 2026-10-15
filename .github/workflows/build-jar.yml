@@ -2,7 +2,7 @@ name: Build jar
 
 on:
   push:
-    branches: [main, master, 'claude/**']
+    branches: [main, master]
   workflow_dispatch:
 
 permissions:
