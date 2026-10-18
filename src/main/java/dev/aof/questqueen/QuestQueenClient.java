@@ -25,6 +25,7 @@ public class QuestQueenClient {
         ClientSync.DEFINITIONS = ClientQuestState::setPack;
         ClientSync.PROGRESS = ClientQuestState::setProgress;
         ClientSync.EDITOR = EditorBridge::setEnabled;
+        ClientSync.AUTHORED_STAGES = EditorBridge::setAuthoredStages;
         ClientSync.ADVANCEMENTS = ClientQuestState::setAdvancements;
         ClientSync.OPEN_BOOK = QuestBookScreen::openFromNetwork;
         modEventBus.addListener(QuestQueenClient::onRegisterKeys);

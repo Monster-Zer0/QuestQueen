@@ -40,6 +40,9 @@ import { iconUrl, itemSelectHtml, readItemSelect, wireItemSelects } from "./item
 import { GLYPH_IDS, glyphPickerHtml, glyphSvg, previewIntroHtml, readGlyph, wireGlyphPicker } from "./glyphs";
 import { descriptionProblems, richToHtml, validTexture } from "./richtext";
 import { commandPreviewHtml, parseGive, rewardName } from "./commandReward";
+import { stageSelectHtml, wireStageSelects, type StageSelectContext } from "./stageSelect";
+import { renderStageEditor, type StageEditorContext } from "./stageEditor";
+import { cleanStage, lockClauses, lockCount, mergeStages, stageUsage, type AuthoredStage, type StageInfo, type StagesState } from "./stages";
 import {
   DEFAULT_THEME_ID,
   STOCK_BACKGROUNDS,
@@ -128,6 +131,14 @@ let press: BoardPress | null = null;
 type TileDrag = { id: string; ox: number; oy: number; px: number; py: number; grabX: number; grabY: number };
 let tileDrag: TileDrag | null = null;
 let catalog: PackCatalog = emptyCatalog();
+/** Every stage the game knows (StageLock's, plus the ones made here), from GET /api/stages. */
+let stagesState: StagesState = { stageLock: false, stages: [] };
+let stagesJson = "";
+let stagesView = false;
+/** The stage open in the Stages tab: null for none, "" for a new one. */
+let openStageId: string | null = null;
+/** Shown once by the next stage editor drawn in the Stages tab ("Saved…"). */
+let stageNotice = "";
 let linkFrom = "";
 let pendingGate: GateOpName = "and";
 /** Slice 3: staged link awaiting confirm (unless Shift power-shortcut). */
@@ -1208,7 +1219,7 @@ function rewardFields(reward: Reward, index: number, ro: string, disabled: boole
         </div>`).join("")}
         ${disabled ? "" : `<button type="button" data-add-option="${index}">+ OPTION</button>`}`;
     case "stage":
-      return `<label>STAGE</label><input data-reward="${index}" data-field="stage" list="pack-stages" value="${escapeAttr(reward.stage ?? "")}" ${ro} />`;
+      return stageSelectHtml(`data-reward="${index}" data-field="stage"`, reward.stage ?? "", disabled, "STAGE", "reward", false);
     default:
       return "";
   }
@@ -1300,15 +1311,16 @@ function showCard(tile?: Tile) {
     <p class="intro-note">**bold** *italic* __underline__ · # heading · - bullet · --- · {#RRGGBB}colour{/#} · {item:minecraft:diamond x3} · {glyph:star} · ![caption](pack:textures/name.png)</p>
     ${itemSelectHtml(`id="tile-item-select"`, tile?.icon?.item ?? "", !authoring, "ICON")}
     ${glyphPickerHtml(tile?.icon?.glyph ?? "", !authoring, "tile-glyph")}
-    <label>REQUIRES STAGE</label>
-    <input id="tile-required-stage" list="pack-stages" value="${escapeAttr(tile?.required_stage ?? "")}" placeholder="(none)" ${ro} />
+    ${stageSelectHtml(`id="tile-required-stage"`, tile?.required_stage ?? "", !authoring, "REQUIRES STAGE", "required", true)}
     <label>HIDDEN UNTIL</label>
     <div style="display:flex;gap:6px">
       <select id="tile-hidden-type" ${disabled}>
         ${["", "quest_complete", "stage", "advancement", "team_flag", "trigger"].map((type) =>
           `<option value="${type}" ${stageAsOne(tile?.hidden_until?.type ?? "") === type ? "selected" : ""}>${type || "(always shown)"}</option>`).join("")}
       </select>
-      <input id="tile-hidden-id" ${isStageType(tile?.hidden_until?.type) ? `list="pack-stages"` : ""} value="${escapeAttr(tile?.hidden_until?.id ?? "")}" placeholder="id" ${ro} />
+      ${isStageType(tile?.hidden_until?.type)
+        ? `<div class="stage-select-flex">${stageSelectHtml(`id="tile-hidden-id"`, tile?.hidden_until?.id ?? "", !authoring, "", "hidden", false)}</div>`
+        : `<input id="tile-hidden-id" value="${escapeAttr(tile?.hidden_until?.id ?? "")}" placeholder="id" ${ro} />`}
     </div>
     <label>JUMP TARGET (CHAPTER / QUEST)</label>
     <div style="display:flex;gap:6px">
@@ -1415,7 +1427,9 @@ function showCard(tile?: Tile) {
             `<option value="${type}" ${stageAsOne(condition.type) === type ? "selected" : ""}>${type}</option>`
           ).join("")}
         </select>
-        <input data-unlock-id="${index}" ${isStageType(condition.type) ? `list="pack-stages"` : ""} value="${escapeAttr(condition.id)}" placeholder="${isStageType(condition.type) ? "iron_age" : "questqueen:starter/go_nether"}" ${ro} />
+        ${isStageType(condition.type)
+          ? stageSelectHtml(`data-unlock-id="${index}"`, condition.id, !authoring, "", "chapter", false)
+          : `<input data-unlock-id="${index}" value="${escapeAttr(condition.id)}" placeholder="questqueen:starter/go_nether" ${ro} />`}
         ${authoring ? `<button type="button" data-remove-unlock="${index}">REMOVE</button>` : ""}
       </fieldset>
     `).join("")}
@@ -1564,6 +1578,7 @@ function showCard(tile?: Tile) {
     draw();
   };
   wireItemSelects(cardBody, catalog.items, bridgeBase(), apply);
+  wireStageSelects(cardBody, cardStageContext(apply, () => showCard(chapter.tiles.find((t) => t.id === selected))));
   if (tile && !intro) wireDescriptionTools(cardBody);
   wireGlyphPicker(cardBody, "#chapter-glyph", apply);
   wireGlyphPicker(cardBody, "#tile-glyph", apply);
@@ -1896,9 +1911,313 @@ function escapeText(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 }
 
+// ------------------------------------------------------------------ stages
+// Stages live in the game (StageLock's files, written by the bridge); the editor reads them with GET /api/stages
+// and writes one at a time with POST /api/stage. The board's stage fields, the Stages tab and the pop-up all
+// share stagesState, so a stage made in one place shows up in the others at once.
+
+const stagesViewEl = document.getElementById("stages-view") as HTMLElement;
+const stageListEl = document.getElementById("stage-list") as HTMLElement;
+const stageDetailEl = document.getElementById("stage-detail") as HTMLElement;
+const stageSearchEl = document.getElementById("stage-search") as HTMLInputElement;
+const stagesNoteEl = document.getElementById("stages-note") as HTMLElement;
+const stageModalEl = document.getElementById("stage-modal") as HTMLElement;
+const stageModalBody = document.getElementById("stage-modal-body") as HTMLElement;
+const STAGE_ICON = "minecraft:amethyst_shard";
+
+/** Re-read the game's stages. True when anything changed. */
+async function refreshStages(): Promise<boolean> {
+  try {
+    const response = await bridgeFetch("/api/stages");
+    if (!response.ok) return false;
+    const text = await response.text();
+    if (text === stagesJson) return false;
+    stagesJson = text;
+    const raw = JSON.parse(text) as { stageLock?: boolean; defined?: { id: string; name?: string }[]; authored?: AuthoredStage[] };
+    stagesState = { stageLock: raw.stageLock === true, stages: mergeStages(raw.defined ?? [], raw.authored ?? []) };
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function stageInfo(id: string): StageInfo | undefined {
+  return stagesState.stages.find((entry) => entry.id === id);
+}
+
+function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v) => v && typeof v === "object" && !Array.isArray(v)
+    ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
+    : v);
+}
+
+/** Poll the bridge until {@code done} holds or {@code ms} passes. */
+async function waitForStages(done: () => boolean, ms: number): Promise<boolean> {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    await refreshStages();
+    if (done()) return true;
+    await new Promise((resolve) => window.setTimeout(resolve, 500));
+  }
+  return false;
+}
+
+async function bridgeError(response: Response, fallback: string): Promise<string> {
+  try {
+    const detail = (await response.json()) as { error?: string };
+    if (detail?.error) return `Minecraft refused it: ${detail.error}`;
+  } catch {
+    /* not JSON */
+  }
+  return fallback;
+}
+
+async function saveStage(stage: AuthoredStage, progress: (text: string) => void): Promise<string | null> {
+  if (!unlocked) return "Minecraft isn't connected.";
+  let response: Response;
+  try {
+    response = await bridgeFetch("/api/stage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(stage),
+    });
+  } catch {
+    return "Couldn't reach Minecraft.";
+  }
+  if (!response.ok) return bridgeError(response, "Minecraft refused the stage. Is the editor still on?");
+  progress("Saved. Reloading the game's data packs…");
+  const want = stableJson(cleanStage(stage));
+  const stored = await waitForStages(() => {
+    const info = stageInfo(stage.id);
+    return !!info?.authored && !!info.stage && stableJson(cleanStage(info.stage)) === want;
+  }, 8000);
+  if (!stored) return "Sent to Minecraft, but it didn't confirm. Check the game chat for the reason.";
+  return null;
+}
+
+async function deleteStage(id: string): Promise<string | null> {
+  let response: Response;
+  try {
+    response = await bridgeFetch("/api/stage/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+  } catch {
+    return "Couldn't reach Minecraft.";
+  }
+  if (!response.ok) return bridgeError(response, "Minecraft refused the delete.");
+  const gone = await waitForStages(() => !stageInfo(id)?.authored, 8000);
+  // StageLock's own list catches up after the reload; give it a moment so the stage doesn't reappear as "pack".
+  if (gone) await waitForStages(() => !stageInfo(id), 4000);
+  return gone ? null : "Sent to Minecraft, but it didn't confirm. Check the game chat for the reason.";
+}
+
+/** Put a "grant this stage" reward on a quest. The chapter's Save writes it to the world. */
+function grantStageFromQuest(stageId: string, chapterId: string, tileId: string) {
+  const target = packChapters.find((entry) => entry.id === chapterId);
+  const tile = target?.tiles.find((entry) => entry.id === tileId);
+  if (!target || !tile) return;
+  if (target === chapter) pushUndo();
+  tile.rewards = [...(tile.rewards ?? []), { type: "stage", stage: stageId }];
+  renderChapterTree();
+  if (target === chapter) {
+    setSaveStatus("Unsaved changes", true);
+    draw();
+  }
+}
+
+function jumpToQuest(chapterId: string, tileId?: string) {
+  closeStageModal();
+  setStagesView(false);
+  if (chapter.id !== chapterId) switchChapter(chapterId);
+  const tile = tileId ? chapter.tiles.find((entry) => entry.id === tileId) : undefined;
+  if (tile) {
+    selected = tile.id;
+    showCard(tile);
+  }
+  draw();
+}
+
+function stageEditorContext(onDone: (id: string) => void, onCancel?: () => void): StageEditorContext {
+  return {
+    catalog: () => ({ ...catalog, stageLock: stagesState.stageLock }),
+    stages: () => stagesState.stages,
+    chapters: () => packChapters,
+    bridgeBase,
+    iconUrl: (item) => iconUrl(bridgeBase(), item),
+    onSave: saveStage,
+    onDelete: deleteStage,
+    onGrantFromQuest: grantStageFromQuest,
+    onJump: jumpToQuest,
+    onDone,
+    onCancel,
+    onOpen: (id) => openStage(id),
+  };
+}
+
+function stageModalOpen(): boolean {
+  return !stageModalEl.hidden;
+}
+
+let stageModalClosed: (() => void) | null = null;
+
+/** The pop-up editor over the board: a new stage (info null) or an existing one. */
+function openStageModal(info: StageInfo | null, prefillName: string, saved: (id: string) => void) {
+  stageModalEl.hidden = false;
+  const close = () => {
+    stageModalEl.hidden = true;
+    stageModalBody.innerHTML = "";
+    const after = stageModalClosed;
+    stageModalClosed = null;
+    after?.();
+  };
+  stageModalClosed = null;
+  renderStageEditor(stageModalBody, info, stageEditorContext((id) => {
+    stageModalClosed = () => saved(id);
+    close();
+  }, close), { modal: true, prefillName });
+}
+
+function closeStageModal() {
+  if (!stageModalOpen()) return;
+  stageModalEl.hidden = true;
+  stageModalBody.innerHTML = "";
+  stageModalClosed = null;
+}
+
+stageModalEl.addEventListener("mousedown", (event) => {
+  if (event.target === stageModalEl) closeStageModal();
+});
+
+/** What a quest card's stage picker says under the chosen stage, and what its New / Edit do. */
+function cardStageContext(onChange: () => void, repaintCard: () => void): StageSelectContext {
+  const grantedBy = (id: string) => stageUsage(packChapters, id).grants.map((use) => use.tileTitle ?? use.chapterTitle);
+  return {
+    stages: () => stagesState.stages,
+    iconUrl: (item) => iconUrl(bridgeBase(), item || STAGE_ICON),
+    onChange,
+    onCreate: (name, done) => openStageModal(null, name, (id) => {
+      done(id);
+      repaintCard();
+    }),
+    onEdit: (id) => {
+      const info = stageInfo(id);
+      if (info) openStageModal(info, "", () => repaintCard());
+      else openStageModal(null, id, () => repaintCard());
+    },
+    hint: (id, role) => {
+      const info = stageInfo(id);
+      const name = `<strong>${escapeText(info?.name ?? id)}</strong>`;
+      if (!info) {
+        return `${name} isn't set up yet. <button type="button" data-stage-edit="${escapeAttr(id)}">Set it up</button>`;
+      }
+      const edit = `<button type="button" data-stage-edit="${escapeAttr(id)}">${info.authored ? "Edit stage" : "View stage"}</button>`;
+      if (role === "reward") {
+        const clauses = info.stage ? lockClauses(info.stage) : [];
+        const opens = clauses.length ? `, so players can ${clauses.join(", ")}` : "";
+        return `Completing this quest gives ${name}${escapeText(opens)}. ${edit}`;
+      }
+      const by = grantedBy(id);
+      const source = by.length ? `Given by ${by.map(escapeText).join(", ")}.` : "No quest gives it yet.";
+      const lead = role === "required" ? `Locked until the player has ${name}.`
+        : role === "hidden" ? `Hidden until the player has ${name}.`
+        : `Needs ${name}.`;
+      return `${lead} ${source} ${edit}`;
+    },
+  };
+}
+
+function setStagesView(next: boolean) {
+  if (stagesView === next) return;
+  stagesView = next;
+  app?.classList.toggle("view-stages", next);
+  stagesViewEl.hidden = !next;
+  document.getElementById("view-board")?.classList.toggle("active", !next);
+  document.getElementById("view-stages")?.classList.toggle("active", next);
+  if (next) {
+    renderStageList();
+    renderStageDetail();
+  } else {
+    requestAnimationFrame(() => {
+      resize();
+      const tile = chapter.tiles.find((entry) => entry.id === selected);
+      if (tile || chapterHasChildren(chapter.id)) showCard(tile);
+    });
+  }
+}
+
+function openStage(id: string | null) {
+  openStageId = id;
+  renderStageList();
+  renderStageDetail();
+}
+
+function renderStageList() {
+  const needle = stageSearchEl.value.trim().toLowerCase();
+  const shown = stagesState.stages.filter((info) => !needle || info.id.includes(needle) || info.name.toLowerCase().includes(needle));
+  stagesNoteEl.hidden = stagesState.stageLock;
+  stagesNoteEl.textContent = "StageLock isn't installed. Stages still work as quest flags, but they can't lock items, blocks or places.";
+  if (!stagesState.stages.length) {
+    stageListEl.innerHTML = `<p class="stage-list-empty">No stages yet. A stage is a milestone a quest gives: until players have it, what it locks stays locked.</p>`;
+    return;
+  }
+  stageListEl.innerHTML = shown.map((info) => {
+    const use = stageUsage(packChapters, info.id);
+    const parts = [
+      use.grants.length ? `given by ${use.grants.length}` : "no quest gives it",
+      ...(use.needs.length ? [`needed by ${use.needs.length}`] : []),
+      ...(info.stage ? [`locks ${lockCount(info.stage)}`] : []),
+    ];
+    return `<button type="button" class="stage-card ${openStageId === info.id ? "active" : ""}" data-stage-id="${escapeAttr(info.id)}">
+      <img alt="" src="${escapeAttr(iconUrl(bridgeBase(), info.stage?.icon || STAGE_ICON))}" />
+      <strong>${escapeText(info.name)}</strong>
+      <span class="stage-badge ${info.authored ? "yours" : "pack"}">${info.authored ? "yours" : "pack"}</span>
+      <small>${escapeText(parts.join(" · "))}</small>
+    </button>`;
+  }).join("") || `<p class="stage-list-empty">No stage matches “${escapeText(needle)}”.</p>`;
+  stageListEl.querySelectorAll<HTMLButtonElement>("[data-stage-id]").forEach((button) => {
+    button.addEventListener("click", () => openStage(button.dataset.stageId ?? null));
+  });
+}
+
+function renderStageDetail() {
+  if (openStageId === null) {
+    stageDetailEl.innerHTML = `<div class="stage-empty">
+      <h2>Stages</h2>
+      <p>A stage is a milestone players earn, usually by finishing a quest. Until they have it, the items, blocks, mods,
+      dimensions or mobs it locks stay out of reach.</p>
+      <p><button type="button" class="btn btn-accent" id="stage-empty-new">+ Make a stage</button></p>
+      ${stagesState.stages.length ? `<p class="muted">Or pick one on the left.</p>` : ""}
+    </div>`;
+    document.getElementById("stage-empty-new")?.addEventListener("click", () => openStage(""));
+    return;
+  }
+  const info = openStageId === "" ? null : stageInfo(openStageId) ?? null;
+  if (openStageId !== "" && !info) {
+    openStageId = null;
+    renderStageDetail();
+    return;
+  }
+  const notice = stageNotice;
+  stageNotice = "";
+  renderStageEditor(stageDetailEl, info, stageEditorContext((id) => {
+    stageNotice = id ? "Saved. The game has it, and its locks apply now." : "";
+    openStage(id || null);
+  }), { notice });
+}
+
+document.getElementById("view-board")?.addEventListener("click", () => setStagesView(false));
+document.getElementById("view-stages")?.addEventListener("click", () => {
+  if (!unlocked) return;
+  setStagesView(true);
+});
+document.getElementById("new-stage")?.addEventListener("click", () => openStage(""));
+stageSearchEl.addEventListener("input", renderStageList);
+
 function updatePackStatus() {
   if (packStatus) {
-    const stages = catalog.stages?.length ? ` · ${catalog.stages.length} stages` : "";
+    const stages = stagesState.stages.length ? ` · ${stagesState.stages.length} stages` : "";
     packStatus.textContent = unlocked ? `Connected · ${catalog.items.length.toLocaleString()} items${stages}` : "Waiting for Minecraft";
     packStatus.classList.toggle("online", unlocked);
     packStatus.title = unlocked ? "Item catalog comes from the pack loaded in Minecraft" : "Run /questqueen editor in game";
@@ -1950,6 +2269,7 @@ async function syncFromMinecraft() {
       throw new Error("catalog unavailable");
     }
     catalog = fromApi(await catalogRes.json() as Record<string, unknown>);
+    if (await refreshStages() && stagesView) renderStageList();
     const firstConnect = !unlocked;
     if (firstConnect) {
       const chaptersRes = await bridgeFetch("/api/chapters");
@@ -2731,6 +3051,12 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (!unlocked) return;
+  // The Stages tab and the stage pop-up are forms: board shortcuts (Delete, Ctrl+Z, gate keys) stay out.
+  if (stageModalOpen()) {
+    if (event.key === "Escape") closeStageModal();
+    return;
+  }
+  if (stagesView) return;
   if ((event.ctrlKey || event.metaKey) && (event.key === "z" || event.key === "Z")) {
     const t = event.target as HTMLElement | null;
     const tag = (t?.tagName ?? "").toLowerCase();

@@ -66,6 +66,22 @@ const CATALOG = {
     { id: "iron_age", name: "Iron Age" },
     { id: "mypack:nether", name: "The Nether" },
   ],
+  stageLock: true,
+  mods: [
+    { id: "minecraft", name: "Minecraft" },
+    { id: "create", name: "Create" },
+    { id: "ae2", name: "Applied Energistics 2" },
+  ],
+};
+
+// Stages made in the editor, as the game keeps them (AuthoredStages). Saving one also "defines" it, like the
+// reload that follows a real save. STAGE_ID mirrors StageLock's rule.
+const STAGE_ID = /^[a-z0-9_.:/-]{1,64}$/;
+let authoredStages = [];
+const definedStages = () => {
+  const byId = new Map(CATALOG.stages.map((entry) => [entry.id, entry]));
+  for (const stage of authoredStages) byId.set(stage.id, { id: stage.id, name: stage.name || stage.id });
+  return [...byId.values()];
 };
 
 // 1x1 transparent PNG: the editor only needs an image to load.
@@ -168,9 +184,36 @@ const server = createServer(async (req, res) => {
     else chapters.push(chapter);
     return json(req, res, 202, { ok: true, queued: true, id: chapter.id });
   }
+  if (path === "/api/stages" && req.method === "GET") {
+    return json(req, res, 200, { stageLock: CATALOG.stageLock, defined: definedStages(), authored: authoredStages });
+  }
+  if (path === "/api/stage" && req.method === "POST") {
+    const { text } = await readBody(req);
+    let stage;
+    try {
+      stage = JSON.parse(text);
+    } catch (error) {
+      return json(req, res, 400, { ok: false, error: `not JSON: ${error.message}` });
+    }
+    if (typeof stage?.id !== "string" || !STAGE_ID.test(stage.id)) return json(req, res, 400, { ok: false, error: `not a stage id: ${stage?.id}` });
+    if (CATALOG.stages.some((entry) => entry.id === stage.id)) {
+      return json(req, res, 400, { ok: false, error: `another datapack already defines ${stage.id}` });
+    }
+    authoredStages = authoredStages.filter((entry) => entry.id !== stage.id).concat([stage]);
+    saves.push({ at: new Date().toISOString(), stage });
+    return json(req, res, 202, { ok: true, queued: true, id: stage.id });
+  }
+  if (path === "/api/stage/delete" && req.method === "POST") {
+    const { text } = await readBody(req);
+    const id = JSON.parse(text || "{}").id;
+    authoredStages = authoredStages.filter((entry) => entry.id !== id);
+    saves.push({ at: new Date().toISOString(), deletedStage: id });
+    return json(req, res, 202, { ok: true, queued: true, id });
+  }
   if (path === "/__saves") return json(req, res, 200, saves);
   if (path === "/__reset" && req.method === "POST") {
     saves = [];
+    authoredStages = [];
     chapters = loadChapters();
     return json(req, res, 200, { ok: true, chapters: chapters.length });
   }

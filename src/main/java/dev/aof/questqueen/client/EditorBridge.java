@@ -7,7 +7,10 @@ import com.sun.net.httpserver.HttpServer;
 import dev.aof.questqueen.QuestQueen;
 import dev.aof.questqueen.data.Chapter;
 import dev.aof.questqueen.data.QuestPack;
+import dev.aof.questqueen.data.stage.AuthoredStage;
 import dev.aof.questqueen.net.AuthorSaveC2S;
+import dev.aof.questqueen.net.AuthorStageDeleteC2S;
+import dev.aof.questqueen.net.AuthorStageSaveC2S;
 import dev.aof.questqueen.net.QuestNetwork;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
@@ -41,6 +44,10 @@ public final class EditorBridge {
     private static volatile String sessionNonce;
     private static final AtomicReference<String> CATALOG = new AtomicReference<>("{\"items\":[]}");
     private static final AtomicReference<String> PACK = new AtomicReference<>("{\"chapters\":[],\"scrolls\":[]}");
+    /** Stages the editor made, as the server last sent them (AuthorStagesS2C). */
+    private static final AtomicReference<String> AUTHORED_STAGES = new AtomicReference<>("[]");
+    /** Every stage the pack defines (id + display name), refreshed on the client thread: reloads change it. */
+    private static final AtomicReference<String> DEFINED_STAGES = new AtomicReference<>("[]");
     private static HttpServer server;
     private static ExecutorService executor;
     /** The pack PACK was last encoded from; re-encode only when the client receives a new one. */
@@ -70,6 +77,10 @@ public final class EditorBridge {
         return enabled;
     }
 
+    public static void setAuthoredStages(String json) {
+        AUTHORED_STAGES.set(json == null || json.isBlank() ? "[]" : json);
+    }
+
     public static void tick(Minecraft minecraft) {
         try {
             if (minecraft.player == null && enabled) {
@@ -83,6 +94,9 @@ public final class EditorBridge {
             // The item catalog is fixed for the session; only the pack changes (reloads, saves).
             if (ticks % 40 == 1 && ClientQuestState.pack != encodedPack) {
                 refreshPack();
+            }
+            if (ticks % 40 == 1) {
+                refreshDefinedStages();
             }
         } catch (Exception exception) {
             QuestQueen.LOGGER.error("Quest editor tick failed; disabling editor", exception);
@@ -128,8 +142,20 @@ public final class EditorBridge {
         }
     }
 
+    private static void refreshDefinedStages() {
+        com.google.gson.JsonArray defined = new com.google.gson.JsonArray();
+        dev.aof.questqueen.compat.Stages.definedStages().forEach((id, name) -> {
+            com.google.gson.JsonObject entry = new com.google.gson.JsonObject();
+            entry.addProperty("id", id);
+            entry.addProperty("name", name);
+            defined.add(entry);
+        });
+        DEFINED_STAGES.set(defined.toString());
+    }
+
     private static boolean refreshSnapshots() {
         try {
+            refreshDefinedStages();
             CATALOG.set(PackCatalogJson.create());
             ItemIconPng.clear();
             return refreshPack();
@@ -260,6 +286,21 @@ public final class EditorBridge {
             handleChapterSave(exchange);
             return;
         }
+        if ("/api/stages".equals(path) && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            write(exchange, 200, "application/json", "{\"stageLock\":"
+                    + (dev.aof.questqueen.compat.Stages.backend() == dev.aof.questqueen.compat.Stages.Backend.STAGELOCK)
+                    + ",\"defined\":" + DEFINED_STAGES.get()
+                    + ",\"authored\":" + AUTHORED_STAGES.get() + "}");
+            return;
+        }
+        if ("/api/stage".equals(path) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            handleStageSave(exchange);
+            return;
+        }
+        if ("/api/stage/delete".equals(path) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            handleStageDelete(exchange);
+            return;
+        }
         serveStatic(exchange, path);
     }
 
@@ -301,6 +342,65 @@ public final class EditorBridge {
         Minecraft.getInstance().execute(() -> QuestNetwork.sendToServer(new AuthorSaveC2S(body)));
         write(exchange, 202, "application/json", "{\"ok\":true,\"queued\":true,\"id\":"
                 + jsonString(chapter.id().toString()) + "}");
+    }
+
+    /** Same gates as a chapter save; the stage is checked with the codec the server applies, then forwarded. */
+    private static void handleStageSave(HttpExchange exchange) throws IOException {
+        String body = authorBody(exchange);
+        if (body == null) {
+            return;
+        }
+        AuthoredStage stage;
+        try {
+            stage = AuthoredStage.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(body))
+                    .getOrThrow(RuntimeException::new);
+        } catch (Exception exception) {
+            write(exchange, 400, "application/json",
+                    "{\"ok\":false,\"error\":" + jsonString(String.valueOf(exception.getMessage())) + "}");
+            return;
+        }
+        Minecraft.getInstance().execute(() -> QuestNetwork.sendToServer(new AuthorStageSaveC2S(body)));
+        write(exchange, 202, "application/json", "{\"ok\":true,\"queued\":true,\"id\":" + jsonString(stage.id()) + "}");
+    }
+
+    private static void handleStageDelete(HttpExchange exchange) throws IOException {
+        String body = authorBody(exchange);
+        if (body == null) {
+            return;
+        }
+        String id;
+        try {
+            id = JsonParser.parseString(body).getAsJsonObject().get("id").getAsString();
+        } catch (Exception exception) {
+            write(exchange, 400, "application/json", "{\"ok\":false,\"error\":\"expected {\\\"id\\\": ...}\"}");
+            return;
+        }
+        if (!dev.aof.questqueen.compat.Stages.validId(id)) {
+            write(exchange, 400, "application/json", "{\"ok\":false,\"error\":\"not a stage id\"}");
+            return;
+        }
+        Minecraft.getInstance().execute(() -> QuestNetwork.sendToServer(new AuthorStageDeleteC2S(id)));
+        write(exchange, 202, "application/json", "{\"ok\":true,\"queued\":true,\"id\":" + jsonString(id) + "}");
+    }
+
+    /** The request body of an authoring write, or null after answering 403/413 for one that may not be made. */
+    private static String authorBody(HttpExchange exchange) throws IOException {
+        if (!enabled) {
+            write(exchange, 403, "application/json", "{\"ok\":false,\"error\":\"editor session is off\"}");
+            return null;
+        }
+        if (!ClientQuestState.progress.canAuthor()) {
+            write(exchange, 403, "application/json",
+                    "{\"ok\":false,\"error\":\"not in an authoring session on the server\"}");
+            return null;
+        }
+        byte[] raw = exchange.getRequestBody().readNBytes(MAX_CHAPTER_BYTES + 1);
+        if (raw.length > MAX_CHAPTER_BYTES) {
+            write(exchange, 413, "application/json",
+                    "{\"ok\":false,\"error\":\"body is larger than " + MAX_CHAPTER_BYTES / 1024 + " KB\"}");
+            return null;
+        }
+        return new String(raw, StandardCharsets.UTF_8);
     }
 
     /** Minimal JSON string quoting for an error message we are about to hand to the browser. */

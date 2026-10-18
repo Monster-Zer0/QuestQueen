@@ -40,16 +40,19 @@ public final class QuestDefinitions {
     @SubscribeEvent
     public static void onAddReloadListener(AddReloadListenerEvent event) {
         event.addListener(new QuestReloadListener());
+        event.addListener(new dev.aof.questqueen.data.stage.AuthoredStages.ReloadListener());
     }
 
     @SubscribeEvent
     public static void onDatapackSync(OnDatapackSyncEvent event) {
         if (event.getPlayer() != null) {
             QuestNetwork.sendDefinitions(event.getPlayer());
+            QuestNetwork.sendAuthoredStages(event.getPlayer());
         } else {
             MinecraftServer server = event.getPlayerList().getServer();
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 QuestNetwork.sendDefinitions(player);
+                QuestNetwork.sendAuthoredStages(player);
             }
         }
     }

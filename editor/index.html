@@ -17,6 +17,13 @@
             <span class="brand-sub">Editor</span>
           </div>
 
+          <div class="toolbar-group view-tabs" role="group" aria-label="View">
+            <span class="segmented view-group">
+              <button type="button" id="view-board" class="view active" title="The quest board">Quests</button>
+              <button type="button" id="view-stages" class="view" title="Stages: what they lock and which quests give them">Stages</button>
+            </span>
+          </div>
+
           <div class="toolbar-group" role="group" aria-label="Lens">
             <span class="group-label">Lens</span>
             <span class="segmented lens-group">
@@ -156,6 +163,26 @@
           <div class="gate-ask-actions">
             <button type="button" id="gate-ask-remove" class="btn btn-danger btn-sm">Remove this link</button>
             <button type="button" id="gate-ask-cancel" class="btn btn-ghost btn-sm">Cancel</button>
+          </div>
+        </div>
+        <section id="stages-view" class="stages-view" hidden>
+          <aside class="stages-list-pane">
+            <div class="panel-head">
+              <span>Stages</span>
+              <button type="button" id="new-stage" class="btn btn-accent btn-sm">+ New stage</button>
+            </div>
+            <label class="search-box stage-search-box" for="stage-search">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+              <input id="stage-search" type="search" placeholder="Find a stage" autocomplete="off" />
+            </label>
+            <p id="stages-note" class="stage-note" hidden></p>
+            <div id="stage-list" class="stage-list"></div>
+          </aside>
+          <div id="stage-detail" class="stage-detail"></div>
+        </section>
+        <div id="stage-modal" class="stage-modal" hidden>
+          <div class="stage-modal-card" role="dialog" aria-modal="true" aria-label="Stage">
+            <div id="stage-modal-body"></div>
           </div>
         </div>
         <div id="lock">

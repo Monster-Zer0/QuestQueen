@@ -752,3 +752,307 @@ main { flex: 1; position: relative; min-height: 0; overflow: hidden; display: fl
 .reward-preview-note { color: #7a6a90; font-size: 11px; }
 .desc-preview .desc-recipe { border: 1px dashed #4a3c62; border-radius: 3px; padding: 6px 8px; margin: 4px 0; color: #c8bad8; font-size: 12px; }
 .desc-preview .desc-recipe code { color: #f5f0e0; }
+
+/* ------------------------------------------------------------------ stages */
+/* Stages tab: the board's chrome steps aside and the stage list + editor take the space. */
+.stages-view { display: flex; flex: 1; min-width: 0; height: 100%; background: var(--bg); }
+.stages-view[hidden] { display: none; }
+#app.view-stages .chapters,
+#app.view-stages .map-stack,
+#app.view-stages #card { display: none; }
+#app.view-stages .appbar-main > .toolbar-group:not(.view-tabs),
+#app.view-stages .appbar-main > .gate-group,
+#app.view-stages .appbar-main > .link-confirm,
+#app.view-stages .appbar-main > .search-box,
+#app.view-stages .appbar-sub > :not(.file-group):not(.appbar-spacer) { display: none !important; }
+
+.stages-list-pane {
+  flex: 0 0 300px;
+  width: 300px;
+  background: var(--surface-1);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.stage-search-box { width: auto; margin: 10px 10px 4px; }
+.stage-list { overflow: auto; padding: 6px 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+.stage-card {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: 2px 10px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.stage-card:hover { background: var(--surface-2); color: var(--text); }
+.stage-card.active { background: var(--surface-3); border-color: var(--border-strong); color: var(--text); }
+.stage-card img { grid-row: span 2; width: 28px; height: 28px; image-rendering: pixelated; }
+.stage-card strong { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage-card small { grid-column: 2 / 4; color: var(--muted); font-size: 11.5px; }
+.stage-list-empty { color: var(--muted); padding: 16px 10px; line-height: 1.5; }
+
+.stage-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.stage-badge.yours { background: rgba(214, 178, 94, 0.16); color: var(--gold-hi); }
+.stage-badge.pack { background: rgba(143, 176, 255, 0.12); color: var(--author); }
+
+.stage-detail { flex: 1; min-width: 0; overflow: auto; padding: 24px clamp(16px, 4vw, 48px) 48px; }
+.stage-empty { max-width: 520px; margin: 10vh auto; text-align: center; color: var(--text-2); line-height: 1.6; }
+.stage-empty h2 { color: var(--text); margin: 0 0 8px; font-size: 20px; }
+
+.stage-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  margin: 8px 0 12px;
+  border-radius: var(--radius);
+  background: rgba(143, 176, 255, 0.08);
+  border: 1px solid rgba(143, 176, 255, 0.2);
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+.stages-list-pane .stage-note { margin: 6px 10px; }
+.stage-note[hidden] { display: none; }
+
+/* The editor itself (Stages tab and pop-up share it). */
+.stage-editor { max-width: 760px; margin: 0 auto; color: var(--text); }
+.stage-editor-head { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
+.stage-editor-head h2 { margin: 0; font-size: 20px; }
+.stage-editor-head small { color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
+.stage-editor-icon { width: 40px; height: 40px; image-rendering: pixelated; background: var(--surface-2); border-radius: var(--radius); padding: 4px; }
+.stage-step { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-1); padding: 14px 16px 16px; margin: 0 0 14px; }
+.stage-step h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 4px; font-size: 15px; }
+.stage-step-n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--gold); color: var(--gold-ink); font-size: 12px; font-weight: 700; }
+.stage-editor label:not(.check) { display: block; margin: 14px 0 5px; font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
+.stage-editor label small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.stage-editor input:not([type="checkbox"]), .stage-editor textarea, .stage-editor select {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+.stage-editor textarea { resize: vertical; line-height: 1.45; }
+.stage-editor select { appearance: none; padding-right: 28px; cursor: pointer;
+  background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238e7ea0' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center / 10px 6px; }
+.stage-editor input:focus, .stage-editor textarea:focus, .stage-editor select:focus { border-color: var(--gold); box-shadow: var(--ring); outline: none; }
+.stage-editor input[readonly], .stage-editor textarea[readonly], .stage-editor select:disabled { color: var(--text-2); background-color: rgba(0, 0, 0, 0.18); }
+.stage-editor #stage-id, .stage-editor #stage-adv { font-family: var(--font-mono); font-size: 12.5px; }
+.stage-editor label.check { display: flex; gap: 9px; align-items: center; margin: 8px 0 0; color: var(--text-2); font-size: 13px; cursor: pointer; }
+.stage-editor label.check input { width: 16px; height: 16px; margin: 0; accent-color: var(--gold); }
+.stage-editor .muted { color: var(--muted); font-size: 12.5px; margin: 6px 0; }
+.stage-editor > section > .btn, .stage-editor .stage-step > .btn { margin-top: 10px; }
+.stage-advanced { margin-top: 14px; }
+.stage-advanced > summary { cursor: pointer; color: var(--text-2); font-size: 12.5px; }
+.stage-add-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.stage-add-row > input, .stage-add-row > select { flex: 1; }
+
+.stage-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; min-height: 4px; }
+.stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 4px 3px 8px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  font-size: 12.5px;
+}
+.stage-chip[data-open-stage] { cursor: pointer; }
+.stage-chip .item-icon { width: 16px; height: 16px; flex-basis: 16px; }
+.stage-chip-x { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 4px; border-radius: 50%; }
+.stage-chip-x:hover { color: #ff8a8e; background: rgba(229, 72, 77, 0.12); }
+
+.stage-uses { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.stage-uses li { color: var(--text-2); font-size: 13px; }
+.stage-uses small { color: var(--muted); margin-left: 4px; }
+.stage-use { width: 100%; text-align: left; padding: 6px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text-2); cursor: pointer; font: inherit; }
+.stage-use:hover { border-color: var(--gold); color: var(--text); }
+
+.stage-kinds { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; margin-top: 10px; align-items: stretch; }
+.stage-kind {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.stage-kind:hover { border-color: var(--gold); background: var(--surface-3); }
+.stage-kind-emoji { font-size: 24px; line-height: 1; }
+
+.stage-lock { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); margin: 10px 0; padding: 6px 12px 12px; }
+.stage-lock legend { display: flex; align-items: center; gap: 6px; padding: 0 6px; font-weight: 650; color: var(--gold-hi); }
+.stage-lock legend .icon-btn { width: 22px; height: 22px; font-size: 14px; }
+.stage-search { position: relative; margin-top: 4px; }
+.stage-hits {
+  position: absolute;
+  left: 0; right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  max-height: 260px;
+  overflow: auto;
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+}
+.stage-hits[hidden] { display: none; }
+.stage-hit { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.03); background: transparent; color: var(--text); text-align: left; cursor: pointer; font: inherit; }
+.stage-hit:hover { background: var(--surface-3); }
+.stage-hit small { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.stage-hit-tag { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 3px; background: var(--surface-3); color: var(--gold-hi); font-weight: 700; }
+.stage-hit-empty { padding: 10px; color: var(--muted); font-size: 12.5px; }
+.stage-flags { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0 16px; margin-top: 6px; }
+
+.stage-editor-foot { position: sticky; bottom: -48px; padding: 14px 16px; margin: 0 0 14px; border-radius: var(--radius-lg); background: var(--surface-2); border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); }
+.stage-modal .stage-editor-foot { bottom: -20px; }
+.stage-summary { margin: 0 0 8px; font-size: 14px; line-height: 1.5; color: var(--text); }
+.stage-summary strong { color: var(--gold-hi); }
+.stage-problems { margin: 0 0 8px; padding-left: 18px; color: var(--warn); font-size: 12.5px; }
+.stage-problems:empty { display: none; }
+.stage-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.stage-actions .hint-text { white-space: normal; }
+.stage-actions .hint-text.bad, .hint-text.bad { color: #ff8a8e; }
+.stage-actions .hint-text.ok { color: var(--text-2); }
+
+/* The pop-up a quest's stage picker opens for "New stage…". */
+.stage-modal { position: absolute; inset: 0; z-index: 60; display: grid; place-items: start center; padding: 4vh 16px; background: rgba(8, 5, 12, 0.7); overflow: auto; }
+.stage-modal[hidden] { display: none; }
+.stage-modal-card { width: min(760px, 100%); background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); padding: 20px; }
+
+/* Stage picker (quest card fields). The card styles every button as a dashed chip; undo that here. */
+.stage-select { position: relative; margin: 0; }
+#card .card-body .stage-select-trigger,
+.stage-select-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  height: auto;
+  margin: 0;
+  padding: 6px 9px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-style: solid;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+}
+#card .card-body .stage-select-trigger:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg); color: var(--text); }
+.stage-select-trigger:disabled { opacity: 0.75; cursor: default; }
+.stage-select-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage-select-id { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.stage-select-panel {
+  position: absolute;
+  left: 0; right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+.stage-select-panel[hidden] { display: none; }
+#card .stage-select-filter, .stage-select-filter { width: 100%; border: 0 !important; border-bottom: 1px solid var(--border) !important; border-radius: 0 !important; background: var(--bg); color: var(--text); padding: 9px 10px !important; outline: none; box-shadow: none !important; }
+.stage-select-list { max-height: 260px; overflow: auto; }
+#card .card-body .stage-select-option,
+.stage-select-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: auto;
+  margin: 0;
+  padding: 7px 10px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+}
+#card .card-body .stage-select-option:hover, .stage-select-option:hover { background: var(--surface-3); color: var(--text); border-color: rgba(255, 255, 255, 0.03); }
+.stage-select-option.active { background: rgba(214, 178, 94, 0.08); }
+.stage-select-option .item-select-option-text { flex: 1; }
+.stage-select-option.create { color: var(--gold-hi); }
+.stage-select-option.create strong { color: var(--gold-hi); }
+.stage-create-plus { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 3px; background: rgba(214, 178, 94, 0.16); font-weight: 700; }
+.stage-select-empty { padding: 8px 10px; color: var(--muted); font-size: 12.5px; }
+.stage-select-hint { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.stage-select-hint:empty { display: none; }
+.stage-select-hint strong { color: var(--text-2); font-weight: 600; }
+#card .card-body .stage-select-hint button, .stage-select-hint button {
+  display: inline;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--gold-hi);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .stages-view { flex-direction: column; }
+  .stages-list-pane { flex: 0 0 auto; width: auto; max-height: 38vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  .stage-detail { padding: 16px; }
+  .stage-modal-card { padding: 14px; }
+  .stage-editor-foot { position: static; }
+}
+.stage-select-flex { flex: 1; min-width: 0; }
+.stage-editor-head .stage-badge { font-family: var(--font-ui); }
+/* The item picker's rows are styled for the quest card; the stage editor needs the same. */
+.stage-editor .item-select-filter { border: 0 !important; border-bottom: 1px solid var(--border) !important; border-radius: 0 !important; box-shadow: none !important; }
+.stage-editor .item-select-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  padding: 6px 10px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.stage-editor .item-select-option:hover { background: var(--surface-3); }

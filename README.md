@@ -144,6 +144,16 @@ With StageLock, stage ids are exact: lowercase, 1–64 characters of `a-z 0-9 _ 
 
 ProgressiveStages only grants stages its own stage files define.
 
+### Making stages in the web editor
+
+The editor's **Stages** tab (and **New stage…** in any stage field on a quest) makes StageLock stages without writing JSON, in three steps:
+
+1. **What is it?** A name (the id is made from it), an icon and a description. Under *Advanced*: the id, who gets it (player, team or everyone) and whether the player is told in chat.
+2. **How do players get it?** The quests whose rewards grant it, with **+ Granted by a quest…** to add one. Optionally, advancements that also grant it and stages it needs first.
+3. **Until then, players can't…** Lock items (or `#tags`), blocks, a whole mod, a dimension or mobs, each with plain on/off toggles (use, craft, pick up, hide in JEI/EMI/REI; break, place, use; attack, interact, spawn near players).
+
+A sentence under the form says it back ("Players without Iron Age can't use 4 items or enter The Nether. They get it by completing Smelt Iron."). **Save stage** writes three files into the world's `datapacks/questqueen_authored` pack: Quest Queen's copy (`data/<ns>/questqueen/stages/<id>.json`), StageLock's definition (`data/<ns>/stagelock/stages/<id>.json`, with an explicit `"id"`) and its rules (`data/<ns>/stagelock/restrictions/questqueen/<id>.json`). The server then runs `/reload` itself. Stages from other datapacks are listed read-only; **Duplicate to edit** copies one. Without StageLock, stages still work as quest flags but cannot lock anything.
+
 ## Layout
 
 - `src/main/java/dev/aof/questqueen/` - mod

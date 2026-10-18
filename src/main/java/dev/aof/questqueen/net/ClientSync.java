@@ -14,6 +14,8 @@ public final class ClientSync {
     };
     public static Consumer<java.util.List<AdvancementInfoS2C.Entry>> ADVANCEMENTS = entries -> {
     };
+    public static Consumer<String> AUTHORED_STAGES = json -> {
+    };
     public static OpenBook OPEN_BOOK = (tileId, expanded, chapter) -> {
     };
 
@@ -39,6 +41,10 @@ public final class ClientSync {
 
     public static void applyEditor(boolean enabled) {
         EDITOR.accept(enabled);
+    }
+
+    public static void applyAuthoredStages(String json) {
+        AUTHORED_STAGES.accept(json);
     }
 
     public static void applyOpenBook(String tileId, boolean expanded, String chapter) {
