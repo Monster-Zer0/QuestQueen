@@ -126,7 +126,7 @@ public final class EditorBridge {
             server = http;
             String url = "http://127.0.0.1:" + PORT + "/";
             notifyPlayer("questqueen.editor.url", itemCount(), url);
-            // Automated runs (e2e/flow.mjs) drive the editor themselves; they set this so no browser tab opens.
+            // -Dquestqueen.editor.openBrowser=false: start the editor without opening a browser tab.
             if (!"false".equals(System.getProperty("questqueen.editor.openBrowser"))) {
                 Util.getPlatform().openUri(URI.create(url));
             }

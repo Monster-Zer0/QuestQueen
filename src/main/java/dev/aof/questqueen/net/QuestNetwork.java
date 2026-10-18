@@ -360,7 +360,7 @@ public final class QuestNetwork {
     /**
      * Writes an authored chapter into {@code root} — the {@code questqueen_authored} datapack folder —
      * and returns the file it landed in. No {@code ServerPlayer} is needed here, so the confinement
-     * below can be attacked from a unit test rather than argued about.
+     * below can be checked on its own.
      *
      * <p>Ordering is the W-2 fix: the id is resolved and refused BEFORE anything is created, and every
      * level this call creates is recorded, so a refused or failed save removes its own traces.

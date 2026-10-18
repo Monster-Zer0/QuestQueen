@@ -29,7 +29,7 @@ public final class TaskVerbs {
     /**
      * The canonical types in {@link TaskFactory#TYPES} order, mapped to the English string the mod ships in
      * {@code en_us.json}. This map is the hardcoded fallback handed to the translatable, so the book reads
-     * correctly even with no language file loaded (a dedicated server, a unit test, an early client).
+     * correctly even with no language file loaded (a dedicated server, an early client).
      */
     static final Map<String, String> VERBS = Map.ofEntries(
             Map.entry("obtain", "OBTAIN"),
@@ -171,7 +171,7 @@ public final class TaskVerbs {
     /**
      * Resolve a key against the current language, falling back to the exact English string and formatting it
      * with {@code args} when the language system is unavailable. Never throws: the language system is absent
-     * on a dedicated server and in unit tests, and a missing translation must not take the book down.
+     * on a dedicated server, and a missing translation must not take the book down.
      */
     public static String translate(String key, String fallback, Object... args) {
         try {

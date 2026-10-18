@@ -1,6 +1,5 @@
 // Quest description markup, mirrored from the game's RichText.java so the editor's preview shows what the book
-// will draw. The two parsers are kept in step by editor/src/richtext.test.ts and src/test/resources/richtext-cases.json,
-// which both sides read.
+// will draw. Keep the two parsers in step.
 //
 //   # Heading   ## Smaller heading   - bullet   ---   **bold**  *italic*  __underline__
 //   {#RRGGBB}coloured{/#}   {size:12}bigger{/size}

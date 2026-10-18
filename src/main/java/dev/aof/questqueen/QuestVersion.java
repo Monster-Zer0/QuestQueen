@@ -12,7 +12,7 @@ import net.neoforged.fml.ModList;
  * forget.
  */
 public final class QuestVersion {
-    /** Shown when there is no mod container to ask (unit tests, tooling, very early startup). */
+    /** Shown when there is no mod container to ask (very early startup). */
     public static final String UNKNOWN = "dev";
 
     private QuestVersion() {

@@ -212,7 +212,7 @@ public final class ProgressService {
         PENDING_TEAM_SYNC.put(teamId, serverTick + SYNC_DEBOUNCE_TICKS);
     }
 
-    /** Flush any pending team syncs immediately (tests / end of critical path). */
+    /** Flush any pending team syncs immediately (end of critical path). */
     public static void flushPendingSyncs(MinecraftServer server) {
         if (PENDING_TEAM_SYNC.isEmpty()) {
             return;

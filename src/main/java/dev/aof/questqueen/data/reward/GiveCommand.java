@@ -52,7 +52,7 @@ public record GiveCommand(String itemSpec, ResourceLocation itemId, int count) {
         return Optional.of(new GiveCommand(spec, itemId, count));
     }
 
-    /** "32x 9mm" style text for logs and tests, from the item id alone. */
+    /** "32x 9mm" style text for logs, from the item id alone. */
     public String plainLabel() {
         String name = itemId.getPath().replace('_', ' ');
         return count > 1 ? count + "x " + name : name;

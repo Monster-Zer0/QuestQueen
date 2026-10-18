@@ -11,24 +11,6 @@ tasks.named('wrapper', Wrapper).configure {
 version = mod_version
 group = mod_group_id
 
-sourceSets {
-    dev {
-        // Harness GameTests compile against the mod; the published jar still packages main only.
-        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
-        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
-    }
-}
-
-// Harness JSON is a second source set of this same mod, so runClient/runServer load it
-// and the published jar (main only) does not.
-afterEvaluate {
-    def runnable = sourceSets.dev.extensions.findByType(net.neoforged.gradle.dsl.common.extensions.sourceset.RunnableSourceSet)
-    if (runnable == null) {
-        throw new GradleException("dev source set has no NeoGradle mod identifier; harness chapters would not load in runClient")
-    }
-    runnable.modIdentifier.set(mod_id)
-}
-
 sourceSets.main.resources {
     srcDir('src/generated/resources')
     exclude("**/*.bbmodel")
@@ -53,8 +35,6 @@ runs {
         systemProperty 'forge.logging.console.level', 'debug'
         workingDirectory project.layout.projectDirectory.dir('run').dir(name)
         modSource project.sourceSets.main
-        // Harness chapters live in src/dev/resources. Runs see them; the published jar does not.
-        modSource project.sourceSets.dev
         // Jar-in-jar supplies SQLite to the shipped mod; dev runs need it on the game classpath themselves.
         dependencies {
             runtime "org.xerial:sqlite-jdbc:${sqlite_version}"
@@ -62,25 +42,10 @@ runs {
     }
 
     client {
-        systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-        // ./gradlew runClient -Pqq.e2e: for e2e/flow.mjs runs, which drive the editor and the book themselves.
-        if (project.hasProperty('qq.e2e')) {
-            systemProperty 'questqueen.editor.openBrowser', 'false'
-        }
-        // -Pqq.marionettePort=25586: run Marionette on another port, so a game already using 25585 is never driven
-        // by the e2e scripts (they read MARIONETTE_PORT).
-        if (project.hasProperty('qq.marionettePort')) {
-            systemProperty 'marionette.port', project.property('qq.marionettePort')
-        }
     }
 
     server {
-        systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         argument '--nogui'
-    }
-
-    gameTestServer {
-        systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
     }
 
     data {
@@ -114,9 +79,6 @@ dependencies {
             prefer sqlite_version
         }
     }
-    testImplementation sourceSets.dev.output
-    testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
-    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 tasks.withType(ProcessResources).configureEach {
@@ -203,17 +165,6 @@ publishing {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-}
-
-tasks.named('test', Test).configure {
-    useJUnitPlatform()
-    // Machine-specific fixture locations; tests that need them skip when they are absent.
-    ['qq.devInstance', 'skylore.chapters'].each { key ->
-        def value = providers.gradleProperty(key).orNull
-        if (value) {
-            systemProperty key, value
-        }
-    }
 }
 
 idea {

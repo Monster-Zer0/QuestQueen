@@ -10,7 +10,7 @@ import java.util.Map;
  *
  * <p>Deliberately not declared on {@link Reward}: holding it there made {@code Reward.<clinit>} resolve
  * every reward codec while each of those codecs resolves {@code Reward::type} — a class-initialization
- * cycle that left entries null and poisoned the whole reward/task/chapter graph (every codec test failed
+ * cycle that left entries null and poisoned the whole reward/task/chapter graph (every codec failed
  * with {@code Could not initialize class dev.aof.questqueen.data.reward.Reward}). The same fix applied to
  * {@code TaskCodecs}.
  */

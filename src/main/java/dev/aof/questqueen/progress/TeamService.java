@@ -29,7 +29,7 @@ public final class TeamService {
     private TeamService() {
     }
 
-    /** A new world or server: migration state belongs to the database that was just opened. Game tests reuse it. */
+    /** A new world or server: migration state belongs to the database that was just opened. */
     public static void resetSession() {
         MIGRATED.clear();
     }

@@ -8,8 +8,8 @@ import java.util.TreeSet;
  * Pure camera chooser for the quest board's FIT behaviour.
  *
  * <p>Split out of {@code QuestBookScreen} deliberately: Worf's F4 review (V4) requires the selection to be
- * a pure function of the tiles, the viewport and the zoom so that idempotence can be asserted by a test
- * rather than commented. This class holds no state, reads no field of the screen, and never touches the
+ * a pure function of the tiles, the viewport and the zoom so that it is idempotent by construction.
+ * This class holds no state, reads no field of the screen, and never touches the
  * current camera, so calling it twice on the same chapter and viewport returns the identical Choice. It
  * also does not derive candidates from the live camera, which is the one design V4 says would break that.
  *
@@ -151,8 +151,8 @@ public final class FitCamera {
      * @param shiftSx       pixels the camera moved in x; 0 when the criterion already held.
      * @param shiftSy       pixels the camera moved in y.
      * @param visibleBefore wholly-visible tile count before the floor, so the cost is explicit in the log.
-     * @param area          the anchor's visible area after the floor, in square screen pixels. The acceptance
-     *                      test reads this against tilePx*tilePx, which the fit log line also carries.
+     * @param area          the anchor's visible area after the floor, in square screen pixels. Compare it
+     *                      against tilePx*tilePx, which the fit log line also carries.
      */
     public record Floor(String state, int shiftSx, int shiftSy, int visibleBefore, int area) {}
 
@@ -161,7 +161,7 @@ public final class FitCamera {
      * cell's rectangle with the board viewport. Symmetric on all four edges by construction, which is the
      * repair Worf's F1 requires: the one-sided bound form accepted a camera putting the anchor wholly off the
      * RIGHT edge (camSx = -479, zero visible area) because it bounded only how far the anchor could slide off
-     * the left. His F1 table is reproduced verbatim by the tests.
+     * the left.
      */
     public static int visibleArea(Cell c, int camSx, int camSy, View view) {
         int sx = view.boardLeft() + c.x() * view.stridePx() - camSx;
@@ -427,9 +427,8 @@ public final class FitCamera {
      * no such range exists and the overhang is unavoidable, in which case the search is left unclamped so
      * the anchor rule can place the camera instead of a clamp that cannot help.
      *
-     * <p>Public because Worf's F8 requires the floor to re-check itself against the clamp: the test asserts
-     * that the whole-anchor TARGET range (the whole anchor inside the gutter, the F6x form) and this range
-     * intersect, which is his proof that the floor can never be forced outside the clamp and the clamp can
+     * <p>Public because Worf's F8 requires the floor to re-check itself against the clamp: the whole-anchor TARGET range (the whole anchor inside the gutter, the F6x form) and this range
+     * intersect, which proves that the floor can never be forced outside the clamp and the clamp can
      * never undo the floor.
      */
     public static int[] clampRange(int lo, int hi, int span, int inset) {

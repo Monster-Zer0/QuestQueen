@@ -8,7 +8,7 @@ import java.util.Optional;
 
 /**
  * Turns an {@link AuthoredStage} into the two files StageLock reads: a stage definition and a restriction file.
- * Pure (no game, no files), so the shapes are pinned by unit tests against StageLock's own examples.
+ * Pure (no game, no files). The shapes follow StageLock's own examples.
  *
  * <p>Every StageLock action defaults to "locked", so a toggle the author switched off is written as {@code false}
  * and the rest are left to that default. A lock group that ends up locking nothing writes no rule.

@@ -16,7 +16,7 @@ import java.util.Locale;
  * track something (no title, no description, never sent to the client) get a readable line such as
  * "Have any Logs" instead of nothing.
  *
- * <p>Pure: names come from {@link Names}, so the server can use real item names and a test can use plain text.
+ * <p>Pure: names come from {@link Names}, so callers choose real item names or plain text.
  */
 public final class AdvancementSummary {
     /** How ids become words. */

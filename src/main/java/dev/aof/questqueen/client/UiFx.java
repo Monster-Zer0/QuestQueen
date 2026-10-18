@@ -27,7 +27,7 @@ public final class UiFx {
         return enabled;
     }
 
-    /** Time source; tests pin it so two reads in one assertion cannot straddle a millisecond. */
+    /** Time source, replaceable so two reads in one step cannot straddle a millisecond. */
     static java.util.function.LongSupplier clock = Util::getMillis;
 
     public static long nowMs() {

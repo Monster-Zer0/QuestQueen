@@ -10,8 +10,6 @@ gradlew runClient
 
 If `runClient` exits at once with `NoSuchElementException: No value present` in `BootstrapLauncher`, the run classpath file lists jars under a Gradle home that is gone. The build now rewrites that file whenever the Gradle home changes; on an older checkout, run `gradlew writeMinecraftClasspathClient --rerun`.
 
-Machine-specific test fixtures are optional Gradle properties: `-Pqq.devInstance=<instance dir>` (JEI API drift check) and `-Pskylore.chapters=<chapters dir>` (caption corpus). Tests that need them skip when they are absent.
-
 Open the book with **J**. JourneyMap also defaults to J, so rebind one of them in a pack that has both. With no pack chapters loaded, the book opens on the built-in Feature Showcase.
 
 ## Editor
@@ -38,9 +36,9 @@ data/<pack>/questqueen/scrolls/<name>.json
 data/<pack>/questqueen/book.json
 ```
 
-Each file's `"id"` should use that pack's namespace (`"<pack>:<name>"`). These ids are reserved for the built-in book and are hidden once a pack chapter exists: `questqueen:showcase`, `questqueen:showcase_stage`, `questqueen:blank`, `questqueen:starter`, `questqueen:nether`, `questqueen:test`, `questqueen:test_bonus`, and the scrolls `questqueen:showcase_brief`, `questqueen:chest_note`, `questqueen:zombie_note`, `questqueen:test_note`.
+Each file's `"id"` should use that pack's namespace (`"<pack>:<name>"`). These ids are reserved for the built-in book and are hidden once a pack chapter exists: `questqueen:showcase`, `questqueen:showcase_stage`, and the scroll `questqueen:showcase_brief`.
 
-`demoChapters` in the common config is `auto` (hide the Feature Showcase when the pack has chapters), `always`, or `never`. `includeDevChapters` loads the harness chapters; those files are only on the dev run classpath, not in the published jar.
+`demoChapters` in the common config is `auto` (hide the Feature Showcase when the pack has chapters), `always`, or `never`.
 
 The pinned quest shows on the HUD at `[pinnedQuest] position` (`top_left` by default; also `top_center`, `top_right`, `middle_left`, `middle_right`, `bottom_left`, `bottom_right`), nudged by `offsetX` / `offsetY`. With the cursor free (chat, the inventory or any other screen), hovering it shows the quest's description, tasks and rewards. The survival inventory has a quest book button in its top-right corner; `[inventoryButton]` turns it off (`enabled`) or moves it (`offsetX`, `offsetY`) to clear another mod's button.
 
@@ -158,7 +156,6 @@ A sentence under the form says it back ("Players without Iron Age can't use 4 it
 
 - `src/main/java/dev/aof/questqueen/` - mod
 - `src/main/resources/data/questqueen/questqueen/` - Feature Showcase shipped in the jar
-- `src/dev/resources/data/questqueen/questqueen/` - harness chapters, dev runs only
 - `schema/questqueen.schema.json` - shared schema
 - `editor/` - Vite authoring UI
 

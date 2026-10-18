@@ -534,7 +534,7 @@ public final class ClientQuestState {
         return liveValue(chapter, tile, taskIndex) + "/" + need;
     }
 
-    /** Local player's XP level, for the count of an xp_levels task before it is submitted. Tests replace it. */
+    /** Local player's XP level, for the count of an xp_levels task before it is submitted. Replaceable. */
     static java.util.function.IntSupplier playerLevel = () -> {
         var player = net.minecraft.client.Minecraft.getInstance().player;
         return player == null ? 0 : player.experienceLevel;

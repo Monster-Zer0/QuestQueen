@@ -24,7 +24,7 @@ public final class Stages {
     private Stages() {
     }
 
-    /** Chosen once, lazily, so code that merely mentions stages (and unit tests, with no mod list) never fails. */
+    /** Chosen once, lazily, so code that merely mentions stages (with no mod list) never fails. */
     public static synchronized Backend backend() {
         if (backend == null) {
             backend = pick();
@@ -115,10 +115,5 @@ public final class Stages {
     /** Condition and reward type names that mean "a stage". "progression" is StageLock's old name (packs from 1.1.213). */
     public static boolean isStageType(String type) {
         return "stage".equals(type) || "stagelock".equals(type) || "progression".equals(type) || "progressivestages".equals(type);
-    }
-
-    /** Test hook: pin the backend (unit tests run without a mod list). */
-    static synchronized void force(Backend next) {
-        backend = next;
     }
 }
