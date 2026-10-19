@@ -272,3 +272,38 @@ button.task-row, button.reward-row { cursor: pointer; }
 .more-note { color: var(--muted); font-size: 12px; margin: 0; }
 .card-more input, .card-more select { font: 13px system-ui, sans-serif; height: 28px; background: #141019; color: var(--ui); border: 1px solid var(--sidebar-edge); padding: 0 6px; }
 .card-more input[hidden], .card-more select[hidden] { display: none; }
+/* sidebar rows with a ⋯ menu, drag to reorder / nest */
+.chapter-item { position: relative; display: flex; align-items: stretch; }
+.chapter-item .chapter-row { flex: 1; min-width: 0; }
+.row-menu { flex: none; width: 26px; border: 0; background: transparent; color: var(--sidebar-header); cursor: pointer; opacity: 0; font-size: 16px; }
+.chapter-item:hover .row-menu, .row-menu:focus-visible, .chapter-item:focus-within .row-menu { opacity: 1; }
+.chapter-item[data-drop="before"] { box-shadow: inset 0 2px 0 var(--edit); }
+.chapter-item[data-drop="into"] { box-shadow: inset 0 0 0 2px var(--edit); }
+/* settings page and act intro */
+.settings-page { position: absolute; inset: 16px; z-index: 8; overflow: auto; background: var(--card); color: var(--ui); border: 2px solid var(--neu);
+  padding: 20px 22px; font: 14px system-ui, sans-serif; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6); }
+.settings-page[hidden], .intro-host[hidden], .book-board[hidden] { display: none; }
+.settings-close { position: absolute; right: 8px; top: 6px; --px: 2; color: var(--muted); }
+.settings-title { margin: 0 0 14px; font: 20px QQBook, system-ui, sans-serif; color: var(--completed); }
+.chapter-settings { display: grid; gap: 10px; max-width: 720px; }
+.settings-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.settings-label { width: 150px; color: var(--sidebar-text); font-size: 13px; }
+.chapter-settings input:not([type=checkbox]):not([type=color]):not([type=range]), .chapter-settings select {
+  font: 13px system-ui, sans-serif; height: 30px; background: #141019; color: var(--ui); border: 1px solid var(--sidebar-edge); padding: 0 8px; min-width: 200px; }
+.chapter-settings input[readonly] { opacity: 0.6; }
+.chapter-settings input[hidden] { display: none; }
+.settings-conditions { display: grid; gap: 6px; }
+.settings-note { color: #f0c060; margin: 0; }
+.intro-host { position: absolute; inset: 0; overflow: auto; display: grid; place-items: start center; padding: 24px; }
+.intro-page { --px: 2; width: min(640px, 100%); background: var(--card); border: calc(var(--px) * 1px) solid var(--neu); padding: 20px 24px; color: var(--text); }
+.intro-title { margin: 8px 0; font-size: 28px; line-height: 1.2; color: var(--completed); }
+.intro-picture { width: 100%; max-height: 260px; object-fit: contain; image-rendering: pixelated; background: #0d0a11; }
+.intro-picture.empty { height: 120px; display: grid; place-items: center; color: var(--muted); font: 13px system-ui, sans-serif; border: 1px dashed var(--sidebar-edge); }
+.intro-path { width: 100%; margin-top: 6px; height: 28px; background: #141019; color: var(--ui); border: 1px solid var(--sidebar-edge); padding: 0 8px; font: 12px system-ui, sans-serif; }
+.intro-body { margin: 8px 0; min-height: 40px; }
+.intro-kids ul { margin: 4px 0 0 18px; font: 14px system-ui, sans-serif; color: var(--sidebar-text); }
+.chapter-item[data-renaming] .chapter-row .chapter-title { visibility: hidden; }
+.chapter-rename { position: absolute; left: 30px; right: 30px; top: 50%; transform: translateY(-50%); height: 26px; font: 14px system-ui, sans-serif;
+  background: #141019; color: var(--ui); border: 1px solid var(--edit); padding: 0 6px; }
+.intro-open .board-tools, .intro-open .minimap { display: none; }
+.intro-page:focus-within { outline: none; }

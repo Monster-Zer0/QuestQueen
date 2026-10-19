@@ -5,6 +5,7 @@ import { bridgeBase } from "../bridge";
 import { glyphSvg } from "../glyphs";
 import { iconUrl } from "../itemSelect";
 import { chapterTree, type Chapter, type ChapterNode } from "../types";
+import { moveChapter } from "./chapters";
 import { h, keptImage, reconcile, releaseImages } from "./dom";
 import { concealed, questKey, unlockedChapters } from "./progress";
 import type { Store } from "./store";
@@ -35,14 +36,77 @@ function padlock(): HTMLElement {
   return lock;
 }
 
+export interface SidebarHooks {
+  /** The + button: add a chapter (the app asks empty or with example quests). */
+  add?: (anchor: HTMLElement) => void;
+  /** A row's ⋯ button: rename, settings, duplicate, delete. */
+  menu?: (chapterId: string, anchor: HTMLElement) => void;
+}
+
+/** Rename a chapter in place: its row title becomes editable; Enter keeps, Esc puts it back. */
+export function startRename(el: HTMLElement, store: Store, chapterId: string): void {
+  const item = el.querySelector<HTMLElement>(`[data-chapter="${CSS.escape(chapterId)}"]`);
+  const chapter = store.get().chapters.find((c) => c.id === chapterId);
+  if (!item || !chapter || item.querySelector(".chapter-rename")) return;
+  // A text box laid over the row: a title inside the row's <button> cannot take typing.
+  const box = h("input", { class: "chapter-rename", "aria-label": "Chapter title", value: chapter.title ?? "" }) as HTMLInputElement;
+  box.value = chapter.title ?? "";
+  item.dataset.renaming = "1";
+  let done = false;
+  const finish = (keep: boolean) => {
+    if (done) return;
+    done = true;
+    delete item.dataset.renaming;
+    box.remove();
+    const text = box.value.replace(/\s+/g, " ").trim();
+    if (keep && text && text !== chapter.title) store.edit(chapterId, "chapter title", (c) => { c.title = text; });
+  };
+  box.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      finish(event.key === "Enter");
+    }
+  });
+  box.addEventListener("blur", () => finish(true));
+  item.append(box);
+  box.focus();
+  box.select();
+}
+
+/** Drag a row onto another: its left part puts it before that chapter, its right third nests it inside. */
+function wireDrag(item: HTMLElement, store: Store, id: string) {
+  item.draggable = true;
+  item.addEventListener("dragstart", (event) => {
+    event.dataTransfer?.setData("text/x-qq-chapter", id);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  });
+  const zone = (event: DragEvent) => (event.offsetX > item.clientWidth * 0.66 ? "into" : "before");
+  item.addEventListener("dragover", (event) => {
+    if (!event.dataTransfer?.types.includes("text/x-qq-chapter")) return;
+    event.preventDefault();
+    item.dataset.drop = zone(event);
+  });
+  item.addEventListener("dragleave", () => { delete item.dataset.drop; });
+  item.addEventListener("drop", (event) => {
+    const moving = event.dataTransfer?.getData("text/x-qq-chapter");
+    const where = zone(event);
+    delete item.dataset.drop;
+    if (!moving || moving === id) return;
+    event.preventDefault();
+    moveChapter(store, moving, where === "into" ? { into: id } : { before: id });
+  });
+}
+
 /** Make el the sidebar for the store's current state. Safe to call on every change; rows are kept by chapter id. */
-export function renderSidebar(el: HTMLElement, store: Store): void {
+export function renderSidebar(el: HTMLElement, store: Store, hooks: SidebarHooks = {}): void {
   let list = el.querySelector<HTMLElement>(".chapter-list");
   if (!list) {
     el.replaceChildren(
       h("div", { class: "sidebar-head" },
         h("h2", { class: "qq-text sidebar-title" }, "CHAPTERS"),
-        h("button", { type: "button", class: "sidebar-add", dataset: { act: "new-chapter" }, "aria-label": "New chapter", "aria-haspopup": "menu" }, "+")),
+        h("button", { type: "button", class: "sidebar-add", dataset: { act: "new-chapter" }, "aria-label": "New chapter", "aria-haspopup": "menu",
+          onclick: (event: Event) => hooks.add?.(event.currentTarget as HTMLElement) }, "+")),
       (list = h("div", { class: "chapter-list", role: "list" })),
     );
   }
@@ -52,9 +116,16 @@ export function renderSidebar(el: HTMLElement, store: Store): void {
   reconcile(list, rows, (row) => row.chapter.id,
     (row) => {
       const id = row.chapter.id;
-      return h("button", { type: "button", class: "chapter-row", role: "listitem", onclick: () => store.open(id) });
+      const item = h("div", { class: "chapter-item", role: "listitem", dataset: { chapter: id } },
+        h("button", { type: "button", class: "chapter-row", onclick: () => store.open(id) }),
+        h("button", { type: "button", class: "row-menu", "aria-label": `More for ${row.chapter.title || id}`, "aria-haspopup": "menu",
+          onclick: (event: Event) => hooks.menu?.(id, event.currentTarget as HTMLElement) }, "⋯"));
+      wireDrag(item, store, id);
+      return item;
     },
-    (el, row) => {
+    (item, row) => {
+      const el = item.querySelector<HTMLElement>(".chapter-row")!;
+      if (el.querySelector("[data-editing]")) return;
       const { chapter, depth } = row;
       const visible = (chapter.tiles ?? []).filter((t) => !concealed(chapter, t, state.sim));
       const done = visible.filter((t) => state.sim.completed.has(questKey(chapter.id, t.id))).length;

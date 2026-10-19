@@ -15,7 +15,12 @@ import { openPreviewAs, previewLabel } from "./previewAs";
 import { setDialogHost } from "./dialog";
 import { h } from "./dom";
 import { applyPalette, mountShell, type ShellParts } from "./shell";
-import { renderSidebar } from "./sidebar";
+import { renderSidebar, startRename } from "./sidebar";
+import { addEmptyChapter, addStarterChapter, duplicateChapter } from "./chapters";
+import { openChapterSettings } from "./chapterSettings";
+import { renderIntro } from "./intro";
+import { choose } from "./dialog";
+import { isIntroChapter } from "../model";
 import { createStore, type Store } from "./store";
 
 const POLL_MS = 2000;
@@ -32,6 +37,41 @@ async function bridgeReady(): Promise<boolean> {
 }
 
 let minimap: Minimap | null = null;
+
+function openSettingsPage(shell: ShellParts, store: Store, chapterId: string) {
+  const page = shell.board.parentElement!.querySelector<HTMLElement>(".settings-page")!;
+  page.dataset.chapter = chapterId;
+  page.hidden = false;
+  openChapterSettings(page.querySelector<HTMLElement>(".settings-body")!, store, chapterId);
+  page.querySelector<HTMLElement>("input, select")?.focus();
+}
+
+function sidebarHooks(shell: ShellParts, store: Store) {
+  return {
+    add: async () => {
+      const kind = await choose("New chapter", [
+        { label: "Empty chapter", hint: "One quest to start from", value: "empty" },
+        { label: "With example quests", hint: "A few linked quests to change", value: "example" },
+      ]);
+      if (!kind) return;
+      const id = kind === "example" ? addStarterChapter(store) : addEmptyChapter(store);
+      startRename(shell.sidebar, store, id);
+    },
+    menu: async (chapterId: string) => {
+      const chapter = store.get().chapters.find((c) => c.id === chapterId);
+      const pick = await choose(chapter?.title || chapterId, [
+        { label: "Rename", value: "rename" },
+        { label: "Settings", hint: "Theme, background, icon, unlocks, board size", value: "settings" },
+        { label: "Duplicate", hint: "A copy, unsaved until you save it", value: "duplicate" },
+        { label: "Delete", hint: "Removes the chapter and its quests", value: "delete", danger: true },
+      ]);
+      if (pick === "rename") startRename(shell.sidebar, store, chapterId);
+      if (pick === "settings") openSettingsPage(shell, store, chapterId);
+      if (pick === "duplicate") duplicateChapter(store, chapterId);
+      if (pick === "delete") shell.root.dispatchEvent(new CustomEvent("qq-delete-chapter", { detail: chapterId }));
+    },
+  };
+}
 let editing: BoardEditing | null = null;
 
 function render(shell: ShellParts, store: Store, board: Board) {
@@ -40,7 +80,19 @@ function render(shell: ShellParts, store: Store, board: Board) {
   applyPalette(shell.root, paletteFor(open?.theme));
   shell.root.classList.toggle("mode-edit", state.mode === "edit");
   shell.root.classList.toggle("mode-preview", state.mode === "preview");
-  renderSidebar(shell.sidebar, store);
+  renderSidebar(shell.sidebar, store, sidebarHooks(shell, store));
+  const intro = open && isIntroChapter(state.chapters, open);
+  const introHost = shell.board.parentElement!.querySelector<HTMLElement>(".intro-host")!;
+  introHost.hidden = !intro;
+  shell.board.hidden = Boolean(intro);
+  shell.root.classList.toggle("intro-open", Boolean(intro));
+  if (intro && open) renderIntro(introHost, store, open);
+  const settings = shell.board.parentElement!.querySelector<HTMLElement>(".settings-page")!;
+  if (!settings.hidden && settings.dataset.chapter && !settings.querySelector(":focus")) {
+    const host = settings.querySelector<HTMLElement>(".settings-body")!;
+    if (state.chapters.some((c) => c.id === settings.dataset.chapter)) openChapterSettings(host, store, settings.dataset.chapter);
+    else settings.hidden = true;
+  }
   for (const b of shell.bar.querySelectorAll<HTMLElement>("[data-mode]")) b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode));
   shell.bar.querySelector("[data-act=preview-as]")!.textContent = `${previewLabel(state)} ▾`;
   shell.hint.textContent = state.mode === "edit"
@@ -91,6 +143,12 @@ function boot() {
     h("button", { type: "button", onclick: () => board.fit() }, "Fit"),
     h("button", { type: "button", "aria-label": "Show or hide the map", onclick: () => minimap?.toggle() }, "Map")));
   minimap = createMinimap(shell.board.parentElement!, board, store, shell.board);
+  shell.board.parentElement!.append(
+    h("div", { class: "intro-host", hidden: true }),
+    h("div", { class: "settings-page", hidden: true, role: "dialog", "aria-label": "Chapter settings" },
+      h("button", { type: "button", class: "card-close settings-close", "aria-label": "Close settings",
+        onclick: (e: Event) => { (e.currentTarget as HTMLElement).parentElement!.hidden = true; } }, "×"),
+      h("div", { class: "settings-body" })));
   const zoomCenter = (direction: 1 | -1) => {
     const rect = shell.board.getBoundingClientRect();
     board.zoomAt(direction, rect.left + rect.width / 2, rect.top + rect.height / 2);
