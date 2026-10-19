@@ -314,7 +314,12 @@ public final class QuestNetwork {
      */
     private static void handleChapterDelete(AuthorChapterDeleteC2S payload, IPayloadContext context) {
         context.enqueueWork(() -> {
-            if (!(context.player() instanceof ServerPlayer player) || !ProgressService.canAuthor(player)) {
+            if (!(context.player() instanceof ServerPlayer player)) {
+                return;
+            }
+            if (!ProgressService.canAuthor(player)) {
+                // The browser is waiting on this answer; say why instead of leaving it to time out.
+                send(player, new AuthorReplyS2C(payload.id().trim(), false, "you can't edit quests on this server"));
                 return;
             }
             String raw = payload.id().trim();

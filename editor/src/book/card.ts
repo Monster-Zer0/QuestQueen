@@ -9,7 +9,7 @@ import { iconUrl } from "../itemSelect";
 import { richToHtml } from "../richtext";
 import type { Chapter, Reward, Task, Tile } from "../types";
 import type { Board } from "./board";
-import { openDescribe } from "./describe";
+import { flushDescribe, openDescribe } from "./describe";
 import { renderMore } from "./more";
 import { h, keptImage, releaseImages } from "./dom";
 import { inlineText } from "./inline";
@@ -110,6 +110,11 @@ function place(card: HTMLElement, layer: HTMLElement, tile: Tile, board: Board |
 const moreOpen = new Set<string>();
 
 export function renderCard(layer: HTMLElement, store: Store, hooks: CardHooks = {}): void {
+  // A description being written in a card that is about to go (another quest, closed, another chapter) is kept:
+  // the commit redraws by itself, so stop here when it changed something.
+  const before = layer.querySelector<HTMLElement>(".quest-card");
+  const now = store.get();
+  if (before?.querySelector("[data-editing]") && (before.dataset.tile !== now.selected || before.dataset.chapter !== now.openId) && flushDescribe(before)) return;
   const s = store.get();
   const ch: Chapter | undefined = s.chapters.find((c) => c.id === s.openId);
   const tile = s.selected ? ch?.tiles.find((t) => t.id === s.selected) : undefined;
@@ -119,7 +124,7 @@ export function renderCard(layer: HTMLElement, store: Store, hooks: CardHooks = 
     return;
   }
   // Never redraw over a field someone is typing in.
-  if (existing?.querySelector("[data-editing]") && existing.dataset.tile === tile.id) return;
+  if (existing?.querySelector("[data-editing]") && existing.dataset.tile === tile.id && existing.dataset.chapter === ch.id) return;
   const chapterId = ch.id;
   const tileId = tile.id;
   const editing = s.mode === "edit";
@@ -132,6 +137,7 @@ export function renderCard(layer: HTMLElement, store: Store, hooks: CardHooks = 
 
   const card = existing ?? h("article", { class: "quest-card", role: "region" });
   card.dataset.tile = tile.id;
+  card.dataset.chapter = ch.id;
   card.className = `quest-card${editing ? " editing" : ""}`;
   card.style.setProperty("--state", `var(${STATE_VAR[editing ? "EDIT" : v] ?? "--neu"})`);
   card.setAttribute("aria-label", `Quest: ${tile.title || tile.id}`);

@@ -95,11 +95,18 @@ const NOT_CONNECTED = "Minecraft isn't connected. The chapter is still here.";
  * refuses a chapter another datapack defines) and goes here only once it agrees. Its child chapters move up to
  * its parent; they are then unsaved until Save.
  */
-export async function deleteChapter(store: Store, id: string, post: (body: string) => Promise<Response>): Promise<{ ok: boolean; message?: string }> {
+export async function deleteChapter(
+  store: Store,
+  id: string,
+  post: (body: string) => Promise<Response>,
+  /** Save a chapter that moved up a level; resolves whether it saved. Without it they stay unsaved here. */
+  saveMoved?: (chapterId: string) => Promise<boolean>,
+): Promise<{ ok: boolean; message?: string }> {
   const s = store.get();
   const gone = s.chapters.find((c) => c.id === id);
   if (!gone) return { ok: true };
-  if (s.savedJson.has(id)) {
+  const wasSaved = s.savedJson.has(id);
+  if (wasSaved) {
     let response: Response;
     try {
       response = await post(JSON.stringify({ id }));
@@ -113,6 +120,8 @@ export async function deleteChapter(store: Store, id: string, post: (body: strin
       /* no JSON: the status says enough */
     }
     if (!response.ok) return { ok: false, message: body.message || body.error || "Minecraft refused the delete." };
+    // 202: sent, but the game never answered (an older server, no permission, or slow). Nothing is known deleted.
+    if (response.status === 202) return { ok: false, message: "Minecraft didn't answer, so the chapter is still here. Check the game chat, then try again." };
   }
   const now = store.get();
   const chapters = now.chapters.filter((c) => c.id !== id).map((c) => {
@@ -122,8 +131,16 @@ export async function deleteChapter(store: Store, id: string, post: (body: strin
     else delete moved.parent;
     return moved;
   });
+  const moved = now.chapters.filter((c) => c.parent === id);
   now.savedJson.delete(id);
   const openId = now.openId === id ? (gone.parent && chapters.some((c) => c.id === gone.parent) ? gone.parent : chapters[0]?.id ?? "") : now.openId;
   store.load({ chapters, openId, selected: now.openId === id ? null : now.selected }, "delete chapter");
-  return { ok: true };
+  // The world no longer has the parent: a child still pointing at it would stay locked for players, so save the
+  // moved children now (only when the deleted chapter was in the world; an unsaved one changed nothing there).
+  if (!wasSaved || !saveMoved || !moved.length) return { ok: true };
+  const failed: string[] = [];
+  for (const child of moved) if (!(await saveMoved(child.id))) failed.push(child.title || child.id);
+  return failed.length
+    ? { ok: true, message: `Deleted. These chapters moved up a level but aren't saved yet, so save them: ${failed.join(", ")}.` }
+    : { ok: true };
 }

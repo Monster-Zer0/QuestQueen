@@ -11,6 +11,22 @@ export interface DescribeOptions {
   preview: PreviewOptions;
 }
 
+/** Open editors, each able to commit itself: a redraw that is about to replace one flushes it first. */
+const openEditors = new Map<HTMLElement, () => boolean>();
+
+/**
+ * Commit every open description editor (inside `within`, when given), as Done would. Returns whether any of them
+ * changed something, so a caller that redraws can stop: the commit has already redrawn.
+ */
+export function flushDescribe(within?: Element | null): boolean {
+  let changed = false;
+  for (const [host, commit] of [...openEditors]) {
+    if (within && !within.contains(host)) continue;
+    if (commit()) changed = true;
+  }
+  return changed;
+}
+
 export function openDescribe(host: HTMLElement, opts: DescribeOptions): void {
   host.dataset.editing = "1";
   const area = h("textarea", { class: "desc-source", rows: "6", "aria-label": "Quest description (book markup)", spellcheck: "true" }) as HTMLTextAreaElement;
@@ -94,12 +110,22 @@ export function openDescribe(host: HTMLElement, opts: DescribeOptions): void {
       picPath.value = "";
       picCaption.value = "";
     })));
-  const close = (keep: boolean) => {
+  const close = (keep: boolean): boolean => {
+    if (!openEditors.has(host)) return false;
+    openEditors.delete(host);
     delete host.dataset.editing;
     host.replaceChildren();
     host.innerHTML = richToHtml(keep ? area.value : opts.value, opts.preview);
-    if (keep && area.value !== opts.value) opts.onCommit(area.value);
+    if (!keep || area.value === opts.value) return false;
+    opts.onCommit(area.value);
+    return true;
   };
+  openEditors.set(host, () => close(true));
+  // Leaving for somewhere else on the page keeps what was written, like every other field here.
+  host.addEventListener("focusout", (event) => {
+    const next = (event as FocusEvent).relatedTarget as Node | null;
+    if (next && !host.contains(next) && host.dataset.editing) close(true);
+  });
   const done = h("button", { type: "button", class: "desc-btn primary", dataset: { act: "desc-done" }, onclick: () => close(true) }, "Done");
   const cancel = h("button", { type: "button", class: "desc-btn", dataset: { act: "desc-cancel" }, onclick: () => close(false) }, "Cancel");
   area.addEventListener("input", refresh);

@@ -2,6 +2,7 @@
 // when the message does; clicking it opens that quest's card at the part the message is about. Save and Save all
 // go through here: a chapter with problems opens the sheet instead of posting.
 import type { Chapter } from "../types";
+import { flushDescribe } from "./describe";
 import { h } from "./dom";
 import type { Store } from "./store";
 
@@ -99,6 +100,9 @@ export function openProblems(host: HTMLElement, store: Store, chapterId: string 
 
 /** Save one chapter: problems open the sheet, a refusal says why, success is noticed. */
 export async function saveChapter(store: Store, chapterId: string, deps: SaveDeps): Promise<boolean> {
+  // Whatever is still being typed goes in: a description editor commits, a focused field blurs (and commits).
+  flushDescribe();
+  (document.activeElement as HTMLElement | null)?.blur?.();
   const chapter = store.get().chapters.find((c) => c.id === chapterId);
   if (!chapter) return false;
   if (store.problems(chapterId).length) {

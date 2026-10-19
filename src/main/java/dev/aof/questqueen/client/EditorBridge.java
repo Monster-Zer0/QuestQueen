@@ -426,6 +426,12 @@ public final class EditorBridge {
             write(exchange, 400, "application/json", "{\"ok\":false,\"error\":\"not a chapter id\"}");
             return;
         }
+        var connection = Minecraft.getInstance().getConnection();
+        if (connection == null || !connection.hasChannel(AuthorChapterDeleteC2S.TYPE)) {
+            write(exchange, 409, "application/json", "{\"ok\":false,\"id\":" + jsonString(id)
+                    + ",\"message\":\"this server's Quest Queen can't delete chapters; update it there\"}");
+            return;
+        }
         java.util.concurrent.CompletableFuture<String> answer = new java.util.concurrent.CompletableFuture<>();
         java.util.concurrent.CompletableFuture<String> earlier = PENDING_DELETES.put(id, answer);
         if (earlier != null) {

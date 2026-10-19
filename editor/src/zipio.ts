@@ -23,6 +23,25 @@ export interface ZipRead {
   losing: string[];
 }
 
+const isNum = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+
+/** What would break the editor in a chapter read from a file (it draws every quest and link), or null. */
+function shapeProblem(chapter: Chapter): string | null {
+  if (!Array.isArray(chapter.tiles)) return "its quests aren't a list";
+  for (const tile of chapter.tiles as unknown[]) {
+    const t = tile as { id?: unknown; pos?: { x?: unknown; y?: unknown } } | null;
+    if (!t || typeof t.id !== "string" || !t.pos || !isNum(t.pos.x) || !isNum(t.pos.y)) return "a quest without an id and a position";
+  }
+  if (chapter.links !== undefined) {
+    if (!Array.isArray(chapter.links)) return "its links aren't a list";
+    for (const link of chapter.links as unknown[]) {
+      const l = link as { from?: unknown; to?: unknown } | null;
+      if (!l || typeof l.from !== "string" || typeof l.to !== "string") return "a link without a from and a to";
+    }
+  } else chapter.links = [];
+  return null;
+}
+
 /** Read the chapters in a ZIP. Throws "<name> is not a ZIP file the editor can read." for anything else. */
 export async function readZip(file: File, existing: Chapter[], dirty: (id: string) => boolean): Promise<ZipRead> {
   let zip: JSZip;
@@ -42,6 +61,11 @@ export async function readZip(file: File, existing: Chapter[], dirty: (id: strin
         continue;
       }
       if (!parsed.tiles) parsed.tiles = [];
+      const shape = shapeProblem(parsed);
+      if (shape) {
+        skipped.push(`${name} (${shape})`);
+        continue;
+      }
       loaded.push(parsed);
     } catch {
       skipped.push(`${name} (not valid JSON)`);

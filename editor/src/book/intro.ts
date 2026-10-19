@@ -4,7 +4,7 @@ import { bridgeBase } from "../bridge";
 import { iconUrl } from "../itemSelect";
 import { richToHtml } from "../richtext";
 import type { Chapter } from "../types";
-import { openDescribe } from "./describe";
+import { flushDescribe, openDescribe } from "./describe";
 import { h } from "./dom";
 import { inlineText } from "./inline";
 import type { Store } from "./store";
@@ -13,7 +13,12 @@ const pictureUrl = (texture: string) => `${bridgeBase()}/api/texture?id=${encode
 const preview = { iconUrl: (id: string) => iconUrl(bridgeBase(), id), pictureUrl };
 
 export function renderIntro(host: HTMLElement, store: Store, chapter: Chapter): void {
-  if (host.querySelector("[data-editing]")) return;
+  // Typing in this act's page: leave it be. Another act's page still open: keep what was written there first.
+  if (host.querySelector("[data-editing]")) {
+    if (host.dataset.chapter === chapter.id) return;
+    flushDescribe(host);
+  }
+  host.dataset.chapter = chapter.id;
   const s = store.get();
   const editing = s.mode === "edit";
   const chapterId = chapter.id;

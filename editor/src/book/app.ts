@@ -19,6 +19,7 @@ import { renderSidebar, startRename } from "./sidebar";
 import { addEmptyChapter, addStarterChapter, deleteChapter, duplicateChapter } from "./chapters";
 import { openChapterSettings } from "./chapterSettings";
 import { renderIntro } from "./intro";
+import { flushDescribe } from "./describe";
 import { isIntroChapter } from "../model";
 import { openProblems, saveAll, saveChapter, type SaveDeps } from "./problems";
 import { openStagePopup, openStages, type StagesPageDeps } from "./stagesPage";
@@ -62,8 +63,10 @@ async function removeChapter(store: Store, chapterId: string) {
     { ok: "Delete", danger: true });
   if (!yes) return;
   const result = await deleteChapter(store, chapterId, (body) =>
-    bridgeFetch("/api/chapter/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body }));
+    bridgeFetch("/api/chapter/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body }),
+    sharedSaveDeps ? (id) => saveChapter(store, id, sharedSaveDeps!) : undefined);
   if (!result.ok) await tell(result.message ?? "Minecraft refused the delete.", { title: "Not deleted" });
+  else if (result.message) await tell(result.message, { title: "Deleted" });
 }
 
 /** Export every chapter as a ZIP; load chapters from one (asking before unsaved work is replaced). */
@@ -137,6 +140,7 @@ function sidebarHooks(shell: ShellParts, store: Store) {
 let editing: BoardEditing | null = null;
 let stagesDeps: StagesPageDeps | null = null;
 let bridgeUp = false;
+let sharedSaveDeps: SaveDeps | null = null;
 
 function render(shell: ShellParts, store: Store, board: Board) {
   const state = store.get();
@@ -147,6 +151,7 @@ function render(shell: ShellParts, store: Store, board: Board) {
   renderSidebar(shell.sidebar, store, sidebarHooks(shell, store));
   const intro = open && isIntroChapter(state.chapters, open);
   const introHost = shell.board.parentElement!.querySelector<HTMLElement>(".intro-host")!;
+  if (!intro && !introHost.hidden) flushDescribe(introHost);
   introHost.hidden = !intro;
   shell.board.hidden = Boolean(intro);
   shell.root.classList.toggle("intro-open", Boolean(intro));
@@ -254,6 +259,8 @@ function boot() {
     tell: (text) => tell(text, { title: "Not saved" }),
     notice,
   };
+  sharedSaveDeps = saveDeps;
+
   shell.bar.querySelector("[data-act=save]")!.addEventListener("click", async () => {
     const unsaved = store.get().chapters.filter((c) => store.dirty(c.id)).length;
     if (!unsaved) return notice("Everything is saved.");

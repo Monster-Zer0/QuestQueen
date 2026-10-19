@@ -180,9 +180,11 @@ export function createStore(initial: Partial<BookState> = {}, extraWarnings: War
       if (!chapter) return { ok: false, error: "No such chapter." };
       const problems = store.problems(chapterId);
       if (problems.length) return { ok: false, error: `${problems.length} problem${problems.length === 1 ? "" : "s"} to fix first`, problems };
+      // What is sent is what counts as saved: an edit made while the answer is on its way stays unsaved.
+      const sent = json(chapter);
       let response: Response;
       try {
-        response = await post(json(chapter));
+        response = await post(sent);
       } catch {
         return { ok: false, error: NOT_CONNECTED };
       }
@@ -196,7 +198,7 @@ export function createStore(initial: Partial<BookState> = {}, extraWarnings: War
         }
         return { ok: false, error };
       }
-      store.markSaved(chapterId);
+      state.savedJson.set(chapterId, sent);
       notify("saved");
       return { ok: true };
     },
