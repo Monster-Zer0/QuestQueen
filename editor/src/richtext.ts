@@ -312,6 +312,8 @@ export function descriptionProblems(source: string | null | undefined): string[]
 export interface PreviewOptions {
   /** URL of an item's icon, as the bridge serves it. */
   iconUrl?: (id: string) => string;
+  /** URL of a resource-pack texture (GET /api/texture). Without it a picture is a labelled frame. */
+  pictureUrl?: (texture: string) => string;
 }
 
 function esc(text: string): string {
@@ -357,7 +359,10 @@ export function richToHtml(source: string | null | undefined, options: PreviewOp
         + (!block.byId && options.iconUrl ? ` <img class="desc-item" alt="" src="${esc(options.iconUrl(block.target))}" width="14" height="14" />` : "")
         + "</div>");
     } else if (block.kind === "image") {
-      html.push(`<figure class="desc-pic"><div class="desc-pic-frame" title="${esc(block.texture)}">${esc(block.texture)}</div>`
+      const picture = options.pictureUrl
+        ? `<img class="desc-pic-img" alt="${esc(block.caption || block.texture)}" src="${esc(options.pictureUrl(block.texture))}" />`
+        : `<div class="desc-pic-frame" title="${esc(block.texture)}">${esc(block.texture)}</div>`;
+      html.push(`<figure class="desc-pic">${picture}`
         + (block.caption ? `<figcaption>${esc(block.caption)}</figcaption>` : "") + "</figure>");
     } else {
       const inner = block.inlines.map((inline) => inlineHtml(inline, block.heading, options)).join("");

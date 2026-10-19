@@ -71,7 +71,13 @@ function nextInDirection(ch: Chapter, from: Tile, dx: number, dy: number): Tile 
 const editable = (target: EventTarget | null) =>
   target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, [contenteditable]:not([contenteditable=false])"));
 
-export function wireBoardEdit(el: HTMLElement, board: Board, store: Store, notice: (text: string) => void): () => void {
+export interface BoardEditing {
+  dispose(): void;
+  duplicateSelected(): void;
+  deleteSelected(): void;
+}
+
+export function wireBoardEdit(el: HTMLElement, board: Board, store: Store, notice: (text: string) => void): BoardEditing {
   const open = () => {
     const s = store.get();
     return s.chapters.find((c) => c.id === s.openId);
@@ -303,12 +309,16 @@ export function wireBoardEdit(el: HTMLElement, board: Board, store: Store, notic
   el.addEventListener("pointerup", up);
   el.addEventListener("keydown", boardKey);
   window.addEventListener("keydown", undoKey);
-  return () => {
-    el.removeEventListener("pointerdown", down);
-    el.removeEventListener("pointermove", move);
-    el.removeEventListener("pointerup", up);
-    el.removeEventListener("keydown", boardKey);
-    window.removeEventListener("keydown", undoKey);
+  return {
+    duplicateSelected,
+    deleteSelected,
+    dispose() {
+      el.removeEventListener("pointerdown", down);
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("keydown", boardKey);
+      window.removeEventListener("keydown", undoKey);
+    },
   };
 }
 

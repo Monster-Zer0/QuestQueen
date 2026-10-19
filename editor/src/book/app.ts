@@ -8,7 +8,8 @@ import { unknownIdWarnings } from "./ids";
 import { loadPack } from "./pack";
 import { paletteFor } from "./palettes";
 import { createBoard, type Board } from "./board";
-import { wireBoardEdit } from "./boardEdit";
+import { confirmDelete, wireBoardEdit, type BoardEditing } from "./boardEdit";
+import { renderCard } from "./card";
 import { setDialogHost } from "./dialog";
 import { h } from "./dom";
 import { applyPalette, mountShell, type ShellParts } from "./shell";
@@ -29,6 +30,7 @@ async function bridgeReady(): Promise<boolean> {
 }
 
 let minimap: Minimap | null = null;
+let editing: BoardEditing | null = null;
 
 function render(shell: ShellParts, store: Store, board: Board) {
   const state = store.get();
@@ -39,6 +41,15 @@ function render(shell: ShellParts, store: Store, board: Board) {
   renderSidebar(shell.sidebar, store);
   board.render();
   minimap?.render();
+  renderCard(shell.cardLayer, store, {
+    board,
+    duplicate: () => editing?.duplicateSelected(),
+    remove: async () => {
+      const s = store.get();
+      const tile = s.chapters.find((c) => c.id === s.openId)?.tiles.find((t) => t.id === s.selected);
+      if (tile && (await confirmDelete(tile.title || tile.id))) editing?.deleteSelected();
+    },
+  });
   const zoomLabel = shell.root.querySelector(".zoom-label");
   if (zoomLabel) zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
 }
@@ -69,7 +80,7 @@ function boot() {
     window.clearTimeout(noticeTimer);
     noticeTimer = window.setTimeout(() => { noticeEl.hidden = true; }, 5000);
   };
-  wireBoardEdit(shell.board, board, store, notice);
+  editing = wireBoardEdit(shell.board, board, store, notice);
   store.subscribe(() => render(shell, store, board));
   void loadBookFont().then((source) => { shell.root.dataset.font = source; });
   let loaded = false;
