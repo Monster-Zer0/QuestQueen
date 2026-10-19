@@ -20,6 +20,7 @@ import { addEmptyChapter, addStarterChapter, deleteChapter, duplicateChapter } f
 import { openChapterSettings } from "./chapterSettings";
 import { renderIntro } from "./intro";
 import { isIntroChapter } from "../model";
+import { openProblems, saveAll, saveChapter, type SaveDeps } from "./problems";
 import { createStore, type Store } from "./store";
 
 const POLL_MS = 2000;
@@ -109,6 +110,20 @@ function render(shell: ShellParts, store: Store, board: Board) {
   }
   for (const b of shell.bar.querySelectorAll<HTMLElement>("[data-mode]")) b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode));
   shell.bar.querySelector("[data-act=preview-as]")!.textContent = `${previewLabel(state)} ▾`;
+  const problemsBtn = shell.bar.querySelector<HTMLElement>("[data-act=problems]")!;
+  const errors = open ? store.problems(open.id).length : 0;
+  const checks = open ? store.warnings(open.id).length : 0;
+  problemsBtn.hidden = !(errors + checks);
+  problemsBtn.classList.toggle("has-errors", errors > 0);
+  problemsBtn.textContent = errors ? `${errors} to fix` : `${checks} to check`;
+  problemsBtn.setAttribute("aria-label", `${errors} problems and ${checks} warnings in this chapter`);
+  const unsaved = state.chapters.filter((c) => store.dirty(c.id)).length;
+  const count = shell.bar.querySelector<HTMLElement>(".save-count")!;
+  count.hidden = unsaved === 0;
+  count.textContent = String(unsaved);
+  shell.bar.querySelector("[data-act=save]")!.setAttribute("aria-label", unsaved ? `Save ${unsaved} unsaved chapter${unsaved === 1 ? "" : "s"} to the world` : "Everything is saved");
+  const sheetHost = shell.board.parentElement!;
+  if (sheetHost.querySelector(".problems-sheet") && !sheetHost.querySelector(".problems-sheet :focus") && open) openProblems(sheetHost, store, open.id);
   shell.hint.textContent = state.mode === "edit"
     ? "Click any text or picture to change it. Drag quests to move them; drag a blue diamond to link."
     : "This is what a player sees. Switch to Edit to change it.";
@@ -183,6 +198,24 @@ function boot() {
     noticeTimer = window.setTimeout(() => { noticeEl.hidden = true; }, 5000);
   };
   editing = wireBoardEdit(shell.board, board, store, notice);
+  const saveDeps: SaveDeps = {
+    host: shell.board.parentElement!,
+    post: (body) => bridgeFetch("/api/chapter", { method: "POST", headers: { "Content-Type": "application/json" }, body }),
+    tell: (text) => tell(text, { title: "Not saved" }),
+    notice,
+  };
+  shell.bar.querySelector("[data-act=save]")!.addEventListener("click", async () => {
+    const unsaved = store.get().chapters.filter((c) => store.dirty(c.id)).length;
+    if (!unsaved) return notice("Everything is saved.");
+    if ((await saveAll(store, saveDeps)) && unsaved > 1) notice(`All ${unsaved} chapters saved.`);
+  });
+  shell.bar.querySelector("[data-act=problems]")!.addEventListener("click", () => openProblems(saveDeps.host, store));
+  window.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+      event.preventDefault();
+      if (store.get().openId) void saveChapter(store, store.get().openId, saveDeps);
+    }
+  });
   store.subscribe(() => render(shell, store, board));
   void loadBookFont().then((source) => { shell.root.dataset.font = source; });
   let loaded = false;

@@ -307,3 +307,16 @@ button.task-row, button.reward-row { cursor: pointer; }
   background: #141019; color: var(--ui); border: 1px solid var(--edit); padding: 0 6px; }
 .intro-open .board-tools, .intro-open .minimap { display: none; }
 .intro-page:focus-within { outline: none; }
+/* problems: bar button and side sheet */
+.bar-btn[data-act=problems] { color: #f0c060; border-color: #7a5f22; }
+.bar-btn[data-act=problems].has-errors { color: #ff8a8a; border-color: #8C1A24; }
+.problems-sheet { position: absolute; top: 0; right: 0; bottom: 0; width: min(380px, 100%); z-index: 9; overflow: auto; background: var(--card); color: var(--ui);
+  border-left: 2px solid var(--neu); padding: 16px; font: 13px system-ui, sans-serif; box-shadow: -12px 0 30px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; gap: 6px; }
+.sheet-close { position: absolute; right: 8px; top: 6px; --px: 2; color: var(--muted); }
+.sheet-title { margin: 0; font: 18px QQBook, system-ui, sans-serif; color: var(--completed); }
+.sheet-sub { margin: 0 0 8px; color: var(--sidebar-text); }
+.problem-row { text-align: left; display: grid; gap: 2px; padding: 8px 10px; background: #141019; color: var(--ui); border: 1px solid var(--sidebar-edge); border-left: 4px solid #f0c060; cursor: pointer; font: inherit; }
+.problem-row.error { border-left-color: #E01018; }
+.problem-row:hover, .problem-row:focus-visible { border-color: var(--edit); }
+.problem-kind { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #f0c060; }
+.problem-row.error .problem-kind { color: #ff8a8a; }
