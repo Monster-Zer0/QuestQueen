@@ -23,6 +23,7 @@ import { isIntroChapter } from "../model";
 import { openProblems, saveAll, saveChapter, type SaveDeps } from "./problems";
 import { openStagePopup, openStages, type StagesPageDeps } from "./stagesPage";
 import { openFind, type FindHooks } from "./find";
+import { maybeTour, openHelp } from "./help";
 import { exportZip, readZip } from "../zipio";
 import { packNamespace } from "../model";
 import { createStore, type Store } from "./store";
@@ -306,6 +307,7 @@ function boot() {
     ],
     openStage: (id) => showStages(id),
   };
+  shell.bar.querySelector("[data-act=help]")!.addEventListener("click", () => openHelp(shell.root, store));
   const find = () => openFind(shell.popLayer, store, findHooks);
   shell.bar.querySelector("[data-act=find]")!.addEventListener("click", find);
   window.addEventListener("keydown", (event) => {
@@ -335,6 +337,7 @@ function boot() {
       store.load({ ...pack, openId: pack.chapters[0]?.id ?? "" }, "pack loaded");
       for (const chapter of pack.chapters) store.markSaved(chapter.id);
       render(shell, store, board);
+      maybeTour(shell.root);
     } catch (error) {
       shell.lock.hidden = false;
       shell.lock.querySelector("small")!.textContent = String((error as Error).message ?? error);
