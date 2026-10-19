@@ -278,6 +278,20 @@ public final class EditorBridge {
             writeBytes(exchange, 200, "image/png", png);
             return;
         }
+        if ("/api/texture".equals(path) && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            var location = TexturePath.parse(queryParam(exchange.getRequestURI().getRawQuery(), "id"));
+            if (location.isEmpty()) {
+                write(exchange, 400, "application/json", "{\"ok\":false,\"error\":\"not a texture id\"}");
+                return;
+            }
+            var bytes = TexturePath.read(location.get());
+            if (bytes.isEmpty()) {
+                write(exchange, 404, "application/json", "{\"ok\":false,\"error\":\"no such texture\"}");
+                return;
+            }
+            writeBytes(exchange, 200, "image/png", bytes.get());
+            return;
+        }
         if ("/api/chapters".equals(path) && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
             write(exchange, 200, "application/json", PACK.get());
             return;
