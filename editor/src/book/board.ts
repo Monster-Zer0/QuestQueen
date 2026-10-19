@@ -9,7 +9,7 @@ import { bridgeBase } from "../bridge";
 import { glyphSvg } from "../glyphs";
 import { iconUrl } from "../itemSelect";
 import { chapterGridHeight, chapterGridWidth, gateOp, type Chapter, type GridPos, type Link, type Reward, type Tile } from "../types";
-import { h, reconcile } from "./dom";
+import { h, keptImage, reconcile, releaseImages } from "./dom";
 import { textWidth } from "./font";
 import * as L from "./ledgerTile";
 import { concealed, unlockedChapters, visual, type Visual } from "./progress";
@@ -79,14 +79,16 @@ function tinyText(cls: string, text: string, x: number, y: number, color: string
   }, text);
 }
 
-function iconEl(cls: string, item: string | undefined, glyph: string | undefined, x: number, y: number, size: number): HTMLElement | null {
+function iconEl(cls: string, item: string | undefined, glyph: string | undefined, x: number, y: number, size: number, scope?: HTMLElement): HTMLElement | null {
   const style = `left:${bp(x)};top:${bp(y)};width:${bp(size)};height:${bp(size)}`;
   if (glyph) {
     const el = h("span", { class: `icon ${cls}`, style, "aria-hidden": "true" });
     el.innerHTML = glyphSvg(glyph);
     return el;
   }
-  if (item) return h("img", { class: `icon ${cls}`, style, alt: "", src: iconUrl(bridgeBase(), item.split("[")[0]), loading: "lazy" });
+  if (!item) return null;
+  const src = iconUrl(bridgeBase(), item.split("[")[0]);
+  return scope ? keptImage(scope, src, { class: `icon ${cls}`, style, alt: "" }) : h("img", { class: `icon ${cls}`, style, alt: "", src });
   return null;
 }
 
@@ -135,7 +137,7 @@ function fillTile(el: HTMLElement, m: TileModel, ch: Chapter, g: Geometry) {
 
   const content = h("span", { class: "tile-content" });
   if (L.showsHeader(size) && m.word) content.append(tinyText("state-word", m.word, lay.header.x, lay.header.y, m.edge));
-  const icon = iconEl("tile-icon", tile.icon?.item, tile.icon?.glyph, lay.icon.x, lay.icon.y, lay.icon.size);
+  const icon = iconEl("tile-icon", tile.icon?.item, tile.icon?.glyph, lay.icon.x, lay.icon.y, lay.icon.size, el);
   if (icon) content.append(icon);
   const title = locked ? "??? COMPLETE PREVIOUS" : tile.title || tile.id;
   let budget = lay.title.lines;
@@ -173,7 +175,7 @@ function fillTile(el: HTMLElement, m: TileModel, ch: Chapter, g: Geometry) {
       }
     }
     for (const face of show) {
-      const img = iconEl("reward-icon", face.item, undefined, rx, ry, rpx);
+      const img = iconEl("reward-icon", face.item, undefined, rx, ry, rpx, el);
       if (img) content.append(img);
       if (face.count > 1) content.append(tinyText("reward-count", `${face.count}x`, rx + 1, ry + Math.max(0, rpx - 5), "var(--text)"));
       rx += rpx + gap;
@@ -188,6 +190,7 @@ function fillTile(el: HTMLElement, m: TileModel, ch: Chapter, g: Geometry) {
   el.dataset.rail = String(lay.rail);
   el.style.setProperty("--rail", String(lay.rail));
   el.replaceChildren(h("span", { class: "rail" }), content);
+  releaseImages(el);
 }
 
 /** Pixels of the path arrow (MockChrome.pathArrowFilled), as offsets along (lx) and across (ly) the travel. */
@@ -275,6 +278,45 @@ function cellPattern(el: HTMLElement, g: Geometry): string {
   return url;
 }
 
+const SIDES = { n: [0, -1], e: [1, 0], s: [0, 1], w: [-1, 0] } as const;
+export type Side = keyof typeof SIDES;
+export const SIDE_STEP = SIDES;
+
+/**
+ * Edit-mode handles on the selected quest, after the original mock: four NEW-blue diamonds at its side midpoints
+ * (drag one onto a neighbour to link, or onto an empty neighbour to add a linked quest) and a dim ⊕ ADD in each
+ * empty grid cell beside it.
+ */
+function renderAffordances(layer: HTMLElement, s: BookState, ch: Chapter, g: Geometry) {
+  const tile = s.mode === "edit" && s.selected ? ch.tiles.find((t) => t.id === s.selected) : undefined;
+  if (!tile) {
+    layer.replaceChildren();
+    return;
+  }
+  const w = chapterGridWidth(ch);
+  const hh = chapterGridHeight(ch);
+  const occupied = new Set(ch.tiles.map((t) => `${t.pos.x},${t.pos.y}`));
+  const nodes: HTMLElement[] = [];
+  for (const [side, [dx, dy]] of Object.entries(SIDES) as [Side, readonly [number, number]][]) {
+    const nx = tile.pos.x + dx;
+    const ny = tile.pos.y + dy;
+    const inGrid = nx >= 0 && ny >= 0 && nx < w && ny < hh;
+    const [mx, my] = edgeMid(g.size, dx, dy);
+    nodes.push(h("button", {
+      type: "button", class: "link-handle", dataset: { side },
+      "aria-label": `Link ${tile.title || tile.id} ${({ n: "up", e: "right", s: "down", w: "left" })[side]}`,
+      style: `left:${tile.pos.x * g.stride + (mx + dx) * g.px}px;top:${tile.pos.y * g.stride + (my + dy) * g.px}px`,
+    }));
+    if (inGrid && !occupied.has(`${nx},${ny}`)) {
+      nodes.push(h("button", {
+        type: "button", class: "add-cell", dataset: { x: String(nx), y: String(ny) }, "aria-label": `Add a quest ${({ n: "above", e: "right of", s: "below", w: "left of" })[side]} ${tile.title || tile.id}`,
+        style: `left:${nx * g.stride}px;top:${ny * g.stride}px;width:${bp(g.size)};height:${bp(g.size)}`,
+      }, h("span", { class: "add-plus" }, "⊕"), h("span", { class: "add-word" }, "ADD")));
+    }
+  }
+  layer.replaceChildren(...nodes);
+}
+
 export interface Hit {
   cell: GridPos;
   tile?: Tile;
@@ -307,7 +349,8 @@ export function createBoard(el: HTMLElement, store: Store): Board {
   const cells = h("div", { class: "board-cells", "aria-hidden": "true" });
   const tileLayer = h("div", { class: "tile-layer", role: "row" });
   const arrowLayer = h("div", { class: "arrow-layer", "aria-hidden": "true" });
-  plane.append(cells, tileLayer, arrowLayer);
+  const editLayer = h("div", { class: "edit-layer" });
+  plane.append(cells, tileLayer, arrowLayer, editLayer);
   el.replaceChildren(plane);
   let pan = { x: 24, y: 24 };
   let fitted = "";
@@ -397,6 +440,7 @@ export function createBoard(el: HTMLElement, store: Store): Board {
         arrows.push({ link, from, to, locked: visuals.get(to.id) === "LOCKED", showGate: editing });
       }
       reconcile(arrowLayer, arrows, (a) => `${a.from.id}>${a.to.id}`, () => h("span", { class: "arrow" }), (node, a) => fillArrow(node, a, g));
+      renderAffordances(editLayer, s, ch, g);
     },
     hit(clientX, clientY) {
       const s = store.get();

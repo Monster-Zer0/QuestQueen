@@ -8,6 +8,8 @@ import { unknownIdWarnings } from "./ids";
 import { loadPack } from "./pack";
 import { paletteFor } from "./palettes";
 import { createBoard, type Board } from "./board";
+import { wireBoardEdit } from "./boardEdit";
+import { setDialogHost } from "./dialog";
 import { h } from "./dom";
 import { applyPalette, mountShell, type ShellParts } from "./shell";
 import { renderSidebar } from "./sidebar";
@@ -56,6 +58,18 @@ function boot() {
     const rect = shell.board.getBoundingClientRect();
     board.zoomAt(direction, rect.left + rect.width / 2, rect.top + rect.height / 2);
   };
+  setDialogHost(shell.popLayer);
+  const noticeEl = h("div", { class: "board-notice", role: "status", hidden: true });
+  shell.board.parentElement!.append(noticeEl);
+  let noticeTimer = 0;
+  const notice = (text: string) => {
+    noticeEl.textContent = text;
+    noticeEl.hidden = false;
+    shell.live.textContent = text;
+    window.clearTimeout(noticeTimer);
+    noticeTimer = window.setTimeout(() => { noticeEl.hidden = true; }, 5000);
+  };
+  wireBoardEdit(shell.board, board, store, notice);
   store.subscribe(() => render(shell, store, board));
   void loadBookFont().then((source) => { shell.root.dataset.font = source; });
   let loaded = false;

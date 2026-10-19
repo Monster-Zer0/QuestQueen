@@ -5,7 +5,7 @@ import { bridgeBase } from "../bridge";
 import { glyphSvg } from "../glyphs";
 import { iconUrl } from "../itemSelect";
 import { chapterTree, type Chapter, type ChapterNode } from "../types";
-import { h, reconcile } from "./dom";
+import { h, keptImage, reconcile, releaseImages } from "./dom";
 import { concealed, questKey, unlockedChapters } from "./progress";
 import type { Store } from "./store";
 
@@ -22,10 +22,10 @@ function flatten(nodes: ChapterNode[], depth = 0, out: Row[] = []): Row[] {
   return out;
 }
 
-function chapterIcon(chapter: Chapter): HTMLElement {
+function chapterIcon(chapter: Chapter, scope: HTMLElement): HTMLElement {
   const box = h("span", { class: "chapter-icon", "aria-hidden": "true" });
   if (chapter.icon?.glyph) box.innerHTML = glyphSvg(chapter.icon.glyph);
-  else if (chapter.icon?.item) box.append(h("img", { class: "icon", alt: "", src: iconUrl(bridgeBase(), chapter.icon.item) }));
+  else if (chapter.icon?.item) box.append(keptImage(scope, iconUrl(bridgeBase(), chapter.icon.item), { class: "icon", alt: "" }));
   return box;
 }
 
@@ -66,10 +66,11 @@ export function renderSidebar(el: HTMLElement, store: Store): void {
       if (chapter.id === state.openId) el.setAttribute("aria-current", "page");
       else el.removeAttribute("aria-current");
       el.replaceChildren(...[
-        locked ? padlock() : chapterIcon(chapter),
+        locked ? padlock() : chapterIcon(chapter, el),
         h("span", { class: "chapter-title qq-text" }, chapter.title || chapter.id),
         visible.length ? h("span", { class: "chapter-count qq-text qq-tiny" }, `${done}/${visible.length}`) : null,
         h("span", { class: "dirty-dot", title: "Unsaved changes", "aria-label": store.dirty(chapter.id) ? "unsaved changes" : undefined }),
       ].filter((child): child is HTMLElement => child !== null));
+      releaseImages(el);
     });
 }

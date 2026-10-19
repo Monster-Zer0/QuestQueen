@@ -61,3 +61,27 @@ export function reconcile<T>(
   }
   for (const stale of old.values()) stale.remove();
 }
+
+/**
+ * An <img> for src, reusing one already inside `scope` with the same src (so a redraw never makes a loaded icon
+ * blink while a fresh element decodes). Each reused image is taken once.
+ */
+export function keptImage(scope: HTMLElement, src: string, props: Record<string, unknown>): HTMLImageElement {
+  const found = [...scope.querySelectorAll<HTMLImageElement>("img")].find((img) => img.getAttribute("src") === src && !img.dataset.kept);
+  if (found) {
+    found.dataset.kept = "1";
+    for (const [key, value] of Object.entries(props)) {
+      if (key === "class") found.className = String(value);
+      else if (value !== undefined) found.setAttribute(key, String(value));
+    }
+    return found;
+  }
+  const img = h("img", { ...props, src }) as HTMLImageElement;
+  img.dataset.kept = "1";
+  return img;
+}
+
+/** Clear keptImage's marks after a redraw. */
+export function releaseImages(scope: HTMLElement): void {
+  scope.querySelectorAll<HTMLImageElement>("img[data-kept]").forEach((img) => delete img.dataset.kept);
+}
