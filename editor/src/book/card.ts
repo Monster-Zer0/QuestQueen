@@ -10,6 +10,7 @@ import { richToHtml } from "../richtext";
 import type { Chapter, Reward, Task, Tile } from "../types";
 import type { Board } from "./board";
 import { openDescribe } from "./describe";
+import { renderMore } from "./more";
 import { h, keptImage, releaseImages } from "./dom";
 import { inlineText } from "./inline";
 import { namer } from "./names";
@@ -23,7 +24,6 @@ export interface CardHooks {
   /** Open the sentence builder for task i (Task 13), or for a new task when i is -1. */
   editTask?: (index: number, anchor: HTMLElement) => void;
   editReward?: (index: number, anchor: HTMLElement) => void;
-  more?: (anchor: HTMLElement) => void;
   duplicate?: () => void;
   remove?: () => void;
 }
@@ -104,6 +104,9 @@ function place(card: HTMLElement, layer: HTMLElement, tile: Tile, board: Board |
   card.style.left = `${Math.round(x)}px`;
   card.style.top = `${Math.round(y)}px`;
 }
+
+/** Quests whose More drawer is open ("chapterId#tileId"). */
+const moreOpen = new Set<string>();
 
 export function renderCard(layer: HTMLElement, store: Store, hooks: CardHooks = {}): void {
   const s = store.get();
@@ -228,7 +231,12 @@ export function renderCard(layer: HTMLElement, store: Store, hooks: CardHooks = 
 
   const foot = editing
     ? h("div", { class: "card-strip" },
-        h("button", { type: "button", class: "strip-btn", "aria-haspopup": "dialog", onclick: (e: Event) => hooks.more?.(e.currentTarget as HTMLElement) }, "More ▾"),
+        h("button", { type: "button", class: "strip-btn", "aria-expanded": String(moreOpen.has(`${chapterId}#${tileId}`)), onclick: () => {
+          const key = `${chapterId}#${tileId}`;
+          if (moreOpen.has(key)) moreOpen.delete(key);
+          else moreOpen.add(key);
+          renderCard(layer, store, hooks);
+        } }, moreOpen.has(`${chapterId}#${tileId}`) ? "More ▴" : "More ▾"),
         h("span", { class: "strip-space" }),
         h("button", { type: "button", class: "strip-btn", onclick: () => hooks.duplicate?.() }, "Duplicate"),
         h("button", { type: "button", class: "strip-btn danger", onclick: () => hooks.remove?.() }, "Delete"))
@@ -237,7 +245,9 @@ export function renderCard(layer: HTMLElement, store: Store, hooks: CardHooks = 
         v !== "COMPLETED" && v !== "FAILED" && v !== "LOCKED" && v !== "CLOSED" ? h("button", { type: "button", class: "play-btn outline qq-text", dataset: { play: "pin" }, disabled: true }, "PIN") : null);
 
   const top = h("div", { class: "card-top" }, iconBtn, title);
-  const body = hidden && !editing ? [head, h("p", { class: "card-desc qq-text" }, "???")] : [head, top, desc, tasks, rewards, foot];
+  const more = editing && moreOpen.has(`${chapterId}#${tileId}`) ? h("div", { class: "card-more" }) : null;
+  if (more) renderMore(more, store);
+  const body = hidden && !editing ? [head, h("p", { class: "card-desc qq-text" }, "???")] : [head, top, desc, tasks, rewards, foot, ...(more ? [more] : [])];
   card.replaceChildren(...body);
   releaseImages(card);
   if (!existing) layer.append(card);

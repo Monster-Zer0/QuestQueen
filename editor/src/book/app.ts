@@ -11,6 +11,7 @@ import { createBoard, type Board } from "./board";
 import { confirmDelete, wireBoardEdit, type BoardEditing } from "./boardEdit";
 import { renderCard } from "./card";
 import { pickReward, pickTask } from "./taskPicker";
+import { openPreviewAs, previewLabel } from "./previewAs";
 import { setDialogHost } from "./dialog";
 import { h } from "./dom";
 import { applyPalette, mountShell, type ShellParts } from "./shell";
@@ -40,6 +41,11 @@ function render(shell: ShellParts, store: Store, board: Board) {
   shell.root.classList.toggle("mode-edit", state.mode === "edit");
   shell.root.classList.toggle("mode-preview", state.mode === "preview");
   renderSidebar(shell.sidebar, store);
+  for (const b of shell.bar.querySelectorAll<HTMLElement>("[data-mode]")) b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode));
+  shell.bar.querySelector("[data-act=preview-as]")!.textContent = `${previewLabel(state)} ▾`;
+  shell.hint.textContent = state.mode === "edit"
+    ? "Click any text or picture to change it. Drag quests to move them; drag a blue diamond to link."
+    : "This is what a player sees. Switch to Edit to change it.";
   board.render();
   minimap?.render();
   renderCard(shell.cardLayer, store, {
@@ -90,6 +96,10 @@ function boot() {
     board.zoomAt(direction, rect.left + rect.width / 2, rect.top + rect.height / 2);
   };
   setDialogHost(shell.popLayer);
+  for (const b of shell.bar.querySelectorAll<HTMLElement>("[data-mode]")) {
+    b.addEventListener("click", () => store.setMode(b.dataset.mode === "preview" ? "preview" : "edit"));
+  }
+  shell.bar.querySelector("[data-act=preview-as]")!.addEventListener("click", () => void openPreviewAs(store));
   const noticeEl = h("div", { class: "board-notice", role: "status", hidden: true });
   shell.board.parentElement!.append(noticeEl);
   let noticeTimer = 0;
