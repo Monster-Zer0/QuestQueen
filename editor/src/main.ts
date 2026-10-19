@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { bridgeBase, bridgeFetch } from "./bridge";
 import {
   GRID_PRESETS,
   REWARD_TYPES,
@@ -2313,29 +2314,6 @@ function updatePackStatus() {
     packStatus.classList.toggle("online", unlocked);
     packStatus.title = unlocked ? "Item catalog comes from the pack loaded in Minecraft" : "Run /questqueen editor in game";
   }
-}
-
-function bridgeBase(): string {
-  return location.port === "47821" ? "" : "http://127.0.0.1:47821";
-}
-
-// QQ-2: the bridge requires the per-session nonce on every mutating request. The page holds
-// the nonce itself: read it from GET /api/session and send it as X-Editor-Nonce on writes.
-async function bridgeFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const base = bridgeBase();
-  const method = (init.method ?? "GET").toUpperCase();
-  if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
-    const session = await fetch(`${base}/api/session`);
-    if (session.ok) {
-      const body = (await session.json()) as { nonce?: string };
-      if (body.nonce) {
-        const headers = new Headers(init.headers ?? {});
-        headers.set("X-Editor-Nonce", body.nonce);
-        init = { ...init, headers };
-      }
-    }
-  }
-  return fetch(`${base}${path}`, init);
 }
 
 function setLocked(next: boolean, message: string) {
