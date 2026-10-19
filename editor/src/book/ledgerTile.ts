@@ -105,3 +105,6 @@ export function wrapTiny(widthOf: (text: string) => number, text: string, visual
   }
   return lines;
 }
+
+/** QuestTileWidget.countFits: the count text ends at least 2px short of the reward strip. */
+export const countFits = (countX: number, countW: number, stripLeft: number) => countX + countW <= stripLeft - 2;

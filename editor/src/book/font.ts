@@ -118,6 +118,21 @@ export function buildBookFont(alpha: Alpha, width: number, height: number, sheet
   return font.toArrayBuffer();
 }
 
+const DEFAULT_ADVANCE = 6;
+let metrics: Map<number, GlyphMetrics> | null = null;
+
+/** Use these glyph metrics for textWidth (loadBookFont sets them; null goes back to the default). */
+export function useMetrics(next: Map<number, GlyphMetrics> | null): void {
+  metrics = next;
+}
+
+/** Width of text in book pixels at full scale in the book font (Minecraft's Font.width); 6 per unknown glyph. */
+export function textWidth(text: string): number {
+  let width = 0;
+  for (const ch of text) width += metrics?.get(ch.codePointAt(0)!)?.advance ?? DEFAULT_ADVANCE;
+  return width;
+}
+
 export interface FontDeps {
   fetch: (url: string) => Promise<Response>;
   /** Decode PNG bytes to pixels. */
@@ -159,6 +174,7 @@ export async function loadBookFont(deps: FontDeps = BROWSER): Promise<"minecraft
       if (!response.ok) continue;
       const image = await deps.decode(await response.blob());
       await deps.addFont(buildBookFont(image.alpha, image.width, image.height, source.sheet));
+      useMetrics(glyphAdvances(image.alpha, image.width, image.height, source.sheet));
       return source.name;
     } catch {
       // Try the next source.

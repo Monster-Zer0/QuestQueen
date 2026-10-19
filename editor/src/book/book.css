@@ -84,3 +84,35 @@
 .chapter-count { color: var(--sidebar-header); }
 .dirty-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
 .chapter-row.dirty .dirty-dot { background: var(--edit); }
+
+/* ---- the board (QuestBookScreen board, QuestTileWidget ledger tiles) ---- */
+.board-plane { position: absolute; left: 0; top: 0; }
+.board-cells { position: absolute; inset: 0; background-repeat: repeat; }
+.tile-layer, .arrow-layer { position: absolute; inset: 0; pointer-events: none; }
+.tile { position: absolute; padding: 0; border: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; overflow: hidden;
+  background: var(--card); box-shadow: inset 0 0 0 calc(var(--px) * 1px) var(--sidebar-edge); pointer-events: auto; }
+.tile .rail { position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--px) * var(--rail) * 1px); background: var(--edge); }
+.tile-content { position: absolute; inset: 0; }
+.tile.locked .tile-content { opacity: 0.6; }
+.tile.concealed { opacity: 0.45; }
+.tile.claimable { background: linear-gradient(var(--claim-tint), var(--claim-tint)), var(--card); box-shadow: inset 0 0 0 calc(var(--px) * 1px) var(--claim-edge); }
+.tile.selected { outline: calc(var(--px) * 1px) solid var(--edit); outline-offset: calc(var(--px) * 2px); }
+.tile:focus-visible { outline: calc(var(--px) * 2px) solid var(--edit); outline-offset: calc(var(--px) * 1px); }
+.tile .tiny, .gate-tag { position: absolute; white-space: nowrap; font-family: QQBook, system-ui, sans-serif; line-height: 1; -webkit-font-smoothing: none; }
+.tile .icon { position: absolute; image-rendering: pixelated; display: block; }
+.tile .icon svg { width: 100%; height: 100%; }
+.tile .bar { position: absolute; background: color-mix(in srgb, var(--cell-line) 70%, transparent); }
+.tile .claim-chip, .tile .xor-badge { position: absolute; background: var(--completed); }
+.tile .expand { position: absolute; }
+.arrow { position: absolute; width: 0; height: 0; }
+.arrow-px { position: absolute; overflow: visible; }
+.gate-tag { font-size: calc(var(--px) * 4px); text-shadow: calc(var(--px) * 0.5px) calc(var(--px) * 0.5px) 0 #000; }
+.mode-preview .gate-tag { display: none; }
+
+.board-tools { position: absolute; left: 10px; top: 10px; display: flex; gap: 6px; z-index: 5; }
+.board-tools button, .board-tools span { font: 13px system-ui, sans-serif; height: 28px; min-width: 28px; padding: 0 8px; border-radius: 6px;
+  border: 1px solid var(--bar-line); background: rgba(18, 12, 24, 0.85); color: var(--ui); display: inline-grid; place-items: center; }
+.board-tools button { cursor: pointer; }
+.minimap { position: absolute; right: 10px; bottom: 10px; width: 180px; height: 120px; z-index: 5; cursor: pointer;
+  border: 1px solid var(--bar-line); background: rgba(10, 6, 16, 0.85); image-rendering: pixelated; }
+.minimap[hidden] { display: none; }

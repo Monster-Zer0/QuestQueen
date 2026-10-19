@@ -3,9 +3,12 @@
 import "./book.css";
 import { bridgeFetch } from "../bridge";
 import { loadBookFont } from "./font";
+import { createMinimap, type Minimap } from "./minimap";
 import { unknownIdWarnings } from "./ids";
 import { loadPack } from "./pack";
 import { paletteFor } from "./palettes";
+import { createBoard, type Board } from "./board";
+import { h } from "./dom";
 import { applyPalette, mountShell, type ShellParts } from "./shell";
 import { renderSidebar } from "./sidebar";
 import { createStore, type Store } from "./store";
@@ -23,20 +26,37 @@ async function bridgeReady(): Promise<boolean> {
   }
 }
 
-function render(shell: ShellParts, store: Store) {
+let minimap: Minimap | null = null;
+
+function render(shell: ShellParts, store: Store, board: Board) {
   const state = store.get();
   const open = state.chapters.find((c) => c.id === state.openId);
   applyPalette(shell.root, paletteFor(open?.theme));
   shell.root.classList.toggle("mode-edit", state.mode === "edit");
   shell.root.classList.toggle("mode-preview", state.mode === "preview");
-  shell.root.style.setProperty("--px", String(state.zoom));
   renderSidebar(shell.sidebar, store);
+  board.render();
+  minimap?.render();
+  const zoomLabel = shell.root.querySelector(".zoom-label");
+  if (zoomLabel) zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
 }
 
 function boot() {
   const shell = mountShell(document.getElementById("book-app")!);
   const store = createStore({}, [(chapter, state) => unknownIdWarnings(chapter, state.catalog)]);
-  store.subscribe(() => render(shell, store));
+  const board = createBoard(shell.board, store);
+  shell.board.parentElement!.append(h("div", { class: "board-tools", role: "group", "aria-label": "Zoom" },
+    h("button", { type: "button", "aria-label": "Zoom out", onclick: () => zoomCenter(-1) }, "−"),
+    h("span", { class: "zoom-label" }, ""),
+    h("button", { type: "button", "aria-label": "Zoom in", onclick: () => zoomCenter(1) }, "+"),
+    h("button", { type: "button", onclick: () => board.fit() }, "Fit"),
+    h("button", { type: "button", "aria-label": "Show or hide the map", onclick: () => minimap?.toggle() }, "Map")));
+  minimap = createMinimap(shell.board.parentElement!, board, store, shell.board);
+  const zoomCenter = (direction: 1 | -1) => {
+    const rect = shell.board.getBoundingClientRect();
+    board.zoomAt(direction, rect.left + rect.width / 2, rect.top + rect.height / 2);
+  };
+  store.subscribe(() => render(shell, store, board));
   void loadBookFont().then((source) => { shell.root.dataset.font = source; });
   let loaded = false;
   const poll = async () => {
@@ -50,7 +70,7 @@ function boot() {
       loaded = true;
       store.load({ ...pack, openId: pack.chapters[0]?.id ?? "" }, "pack loaded");
       for (const chapter of pack.chapters) store.markSaved(chapter.id);
-      render(shell, store);
+      render(shell, store, board);
     } catch (error) {
       shell.lock.hidden = false;
       shell.lock.querySelector("small")!.textContent = String((error as Error).message ?? error);
@@ -58,7 +78,7 @@ function boot() {
   };
   void poll();
   window.setInterval(() => void poll(), POLL_MS);
-  render(shell, store);
+  render(shell, store, board);
 }
 
 boot();
