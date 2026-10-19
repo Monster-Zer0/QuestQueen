@@ -10,7 +10,7 @@ import { stageWarnings, validate } from "../validate";
 
 export type Mode = "edit" | "preview";
 
-/** A player the board is previewed as. `completed` keys are "<chapterId>#<tileId>". */
+/** A player the board is previewed as. `completed` keys are the game's quest keys, "<chapterId>/<tileId>" (questKey). */
 export interface SimPlayer {
   completed: Set<string>;
   stages: Set<string>;
