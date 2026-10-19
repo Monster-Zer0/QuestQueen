@@ -220,3 +220,47 @@ button.task-row, button.reward-row { cursor: pointer; }
 .glyph-btn { height: 30px; border: 1px solid #3a3048; background: #1d1626; cursor: pointer; padding: 4px; }
 .glyph-btn svg { width: 100%; height: 100%; }
 .pick-actions { display: flex; justify-content: flex-end; gap: 6px; }
+/* ---- control lines: the mock's EDIT MODE rows (a book-style dropdown, then boxed fields) ---- */
+.control-line { flex: 1; display: flex; flex-wrap: wrap; align-items: flex-end; gap: calc(var(--px, 2) * 2px) calc(var(--px, 2) * 3px); min-width: 0; }
+.control-line .kind-select, .control-line .box {
+  font: calc(var(--px, 2) * 5px) / 1.2 QQBook, system-ui, sans-serif; color: var(--edit, #ffb84a); background: transparent;
+  border: calc(var(--px, 2) * 0.5px) solid var(--edit, #ffb84a); height: calc(var(--px, 2) * 9px); padding: 0 calc(var(--px, 2) * 2px); min-width: 0; }
+.control-line .kind-select { flex: 1 1 100%; }
+.control-line .kind-select option, .control-line .kind-select optgroup { background: #16121c; color: #efe8f6; }
+.control-line .box { width: calc(var(--px, 2) * 60px); }
+.control-line .box.num { width: calc(var(--px, 2) * 22px); }
+.control-line .field { display: inline-flex; align-items: center; gap: calc(var(--px, 2) * 2px); }
+.control-line .field-label { font: calc(var(--px, 2) * 4.5px) / 1 QQBook, system-ui, sans-serif; color: var(--text, #f5f0e0); text-transform: uppercase; }
+.control-line .field-icon { width: calc(var(--px, 2) * 8px); height: calc(var(--px, 2) * 8px); image-rendering: pixelated; }
+.control-line .field-icon[hidden] { display: none; }
+.reward-line .choice-options { flex: 1 1 100%; display: grid; gap: 4px; }
+.choice-option { display: flex; gap: 6px; align-items: flex-end; }
+.choice-remove { border: 0; background: transparent; color: var(--muted, #a898b8); cursor: pointer; }
+.choice-remove:disabled { opacity: 0.35; cursor: default; }
+.command-preview { flex: 1 1 100%; font-size: 12px; }
+/* ---- task / reward picker ---- */
+.task-picker { position: fixed; left: 50%; top: 8vh; transform: translateX(-50%); z-index: 95; width: min(760px, 94vw); max-height: 84vh; overflow: auto;
+  --px: 2; background: #1d1626; color: #efe8f6; border: 1px solid #4a3a5c; border-radius: 14px; padding: 18px 20px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  font: 14px system-ui, sans-serif; display: grid; gap: 14px; }
+.picker-head { display: flex; align-items: center; gap: 12px; }
+.picker-title { margin: 0; flex: 1; font: 19px QQBook, system-ui, sans-serif; color: #fff540; }
+.picker-search { height: 38px; border-radius: 10px; border: 1px solid #4a3a5c; background: #141019; color: #efe8f6; padding: 0 12px; font: inherit; }
+.picker-search[hidden], .kind-grid[hidden], .your-task[hidden], .picker-foot[hidden] { display: none; }
+.kind-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.kind-grid.single { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.kind-grid.single .kind-col { display: contents; }
+.kind-col { display: flex; flex-direction: column; gap: 6px; }
+.kind-group { font-size: 12px; font-weight: 700; letter-spacing: 0.8px; color: #b3a5c2; }
+.kind-option { font: inherit; text-align: left; padding: 8px 10px; border-radius: 10px; border: 1px solid #3a2d49; background: #1a1222; color: #efe8f6; cursor: pointer; }
+.kind-option:hover, .kind-option:focus-visible { border-color: #ffb84a; }
+.kind-option[hidden] { display: none; }
+.kind-option strong { display: block; font-size: 13px; }
+.kind-option small { display: block; color: #a596b4; font-size: 12px; margin-top: 2px; }
+.your-task { background: #140e1b; border: 1px solid #3a2d49; border-radius: 12px; padding: 14px 16px; display: grid; gap: 12px; }
+.players-see { font-size: 13px; color: #b3a5c2; }
+.see-text { color: #ffe2a6; --px: 2; font-size: 14px; }
+.picker-actions { display: flex; align-items: center; gap: 8px; }
+.picker-btn { font: inherit; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid #4a3a5c; background: #2a2036; color: #efe8f6; cursor: pointer; }
+.picker-btn.small { height: 26px; font-size: 12px; justify-self: start; }
+.picker-btn.primary { background: #ffb84a; border-color: #ffb84a; color: #1b1322; font-weight: 700; }
+.picker-link { border: 0; background: transparent; color: #ffb84a; cursor: pointer; font: inherit; text-decoration: underline; }

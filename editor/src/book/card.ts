@@ -15,6 +15,7 @@ import { inlineText } from "./inline";
 import { namer } from "./names";
 import { concealed, unlockedChapters, visual } from "./progress";
 import { rewardSentence, taskSentence } from "./sentences";
+import { rewardLine, taskLine } from "./taskPicker";
 import type { BookState, Store } from "./store";
 
 export interface CardHooks {
@@ -157,32 +158,69 @@ export function renderCard(layer: HTMLElement, store: Store, hooks: CardHooks = 
     desc.addEventListener("keydown", (event) => { if (!desc.dataset.editing && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); openEditor(); } });
   }
 
-  const tasks = h("div", { class: "card-tasks" },
-    ...(tile.tasks ?? []).map((task, i) => {
-      const row = h(editing ? "button" : "div", { type: editing ? "button" : undefined, class: `task-row${editing ? " editable" : ""}`, dataset: { index: String(i) } },
+  /**
+   * A control line edits a copy; the change is kept once, when focus leaves the line (one undo step, and no
+   * redraw under the fields while someone types). The line is marked data-editing while focused.
+   */
+  const committing = <T>(line: HTMLElement, why: string, apply: (t: Tile, value: T) => void) => {
+    let pending: { value: T } | null = null;
+    line.addEventListener("focusin", () => { line.dataset.editing = "1"; });
+    line.addEventListener("focusout", (event) => {
+      if (line.contains(event.relatedTarget as Node | null)) return;
+      delete line.dataset.editing;
+      if (pending) {
+        const value = pending.value;
+        pending = null;
+        editTile(why, (t) => apply(t, value));
+      }
+    });
+    return (value: T) => {
+      pending = { value };
+      // A type change (the dropdown) keeps focus on the line; still commit it at once, it redraws the fields.
+      if (!line.dataset.editing) {
+        pending = null;
+        editTile(why, (t) => apply(t, value));
+      }
+    };
+  };
+
+  const tasks = h("div", { class: "card-tasks" });
+  (tile.tasks ?? []).forEach((task, i) => {
+    if (!editing) {
+      tasks.append(h("div", { class: "task-row" },
         iconBox(card, taskItem(task), undefined, "small"),
         h("span", { class: "task-text qq-text" }, taskSentence(task, name)),
-        !editing && v !== "COMPLETED" ? h("span", { class: "task-count qq-text" }, (task.count ?? 1) > 1 ? `0/${task.count}` : "") : null);
-      if (editing) row.addEventListener("click", () => hooks.editTask?.(i, row));
-      if (!editing) return row;
-      const remove = h("button", { type: "button", class: "row-remove", "aria-label": `Remove task ${i + 1}`, onclick: () => editTile("remove task", (t) => { t.tasks?.splice(i, 1); }) }, "✕");
-      return h("div", { class: "row-wrap" }, row, remove);
-    }));
+        v !== "COMPLETED" ? h("span", { class: "task-count qq-text" }, (task.count ?? 1) > 1 ? `0/${task.count}` : "") : null));
+      return;
+    }
+    const holder = h("div", { class: "row-wrap" });
+    let commit: (value: Task) => void = () => {};
+    const line = taskLine(task, s, (t) => commit(t));
+    commit = committing<Task>(line, "edit task", (t, value) => { if (t.tasks) t.tasks[i] = value; });
+    holder.append(line, h("button", { type: "button", class: "row-remove", "aria-label": `Remove task ${i + 1}`,
+      onclick: () => editTile("remove task", (t) => { t.tasks?.splice(i, 1); }) }, "✕"));
+    tasks.append(holder);
+  });
   if (editing) {
     const add = h("button", { type: "button", class: "edit-chip qq-text", onclick: () => hooks.editTask?.(-1, add) }, "⊕ TASK");
     tasks.append(add);
   }
 
-  const rewards = h("div", { class: "card-rewards" }, h("div", { class: "card-caption qq-text" }, "REWARD"),
-    ...(tile.rewards ?? []).map((reward, i) => {
-      const row = h(editing ? "button" : "div", { type: editing ? "button" : undefined, class: `reward-row${editing ? " editable" : ""}` },
-        h("span", { class: editing ? "reward-ring" : "reward-slot" }, iconBox(card, rewardItem(reward), reward.type === "command" && reward.icon?.startsWith("glyph:") ? reward.icon.slice(6) : undefined, "small")),
-        h("span", { class: "reward-text qq-text" }, rewardSentence(reward, name)));
-      if (editing) row.addEventListener("click", () => hooks.editReward?.(i, row));
-      if (!editing) return row;
-      const remove = h("button", { type: "button", class: "row-remove", "aria-label": `Remove reward ${i + 1}`, onclick: () => editTile("remove reward", (t) => { t.rewards?.splice(i, 1); }) }, "✕");
-      return h("div", { class: "row-wrap" }, row, remove);
-    }));
+  const rewards = h("div", { class: "card-rewards" }, h("div", { class: "card-caption qq-text" }, "REWARD"));
+  (tile.rewards ?? []).forEach((reward, i) => {
+    const icon = h("span", { class: editing ? "reward-ring" : "reward-slot" },
+      iconBox(card, rewardItem(reward), reward.type === "command" && reward.icon?.startsWith("glyph:") ? reward.icon.slice(6) : undefined, "small"));
+    if (!editing) {
+      rewards.append(h("div", { class: "reward-row" }, icon, h("span", { class: "reward-text qq-text" }, rewardSentence(reward, name))));
+      return;
+    }
+    let commit: (value: Reward) => void = () => {};
+    const line = rewardLine(reward, s, (r) => commit(r));
+    commit = committing<Reward>(line, "edit reward", (t, value) => { if (t.rewards) t.rewards[i] = value; });
+    rewards.append(h("div", { class: "row-wrap" }, icon, line,
+      h("button", { type: "button", class: "row-remove", "aria-label": `Remove reward ${i + 1}`,
+        onclick: () => editTile("remove reward", (t) => { t.rewards?.splice(i, 1); }) }, "✕")));
+  });
   if (editing) {
     const add = h("button", { type: "button", class: "edit-chip qq-text", onclick: () => hooks.editReward?.(-1, add) }, "⊕ REWARD");
     rewards.append(add);

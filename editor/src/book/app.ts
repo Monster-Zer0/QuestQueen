@@ -10,6 +10,7 @@ import { paletteFor } from "./palettes";
 import { createBoard, type Board } from "./board";
 import { confirmDelete, wireBoardEdit, type BoardEditing } from "./boardEdit";
 import { renderCard } from "./card";
+import { pickReward, pickTask } from "./taskPicker";
 import { setDialogHost } from "./dialog";
 import { h } from "./dom";
 import { applyPalette, mountShell, type ShellParts } from "./shell";
@@ -44,6 +45,25 @@ function render(shell: ShellParts, store: Store, board: Board) {
   renderCard(shell.cardLayer, store, {
     board,
     duplicate: () => editing?.duplicateSelected(),
+    editTask: async (index, anchor) => {
+      if (index >= 0) return;
+      const s = store.get();
+      const chapterId = s.openId;
+      const tileId = s.selected;
+      const task = await pickTask(anchor, s);
+      if (task && tileId) store.edit(chapterId, "add task", (c) => { c.tiles.find((t) => t.id === tileId)?.tasks?.push(task); });
+    },
+    editReward: async (index, anchor) => {
+      if (index >= 0) return;
+      const s = store.get();
+      const chapterId = s.openId;
+      const tileId = s.selected;
+      const reward = await pickReward(anchor, s);
+      if (reward && tileId) store.edit(chapterId, "add reward", (c) => {
+        const t = c.tiles.find((x) => x.id === tileId);
+        if (t) t.rewards = [...(t.rewards ?? []), reward];
+      });
+    },
     remove: async () => {
       const s = store.get();
       const tile = s.chapters.find((c) => c.id === s.openId)?.tiles.find((t) => t.id === s.selected);
