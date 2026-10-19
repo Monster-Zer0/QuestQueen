@@ -2,6 +2,7 @@
 // background, icon, unlock conditions, hide until unlocked and the board size. Each field saves as you leave it.
 import { descendantIds, minGrid } from "../model";
 import { chapterGridHeight, chapterGridWidth, GRID_PRESETS, type Chapter, type UnlockCondition } from "../types";
+import { attachCombo } from "./combo";
 import { h } from "./dom";
 import { BOOK_PALETTES } from "./palettes";
 import type { Store } from "./store";
@@ -56,7 +57,8 @@ export function openChapterSettings(host: HTMLElement, store: Store, chapterId: 
   });
   [bgMode, bgColor, bgImage, bgOpacity].forEach((el) => el.addEventListener("change", writeBg));
 
-  const icon = h("input", { value: ch.icon?.item ?? (ch.icon?.glyph ? `glyph:${ch.icon.glyph}` : ""), list: "qq-list-item", placeholder: "minecraft:book or glyph:star", dataset: { setting: "icon" }, "aria-label": "Chapter icon" }) as HTMLInputElement;
+  const icon = h("input", { value: ch.icon?.item ?? (ch.icon?.glyph ? `glyph:${ch.icon.glyph}` : ""), placeholder: "minecraft:book or glyph:star", dataset: { setting: "icon" }, "aria-label": "Chapter icon" }) as HTMLInputElement;
+  attachCombo(icon, () => store.get().catalog.items, { icons: true });
   icon.addEventListener("change", () => edit("chapter icon", (c) => {
     const v = icon.value.trim();
     if (!v) delete c.icon;

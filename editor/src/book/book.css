@@ -706,3 +706,14 @@ button.task-row, button.reward-row { cursor: pointer; }
 .guide-target { outline: 2px solid var(--edit) !important; outline-offset: 2px; box-shadow: 0 0 18px rgba(255, 184, 74, 0.45) !important; }
 @media (prefers-reduced-motion: no-preference) { .guide-target { animation: guide-pulse 1.6s ease-in-out infinite; } }
 @keyframes guide-pulse { 50% { outline-color: rgba(255, 184, 74, 0.4); } }
+/* Id dropdown (items, mobs, structures, stages…) */
+.combo-panel { color-scheme: dark; position: fixed; z-index: 60; display: flex; flex-direction: column; background: #16101d; border: 2px solid var(--edit); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.65); font: 13px system-ui, sans-serif; color: var(--ui); }
+.combo-list { overflow: auto; min-height: 0; flex: 1; }
+.combo-row { display: flex; align-items: center; gap: 8px; padding: 4px 8px; cursor: pointer; white-space: nowrap; }
+.combo-row:hover, .combo-row.active { background: #2a1f38; }
+.combo-row.chosen { box-shadow: inset 3px 0 0 var(--edit); }
+.combo-icon { width: 20px; height: 20px; flex: none; image-rendering: pixelated; }
+.combo-name { color: var(--ui); overflow: hidden; text-overflow: ellipsis; }
+.combo-id { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; margin-left: auto; }
+.combo-count, .combo-none { padding: 5px 8px; border-top: 1px solid var(--sidebar-edge); color: var(--muted); font-size: 12px; }
+.combo-none { color: #f0c060; }

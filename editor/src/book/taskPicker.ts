@@ -8,6 +8,7 @@ import { commandPreviewHtml } from "../commandReward";
 import { iconUrl } from "../itemSelect";
 import type { CatalogEntry } from "../packCatalog";
 import type { Reward, Task } from "../types";
+import { attachCombo } from "./combo";
 import { h } from "./dom";
 import { namer } from "./names";
 import { REWARD_KINDS, TASK_KINDS, emptyReward, emptyTask, rewardKindOf, kindOf, rewardSentence, taskSentence, type FieldSpec, type Kind, type Picker } from "./sentences";
@@ -20,18 +21,9 @@ const LISTS: Partial<Record<Picker, (s: BookState) => CatalogEntry[]>> = {
   stage: (s) => s.stages.stages.map((st) => ({ id: st.id, name: st.name })),
 };
 
-/** One shared <datalist> per catalog list, so suggestions are not copied into every field. */
-function datalistFor(picker: Picker, state: BookState): string | undefined {
-  const entries = LISTS[picker]?.(state);
-  if (!entries?.length) return undefined;
-  const id = `qq-list-${picker}`;
-  let list = document.getElementById(id);
-  if (!list || list.childElementCount !== entries.length) {
-    list?.remove();
-    list = h("datalist", { id }, ...entries.slice(0, 8000).map((e) => h("option", { value: e.id }, e.name && e.name !== e.id ? e.name : "")));
-    document.body.append(list);
-  }
-  return id;
+/** The pack's entries for a picker kind (what its dropdown lists). */
+export function catalogEntries(picker: Picker, state: BookState): CatalogEntry[] {
+  return LISTS[picker]?.(state) ?? [];
 }
 
 type Value = Record<string, unknown>;
@@ -41,10 +33,11 @@ function field(spec: FieldSpec, value: Value, state: BookState, set: (key: strin
   const number = spec.picker === "number";
   const input = h("input", {
     class: `box${number ? " num" : ""}`, type: number ? "number" : "text", dataset: { field: spec.key },
-    value: raw === undefined ? "" : String(raw), list: datalistFor(spec.picker, state),
+    value: raw === undefined ? "" : String(raw),
     "aria-label": spec.label, placeholder: number ? "" : spec.picker === "text" ? spec.label : "namespace:id",
     min: number && spec.key !== "x" && spec.key !== "y" && spec.key !== "z" ? "1" : undefined, spellcheck: "false",
   }) as HTMLInputElement;
+  if (LISTS[spec.picker]) attachCombo(input, () => catalogEntries(spec.picker, state), { icons: spec.picker === "item" });
   const icon = spec.picker === "item" ? h("img", { class: "field-icon icon", alt: "", hidden: !raw }) as HTMLImageElement : null;
   const showIcon = () => {
     if (!icon) return;

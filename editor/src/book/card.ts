@@ -9,6 +9,7 @@ import { iconUrl } from "../itemSelect";
 import { richToHtml } from "../richtext";
 import type { Chapter, Reward, Task, Tile } from "../types";
 import type { Board } from "./board";
+import { attachCombo } from "./combo";
 import { flushDescribe, openDescribe } from "./describe";
 import { renderMore } from "./more";
 import { h, keptImage, releaseImages } from "./dom";
@@ -60,8 +61,8 @@ function iconBox(scope: HTMLElement, item: string | undefined, glyph: string | u
 /** Pick a quest icon: an item from the pack, a QuestQueen glyph, or none. */
 function openIconPicker(anchor: HTMLElement, state: BookState, current: Tile["icon"], onPick: (icon: Tile["icon"]) => void) {
   document.querySelector(".icon-picker")?.remove();
-  const listId = "icon-picker-items";
-  const input = h("input", { class: "icon-picker-input", list: listId, placeholder: "Item id, e.g. minecraft:diamond", "aria-label": "Item", value: current?.item ?? "" }) as HTMLInputElement;
+  const input = h("input", { class: "icon-picker-input", placeholder: "Item id, e.g. minecraft:diamond", "aria-label": "Item", value: current?.item ?? "" }) as HTMLInputElement;
+  attachCombo(input, () => state.catalog.items, { icons: true });
   const close = () => pop.remove();
   const glyphs = h("div", { class: "icon-picker-glyphs", role: "group", "aria-label": "QuestQueen glyphs" },
     ...GLYPH_IDS.map((id) => {
@@ -71,7 +72,6 @@ function openIconPicker(anchor: HTMLElement, state: BookState, current: Tile["ic
     }));
   const pop = h("div", { class: "icon-picker", role: "dialog", "aria-label": "Quest icon" },
     h("label", { class: "pick-label" }, "Item", input),
-    h("datalist", { id: listId }, ...state.catalog.items.slice(0, 5000).map((e) => h("option", { value: e.id }, e.name ?? e.id))),
     h("div", { class: "pick-label" }, "or a glyph"), glyphs,
     h("div", { class: "pick-actions" },
       h("button", { type: "button", class: "desc-btn", onclick: () => { onPick(undefined); close(); } }, "No icon"),

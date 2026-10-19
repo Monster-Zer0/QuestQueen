@@ -1,6 +1,7 @@
 // The card's More drawer: what has no place in the book itself. How this quest opens (each arrow into it: its
 // rule and its conditions), the stage it needs, what hides it until when, where it jumps, and the scrolls it gives.
 import { gateOp, linkConditions, upsertLink, type GateOpName, type LinkCondition, type Tile } from "../types";
+import { attachCombo } from "./combo";
 import { h } from "./dom";
 import type { Store } from "./store";
 
@@ -52,6 +53,7 @@ export function renderMore(host: HTMLElement, store: Store, hooks: MoreHooks = {
       const rows = conditions.map((cond, i) => {
         const type = select("condition_type", CONDITION_TYPES, cond.type, "Condition type");
         const id = h("input", { value: cond.id, "aria-label": "Condition id", dataset: { more: "condition_id" } }) as HTMLInputElement;
+        attachCombo(id, () => (type.value === "advancement" ? s.catalog.advancements : type.value === "stage" ? s.stages.stages.map((st) => ({ id: st.id, name: st.name })) : []), { icons: false });
         const update = () => setConditions(conditions.map((c, j) => (j === i ? { type: type.value, id: id.value.trim() } : c)));
         type.addEventListener("change", update);
         id.addEventListener("change", update);
@@ -66,8 +68,8 @@ export function renderMore(host: HTMLElement, store: Store, hooks: MoreHooks = {
     }));
 
   // Requires stage.
-  const stagesList = "qq-more-stages";
-  const required = h("input", { value: tile.required_stage ?? "", list: stagesList, placeholder: "none", dataset: { more: "required_stage" }, "aria-label": "Requires stage" }) as HTMLInputElement;
+  const required = h("input", { value: tile.required_stage ?? "", placeholder: "none (pick a stage)", dataset: { more: "required_stage" }, "aria-label": "Requires stage" }) as HTMLInputElement;
+  attachCombo(required, () => s.stages.stages.map((st) => ({ id: st.id, name: st.name })), { icons: false });
   required.addEventListener("change", () => editTile("requires stage", (t) => {
     const v = required.value.trim();
     if (v) t.required_stage = v;
@@ -82,6 +84,7 @@ export function renderMore(host: HTMLElement, store: Store, hooks: MoreHooks = {
     else t.hidden_until = { type: hiddenType.value, id: hiddenId.value.trim() };
   });
   hiddenType.addEventListener("change", () => { hiddenId.hidden = !hiddenType.value; writeHidden(); });
+  attachCombo(hiddenId, () => (hiddenType.value === "stage" ? s.stages.stages.map((st) => ({ id: st.id, name: st.name })) : []), { icons: false });
   hiddenId.addEventListener("change", writeHidden);
 
   // Jump to: a chapter, then one of its quests.
@@ -113,8 +116,7 @@ export function renderMore(host: HTMLElement, store: Store, hooks: MoreHooks = {
         if (!id) return;
         required.value = id;
         required.dispatchEvent(new Event("change"));
-      } }, "New stage…") : null),
-      h("datalist", { id: stagesList }, ...s.stages.stages.map((st) => h("option", { value: st.id }, st.name)))),
+      } }, "New stage…") : null)),
     h("section", { class: "more-section" }, h("h3", {}, "Hidden"), h("div", { class: "more-row" }, hiddenType, hiddenId)),
     h("section", { class: "more-section" }, h("h3", {}, "Jump to"), h("div", { class: "more-row" }, jumpChapter, jumpTile)),
     h("section", { class: "more-section" }, h("h3", {}, "Scrolls it gives"), scrolls));
