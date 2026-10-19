@@ -1,0 +1,67 @@
+/* The Living Book. Colours are the chapter theme's (applyPalette writes --void, --cell, --current, …), sizes are
+   book pixels times --px (CSS px per book px), so the board lines up with the game at the same GUI scale. */
+
+.qq-book-app {
+  --px: 2;
+  --void: #24142c; --cell: #18101f; --cell-line: #4a3c62; --cell-shadow: #0a0610;
+  --sidebar: #1c1526; --sidebar-edge: #3a3048; --sidebar-active: #2a2238; --sidebar-text: #b8a8c8; --sidebar-header: #8a7a9a;
+  --locked: #2b203a; --locked-text: #7a6a90; --current: #3dff6e; --neu: #488bd4; --edit: #ffb84a; --completed: #fff540;
+  --failed: #e01018; --closed: #6a6080; --card: #16121c; --text: #f5f0e0; --muted: #a898b8; --port-red: #8c1a24;
+  --gate-and: #c8c0d8; --gate-or: #4ad4ff; --gate-xor: #fff540; --gate-not: #e88ab0; --add: rgba(138, 130, 160, 0.4);
+  --claim-tint: rgba(255, 213, 79, 0.2); --claim-edge: #ffd54f;
+  --bar: #120c18; --bar-line: #2c2139; --ui: #efe8f6; --ui-muted: #b3a5c2;
+  position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--bar); color: var(--ui);
+  font: 14px/1.4 system-ui, sans-serif; overflow: hidden;
+}
+
+/* Text in the book's own font: 8 book px per line, with Minecraft's 1 px drop shadow at 25% of the text colour. */
+.qq-text {
+  font-family: QQBook, system-ui, sans-serif;
+  font-size: calc(var(--px) * 8px);
+  line-height: calc(var(--px) * 9px);
+  text-shadow: calc(var(--px) * 1px) calc(var(--px) * 1px) 0 color-mix(in srgb, currentColor 25%, black);
+  -webkit-font-smoothing: none; font-smooth: never;
+}
+.qq-tiny { font-size: calc(var(--px) * 8px * 0.6); line-height: calc(var(--px) * 9px * 0.6); }
+.qq-book-app img.icon, .qq-book-app .icon img { image-rendering: pixelated; }
+
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- editor bar ---- */
+.book-bar { flex: none; height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 14px;
+  background: var(--bar); border-bottom: 1px solid var(--bar-line); }
+.bar-brand { --px: 2; color: var(--edit); white-space: nowrap; }
+.bar-seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--bar-line); border-radius: 8px; }
+.bar-seg button { font: inherit; border: 0; background: transparent; color: var(--ui-muted); height: 28px; padding: 0 12px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.bar-seg button[aria-pressed="true"] { background: var(--edit); color: #1b1322; font-weight: 700; }
+.bar-btn { font: inherit; height: 32px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--bar-line);
+  background: #1d1626; color: var(--ui); cursor: pointer; white-space: nowrap; }
+.bar-btn:hover { border-color: #4a3a5c; }
+.bar-btn[data-act="problems"].bad { color: #ff8a8e; border-color: #5a2f3a; }
+.bar-btn[data-act="problems"].warn { color: #f0c060; border-color: #5a4a2a; }
+.bar-save { background: var(--edit); border-color: var(--edit); color: #1b1322; font-weight: 700; display: inline-flex; gap: 8px; align-items: center; }
+.save-count { background: #1b1322; color: var(--edit); border-radius: 9px; font-size: 11px; padding: 1px 7px; }
+.bar-hint { color: var(--ui-muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.bar-space { flex: 1; }
+.qq-book-app :focus-visible { outline: 2px solid var(--edit); outline-offset: 2px; }
+
+/* ---- the book ---- */
+.book { flex: 1; min-height: 0; display: flex; background: var(--void); }
+.book-sidebar { flex: none; width: calc(var(--px) * 148px); max-width: 40%; background: var(--sidebar);
+  border-right: calc(var(--px) * 1px) solid var(--sidebar-edge); overflow-y: auto; }
+.board-wrap { flex: 1; min-width: 0; position: relative; overflow: hidden; }
+.book-board { position: absolute; inset: 0; overflow: hidden; outline: none; }
+.card-layer { position: absolute; inset: 0; pointer-events: none; }
+.card-layer > * { pointer-events: auto; }
+.pop-layer { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+.pop-layer > * { pointer-events: auto; }
+
+/* Edit affordance: anything editable gets a dashed gold outline on hover and focus. */
+.qq-book-app.mode-edit .editable:hover, .qq-book-app.mode-edit .editable:focus-within {
+  outline: 1px dashed rgba(255, 184, 74, 0.6); outline-offset: 2px; cursor: text; }
+
+/* ---- waiting for Minecraft ---- */
+.book-lock { position: absolute; inset: 48px 0 0; display: grid; place-items: center; background: rgba(10, 6, 16, 0.82); z-index: 40; }
+.book-lock[hidden] { display: none; }
+.lock-card { --px: 2; color: var(--text); background: var(--card); border: 2px solid var(--neu); padding: 24px 32px; display: grid; gap: 10px; text-align: center; }
+.lock-card small { font: 13px system-ui, sans-serif; color: var(--muted); text-shadow: none; }
