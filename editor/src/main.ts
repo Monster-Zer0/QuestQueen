@@ -1,6 +1,5 @@
 import JSZip from "jszip";
 import {
-  BLANK,
   GRID_PRESETS,
   REWARD_TYPES,
   STARTER,
@@ -18,6 +17,7 @@ import {
   removeLink,
   setUnlockConditions,
   startsOf,
+  straightLink,
   unlockConditions,
   upsertLink,
   wouldCreateCycle,
@@ -26,6 +26,7 @@ import {
   type Chapter,
   type ChapterNode,
   type GateOpName,
+  type GridPos,
   type Link,
   type Reward,
   type Task,
@@ -33,8 +34,8 @@ import {
   type UnlockCondition,
 } from "./types";
 import { emptyCatalog, fromApi, type CatalogEntry, type PackCatalog } from "./packCatalog";
-import { cleanChapter, descendantIds, isIntroChapter, minGrid, newTile, packNamespace, uniqueChapterId } from "./model";
-import { isStageType, validate } from "./validate";
+import { cleanChapter, descendantIds, isIntroChapter, minGrid, newTile, packNamespace, uniqueChapterId, uniqueChapterTitle } from "./model";
+import { isStageType, stageWarnings, validate } from "./validate";
 import { snapshot as snapshotUndo, undo as undoChapter } from "./undo";
 import { iconUrl, itemSelectHtml, readItemSelect, wireItemSelects } from "./itemSelect";
 import { GLYPH_IDS, glyphPickerHtml, glyphSvg, previewIntroHtml, readGlyph, wireGlyphPicker } from "./glyphs";
@@ -97,8 +98,11 @@ type Lens = "author" | "player";
 let uiMode: UiMode = "view";
 let lens: Lens = "author";
 let authoring = false; // derived via syncAuthoring: Author + Edit
+/** The quest card takes edits in EDIT and LINK (Author lens): LINK only changes what a click on the board does. */
+let cardEditable = false;
 function syncAuthoring() {
   authoring = lens === "author" && uiMode === "edit";
+  cardEditable = lens === "author" && uiMode !== "view";
 }
 
 function isSelectedEdge(link: Link): boolean {
@@ -147,6 +151,22 @@ let searchHits: Set<string> | null = null;
 /** Snapshot the open chapter before a board edit, so Ctrl+Z can put it back (per chapter, see undo.ts). */
 function pushUndo() {
   snapshotUndo(chapter);
+  scheduleChapterRefresh();
+}
+
+let chapterRefreshQueued = false;
+
+/**
+ * The edit that follows a pushUndo runs synchronously, so refresh the chapter list (unsaved dot) and the live
+ * problem count once it is done. Link and gate edits did not, so a one-path fork showed no problem until Save.
+ */
+function scheduleChapterRefresh() {
+  if (chapterRefreshQueued) return;
+  chapterRefreshQueued = true;
+  window.setTimeout(() => {
+    chapterRefreshQueued = false;
+    renderChapterTree();
+  }, 0);
 }
 
 function undoLastLinkOp() {
@@ -158,6 +178,7 @@ function undoLastLinkOp() {
   syncGridSizeSelect();
   const tile = chapter.tiles.find((t) => t.id === selected);
   if (tile) showCard(tile);
+  renderChapterTree();
   draw();
 }
 
@@ -211,10 +232,11 @@ function switchChapter(id: string) {
   linkFrom = "";
   pendingLink = null;
   searchHits = null;
+  setSearchCount("", false);
   updateLinkStatus();
   syncLinkConfirmChrome();
   syncGridSizeSelect();
-  setSaveStatus(isDirty(chapter) ? "Unsaved changes" : "", true);
+  savedNote = "";
   renderChapterTree();
   // The inspector follows the switch at once: deferring it to the next frame left the old chapter's fields on
   // screen (in a hidden tab, indefinitely), and editing them wrote into the newly opened chapter.
@@ -239,7 +261,7 @@ function createChapter() {
   // into an act intro and hid its quest board.
   const created: Chapter = {
     id: uniqueChapterId(packChapters, packNamespace(packChapters), "new_chapter"),
-    title: "New Chapter",
+    title: uniqueChapterTitle(packChapters, "New Chapter"),
     order: packChapters.length * 10,
     ...(chapter.parent ? { parent: chapter.parent } : {}),
     grid_width: 12,
@@ -278,7 +300,59 @@ function renderChapterTree() {
   });
 }
 
-document.getElementById("new-chapter")?.addEventListener("click", () => createChapter());
+const newChapterBtn = document.getElementById("new-chapter");
+const newChapterMenu = document.getElementById("new-chapter-menu");
+
+function setNewChapterMenu(open: boolean) {
+  if (!newChapterMenu || !newChapterBtn) return;
+  newChapterMenu.hidden = !open;
+  newChapterBtn.setAttribute("aria-expanded", String(open));
+  if (open) newChapterMenu.querySelector<HTMLButtonElement>("button")?.focus();
+}
+
+newChapterBtn?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  if (unlocked) setNewChapterMenu(Boolean(newChapterMenu?.hidden));
+});
+newChapterMenu?.addEventListener("click", (event) => {
+  const choice = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-new-chapter]");
+  if (!choice) return;
+  setNewChapterMenu(false);
+  if (choice.dataset.newChapter === "example") addStarterChapter();
+  else createChapter();
+  focusChapterTitle();
+});
+newChapterMenu?.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.stopPropagation();
+    setNewChapterMenu(false);
+    newChapterBtn?.focus();
+  }
+});
+document.addEventListener("click", (event) => {
+  if (newChapterMenu && !newChapterMenu.hidden && !newChapterMenu.contains(event.target as Node)) setNewChapterMenu(false);
+});
+
+/** The starter template as a new chapter in the pack's namespace; the open chapters stay as they are. */
+function addStarterChapter() {
+  if (!unlocked) return;
+  rememberChapter();
+  const added = structuredClone(STARTER);
+  added.id = uniqueChapterId(packChapters, packNamespace(packChapters), added.id.split(":")[1]);
+  added.title = uniqueChapterTitle(packChapters, added.title || "New Chapter");
+  packChapters.push(added);
+  switchChapter(added.id);
+}
+
+/** A new chapter is named next: open its settings and select the title. */
+function focusChapterTitle() {
+  sectionOpen.chapter = true;
+  const tile = chapter.tiles.find((t) => t.id === selected);
+  showCard(tile);
+  const title = document.getElementById("chapter-title") as HTMLInputElement | null;
+  title?.focus();
+  title?.select();
+}
 
 function loadCardGeom(): CardGeom | null {
   try {
@@ -753,7 +827,8 @@ function paintBoardAffordances() {
     }
   }
   if (tileDrag && hoverCell && inGrid(chapter, hoverCell.x, hoverCell.y)) {
-    const blocked = chapter.tiles.some((t) => t.id !== tileDrag!.id && t.pos.x === hoverCell!.x && t.pos.y === hoverCell!.y);
+    const blocked = chapter.tiles.some((t) => t.id !== tileDrag!.id && t.pos.x === hoverCell!.x && t.pos.y === hoverCell!.y)
+      || diagonalPartners(tileDrag.id, hoverCell).length > 0;
     const p = screen(hoverCell.x, hoverCell.y);
     ctx.save();
     ctx.strokeStyle = blocked ? theme.lockedEdge : theme.edit;
@@ -1093,7 +1168,7 @@ function draw() {
       // Badge sized from its own text so the label can never overflow it.
       const fontPx = Math.max(7, Math.min(10, Math.floor(7 * zoom)));
       setCaptionFont(fontPx);
-      const bw = Math.ceil(ctx.measureText("XOR").width) + 6;
+      const bw = Math.ceil(ctx.measureText("FORK").width) + 6;
       const bh = fontPx + 4;
       const bx = p.x + 3;
       const by = p.y + size - bh - 3;
@@ -1102,7 +1177,7 @@ function draw() {
       ctx.fill();
       ctx.fillStyle = theme.card;
       ctx.textBaseline = "middle";
-      ctx.fillText("XOR", bx + 3, by + bh / 2 + 0.5);
+      ctx.fillText("FORK", bx + 3, by + bh / 2 + 0.5);
       ctx.textBaseline = "alphabetic";
     }
     ctx.restore();
@@ -1228,6 +1303,9 @@ function rewardFields(reward: Reward, index: number, ro: string, disabled: boole
 function questlineHtml(tile: Tile): string {
   const inbound = (chapter.links ?? []).filter((link) => link.to === tile.id);
   const outbound = (chapter.links ?? []).filter((link) => link.from === tile.id);
+  const startNote = !inbound.length && chapter.tiles.length > 1
+    ? `<p class="muted">No quest leads here, so players can start it right away.</p>`
+    : "";
   // Data S1: mutate gates/links only in Author+Link — Edit must not cycle/remove.
   if (!canLink()) {
     const parts = [
@@ -1235,15 +1313,15 @@ function questlineHtml(tile: Tile): string {
       ...outbound.map((link) => `OUT ${link.to} [${gateOp(link).toUpperCase()}]`),
     ];
     const hint = lens === "author" && uiMode === "edit"
-      ? `<p class="muted">Switch to LINK. Hover a side to add a quest or choose AND, OR, or XOR.</p>`
+      ? `<p class="muted">Switch to LINK. Hover a side to add a quest or choose AND, OR, NOT, or FORK.</p>`
       : "";
-    return `${hint}<p>${parts.length ? parts.join("<br/>") : "No links"}</p>`;
+    return `${hint}${startNote}<p>${parts.length ? parts.join("<br/>") : "No links"}</p>`;
   }
   if (!inbound.length && !outbound.length) {
-    return `<ol class="link-steps">
+    return `${startNote}<ol class="link-steps">
       <li>Hover a quest. The four sides light up.</li>
       <li>Click an empty side to create the next quest that way.</li>
-      <li>Click a side that already meets a quest, then pick AND, OR, or XOR.</li>
+      <li>Click a side that already meets a quest, then pick AND, OR, NOT, or FORK.</li>
     </ol>`;
   }
   const rows = [
@@ -1260,7 +1338,7 @@ function questlineHtml(tile: Tile): string {
         <button type="button" data-remove-from="${escapeAttr(link.from)}" data-remove-to="${escapeAttr(link.to)}">x</button>
       </div>`),
   ];
-  return rows.join("");
+  return startNote + rows.join("");
 }
 
 /** Which inspector sections are expanded; kept across tile and chapter switches. */
@@ -1274,6 +1352,8 @@ function section(key: string, title: string, meta: string, body: string, forceOp
   </details>`;
 }
 
+let lastCardTile = "";
+
 function showCard(tile?: Tile) {
   const intro = chapterHasChildren(chapter.id);
   if (!intro && !tile) {
@@ -1281,14 +1361,14 @@ function showCard(tile?: Tile) {
     return;
   }
   setCardOpen(true);
-  card.classList.toggle("edit", authoring);
+  card.classList.toggle("edit", cardEditable);
   applyCardGeom();
   const header = intro ? "ACT INTRO" : uiMode === "edit" && lens === "author" ? "EDIT" : uiMode === "link" && lens === "author" ? "LINK" : "INSPECTOR";
   const heading = intro ? (chapter.title || chapter.id) : (tile!.title ?? tile!.id);
   cardTitle.textContent = `${header} · ${heading}`;
-  const hint = authoring ? "" : (lens === "player" ? "<p>Player lens — read only.</p>" : "<p>Switch to EDIT mode (Author lens) to change this tile.</p>");
-  const ro = authoring ? "" : "readonly";
-  const disabled = authoring ? "" : "disabled";
+  const hint = cardEditable ? "" : (lens === "player" ? "<p>Player lens — read only.</p>" : "<p>VIEW only looks. Switch to EDIT to change this quest.</p>");
+  const ro = cardEditable ? "" : "readonly";
+  const disabled = cardEditable ? "" : "disabled";
   const tasks = tile?.tasks ?? [];
   const rewards = tile?.rewards ?? [];
   const introFields = intro ? `
@@ -1304,14 +1384,14 @@ function showCard(tile?: Tile) {
     <label>TILE TITLE</label>
     <input id="tile-title" value="${escapeAttr(tile?.title ?? "")}" ${ro} />
     <label>DESCRIPTION</label>
-    ${authoring ? descriptionToolsHtml() : ""}
+    ${cardEditable ? descriptionToolsHtml() : ""}
     <textarea id="tile-body" rows="6" ${ro}>${escapeText(tile?.description ?? "")}</textarea>
     <div id="desc-preview" class="desc-preview" aria-label="Description preview">${richToHtml(tile?.description ?? "", { iconUrl: (id) => iconUrl(bridgeBase(), id) })}</div>
     <div id="desc-problems" class="desc-problems">${descriptionProblems(tile?.description).map((p) => `<div>${escapeText(p)}</div>`).join("")}</div>
     <p class="intro-note">**bold** *italic* __underline__ · # heading · - bullet · --- · {#RRGGBB}colour{/#} · {item:minecraft:diamond x3} · {glyph:star} · ![caption](pack:textures/name.png)</p>
-    ${itemSelectHtml(`id="tile-item-select"`, tile?.icon?.item ?? "", !authoring, "ICON")}
-    ${glyphPickerHtml(tile?.icon?.glyph ?? "", !authoring, "tile-glyph")}
-    ${stageSelectHtml(`id="tile-required-stage"`, tile?.required_stage ?? "", !authoring, "REQUIRES STAGE", "required", true)}
+    ${itemSelectHtml(`id="tile-item-select"`, tile?.icon?.item ?? "", !cardEditable, "ICON")}
+    ${glyphPickerHtml(tile?.icon?.glyph ?? "", !cardEditable, "tile-glyph")}
+    ${stageSelectHtml(`id="tile-required-stage"`, tile?.required_stage ?? "", !cardEditable, "REQUIRES STAGE", "required", true)}
     <label>HIDDEN UNTIL</label>
     <div style="display:flex;gap:6px">
       <select id="tile-hidden-type" ${disabled}>
@@ -1319,7 +1399,7 @@ function showCard(tile?: Tile) {
           `<option value="${type}" ${stageAsOne(tile?.hidden_until?.type ?? "") === type ? "selected" : ""}>${type || "(always shown)"}</option>`).join("")}
       </select>
       ${isStageType(tile?.hidden_until?.type)
-        ? `<div class="stage-select-flex">${stageSelectHtml(`id="tile-hidden-id"`, tile?.hidden_until?.id ?? "", !authoring, "", "hidden", false)}</div>`
+        ? `<div class="stage-select-flex">${stageSelectHtml(`id="tile-hidden-id"`, tile?.hidden_until?.id ?? "", !cardEditable, "", "hidden", false)}</div>`
         : `<input id="tile-hidden-id" value="${escapeAttr(tile?.hidden_until?.id ?? "")}" placeholder="id" ${ro} />`}
     </div>
     <label>JUMP TARGET (CHAPTER / QUEST)</label>
@@ -1338,12 +1418,12 @@ function showCard(tile?: Tile) {
         <select data-task-type="${index}" ${disabled}>
           ${TASK_TYPES.map((type) => `<option value="${type}" ${task.type === type ? "selected" : ""}>${type}</option>`).join("")}
         </select>
-        ${taskFields(task, index, ro, !authoring)}
-        ${ICON_TASK_TYPES.has(task.type) ? itemSelectHtml(`data-task="${index}" data-field="icon"`, task.icon ?? "", !authoring, "DISPLAY ITEM (OPTIONAL)") : ""}
-        ${authoring ? `<button type="button" data-remove-task="${index}">REMOVE TASK</button>` : ""}
+        ${taskFields(task, index, ro, !cardEditable)}
+        ${ICON_TASK_TYPES.has(task.type) ? itemSelectHtml(`data-task="${index}" data-field="icon"`, task.icon ?? "", !cardEditable, "DISPLAY ITEM (OPTIONAL)") : ""}
+        ${cardEditable ? `<button type="button" data-remove-task="${index}">REMOVE TASK</button>` : ""}
       </fieldset>
     `).join("")}
-    ${authoring ? `<button type="button" id="add-task">+ TASK</button>` : ""}
+    ${cardEditable ? `<button type="button" id="add-task">+ TASK</button>` : ""}
     <label>REWARDS</label>
     ${rewards.map((reward, index) => `
       <fieldset class="stack">
@@ -1351,12 +1431,12 @@ function showCard(tile?: Tile) {
         <select data-reward-type="${index}" ${disabled}>
           ${REWARD_TYPES.map((type) => `<option value="${type}" ${reward.type === type ? "selected" : ""}>${type}</option>`).join("")}
         </select>
-        ${rewardFields(reward, index, ro, !authoring)}
-        ${authoring ? `<button type="button" data-remove-reward="${index}">REMOVE REWARD</button>` : ""}
+        ${rewardFields(reward, index, ro, !cardEditable)}
+        ${cardEditable ? `<button type="button" data-remove-reward="${index}">REMOVE REWARD</button>` : ""}
       </fieldset>
     `).join("")}
-    ${authoring ? `<button type="button" id="add-reward">+ REWARD</button>` : ""}
-    ${authoring ? `<button type="button" id="remove-tile">REMOVE TILE</button>` : ""}
+    ${cardEditable ? `<button type="button" id="add-reward">+ REWARD</button>` : ""}
+    ${cardEditable ? `<button type="button" id="remove-tile">REMOVE TILE</button>` : ""}
   `;
   const chapterFields = `
     <datalist id="pack-entities">${listOptions(catalog.entities)}</datalist>
@@ -1383,7 +1463,7 @@ function showCard(tile?: Tile) {
     <label>ORDER</label>
     <input id="chapter-order" type="number" value="${chapter.order ?? 0}" ${ro} />
     <label>THEME</label>
-    ${themeOptionHtml(chapter.theme, !authoring)}
+    ${themeOptionHtml(chapter.theme, !cardEditable)}
     <div class="theme-swatch" style="display:flex;gap:2px;height:10px;margin:4px 0 8px">
       ${(() => {
         const t = themeById(chapter.theme);
@@ -1412,8 +1492,8 @@ function showCard(tile?: Tile) {
     <input id="chapter-bg-image" value="${escapeAttr(chapter.background?.image ?? "")}" placeholder="questqueen:textures/gui/bg/midnight.png" ${ro} />
     <label>BG OPACITY</label>
     <input id="chapter-bg-opacity" type="number" min="0" max="1" step="0.05" value="${chapter.background?.opacity ?? 1}" ${ro} />
-    ${itemSelectHtml(`id="chapter-icon-select"`, chapter.icon?.item ?? "", !authoring, "CHAPTER ICON")}
-    ${glyphPickerHtml(chapter.icon?.glyph ?? "", !authoring, "chapter-glyph")}
+    ${itemSelectHtml(`id="chapter-icon-select"`, chapter.icon?.item ?? "", !cardEditable, "CHAPTER ICON")}
+    ${glyphPickerHtml(chapter.icon?.glyph ?? "", !cardEditable, "chapter-glyph")}
     <label>UNLOCK CONDITIONS</label>
     <select id="chapter-unlock-op" ${disabled}>
       <option value="and" ${unlockOp(chapter) === "and" ? "selected" : ""}>All of these</option>
@@ -1428,12 +1508,12 @@ function showCard(tile?: Tile) {
           ).join("")}
         </select>
         ${isStageType(condition.type)
-          ? stageSelectHtml(`data-unlock-id="${index}"`, condition.id, !authoring, "", "chapter", false)
+          ? stageSelectHtml(`data-unlock-id="${index}"`, condition.id, !cardEditable, "", "chapter", false)
           : `<input data-unlock-id="${index}" value="${escapeAttr(condition.id)}" placeholder="questqueen:starter/go_nether" ${ro} />`}
-        ${authoring ? `<button type="button" data-remove-unlock="${index}">REMOVE</button>` : ""}
+        ${cardEditable ? `<button type="button" data-remove-unlock="${index}">REMOVE</button>` : ""}
       </fieldset>
     `).join("")}
-    ${authoring ? `<button type="button" id="add-unlock">+ UNLOCK CONDITION</button>` : ""}
+    ${cardEditable ? `<button type="button" id="add-unlock">+ UNLOCK CONDITION</button>` : ""}
     <label class="check">
       <input id="chapter-hide-until" type="checkbox" ${chapter.hide_until_unlocked ? "checked" : ""} ${disabled} />
       Hide until unlocked
@@ -1443,12 +1523,22 @@ function showCard(tile?: Tile) {
     ? section("intro", "Act intro", "", introFields)
     : section("quest", "Quest", tile?.id ?? "", introFields);
   // A chapter with no selectable quest has nothing else to show, so its settings open by default.
+  const cardKey = `${chapter.id}#${tile?.id ?? ""}`;
+  const scrollTop = cardKey === lastCardTile ? cardBody.scrollTop : 0;
   cardBody.innerHTML = `${hint}${primary}${section("chapter", "Chapter settings", chapter.id, chapterFields, !tile && !intro)}`;
+  // A different quest opens at its top, not wherever the last one was scrolled; a new quest asks for its title.
+  cardBody.scrollTop = scrollTop;
+  if (tile && cardKey !== lastCardTile && cardEditable && tile.title === "New tile") {
+    const titleInput = document.getElementById("tile-title") as HTMLInputElement | null;
+    titleInput?.focus({ preventScroll: true });
+    titleInput?.select();
+  }
+  lastCardTile = cardKey;
   cardBody.querySelectorAll<HTMLDetailsElement>("details.section").forEach((el) => {
     el.addEventListener("toggle", () => { sectionOpen[el.dataset.section ?? ""] = el.open; });
   });
   const apply = () => {
-    if (!authoring) return;
+    if (!cardEditable) return;
     chapter.title = (document.getElementById("chapter-title") as HTMLInputElement).value;
     const parent = (document.getElementById("chapter-parent") as HTMLSelectElement).value;
     if (parent) chapter.parent = parent;
@@ -1747,7 +1837,7 @@ function unlockOp(entry: Chapter): string {
  */
 function renameChapter(tile?: Tile) {
   const input = document.getElementById("chapter-id") as HTMLInputElement | null;
-  if (!input || !authoring || savedIds.has(chapter.id)) return;
+  if (!input || !cardEditable || savedIds.has(chapter.id)) return;
   const nextId = input.value.trim();
   const problem = !/^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(nextId)
     ? "A chapter id is namespace:path in lowercase, like mypack:getting_started."
@@ -1842,9 +1932,11 @@ function wireDescriptionTools(root: HTMLElement) {
     commit();
   };
   const insert = (text: string, ownLine = false) => {
-    const a = area.selectionStart;
+    // Insert after the selection, never over it: H1/H2/bullet leave their whole block selected, and a glyph
+    // picked next replaced the paragraph (the value is set from code, so the browser's undo could not bring it back).
+    const a = area.selectionEnd;
     const before = area.value.slice(0, a);
-    const after = area.value.slice(area.selectionEnd);
+    const after = area.value.slice(a);
     const put = ownLine
       ? (before && !before.endsWith("\n") ? "\n" : "") + text + (after && !after.startsWith("\n") ? "\n" : "")
       : text;
@@ -1935,6 +2027,8 @@ async function refreshStages(): Promise<boolean> {
     stagesJson = text;
     const raw = JSON.parse(text) as { stageLock?: boolean; defined?: { id: string; name?: string }[]; authored?: AuthoredStage[] };
     stagesState = { stageLock: raw.stageLock === true, stages: mergeStages(raw.defined ?? [], raw.authored ?? []) };
+    // A stage made or deleted changes which quests point at nothing.
+    refreshProblems();
     return true;
   } catch {
     return false;
@@ -2021,10 +2115,7 @@ function grantStageFromQuest(stageId: string, chapterId: string, tileId: string)
   if (target === chapter) pushUndo();
   tile.rewards = [...(tile.rewards ?? []), { type: "stage", stage: stageId }];
   renderChapterTree();
-  if (target === chapter) {
-    setSaveStatus("Unsaved changes", true);
-    draw();
-  }
+  if (target === chapter) draw();
 }
 
 function jumpToQuest(chapterId: string, tileId?: string) {
@@ -2310,19 +2401,37 @@ async function syncFromMinecraft() {
   }
 }
 
-/** Live problem count for the open chapter, so problems show while editing rather than only on save. */
+/** "Saved · id" right after a save, until the chapter changes again or another chapter opens. */
+let savedNote = "";
+
+/** Stages the open chapter waits on that nothing provides; only judged when StageLock answers. */
+function currentStageWarnings(): string[] {
+  if (!stagesState.stageLock) return [];
+  return stageWarnings(chapter, new Set(stagesState.stages.map((info) => info.id)), packChapters);
+}
+
+/**
+ * Live status for the open chapter, so problems show while editing rather than only on save: problems (which
+ * block a save) win; otherwise unsaved/saved, plus a warning count that does not block.
+ */
 function refreshProblems() {
   if (!unlocked) return;
-  const problems = validate(chapter, packChapters);
   const el = document.getElementById("save-status");
   if (!el) return;
+  const problems = validate(chapter, packChapters);
   if (problems.length) {
     setSaveStatus(`${problems.length} problem${problems.length === 1 ? "" : "s"}`, false);
     el.title = problems.join("\n");
-  } else if (el.classList.contains("bad")) {
-    setSaveStatus(isDirty(chapter) ? "Unsaved changes" : "", true);
-    el.title = "";
+    return;
   }
+  const dirty = isDirty(chapter);
+  if (dirty) savedNote = "";
+  const warnings = currentStageWarnings();
+  const parts = [dirty ? "Unsaved changes" : savedNote];
+  if (warnings.length) parts.push(`${warnings.length} warning${warnings.length === 1 ? "" : "s"}`);
+  setSaveStatus(parts.filter(Boolean).join(" · "), true);
+  el.classList.toggle("warn", warnings.length > 0);
+  el.title = warnings.join("\n");
 }
 
 function setSaveStatus(text: string, ok: boolean) {
@@ -2331,17 +2440,21 @@ function setSaveStatus(text: string, ok: boolean) {
   el.textContent = text;
   el.classList.toggle("ok", ok);
   el.classList.toggle("bad", !ok);
+  el.classList.remove("warn");
 }
 
-/** JSON of each chapter as the game last saw it; a chapter whose JSON differs has unsaved edits. */
-const savedJson = new Map<Chapter, string>();
+/**
+ * JSON of each chapter as the game last saw it, by chapter id; a chapter whose JSON differs has unsaved edits.
+ * By id, not by object, so a chapter loaded from a ZIP that matches the game is not an unsaved change.
+ */
+const savedJson = new Map<string, string>();
 
 function isDirty(entry: Chapter): boolean {
-  return savedJson.get(entry) !== JSON.stringify(cleanChapter(entry));
+  return savedJson.get(entry.id) !== JSON.stringify(cleanChapter(entry));
 }
 
 function markSaved(entry: Chapter) {
-  savedJson.set(entry, JSON.stringify(cleanChapter(entry)));
+  savedJson.set(entry.id, JSON.stringify(cleanChapter(entry)));
   savedIds.add(entry.id);
 }
 
@@ -2372,7 +2485,7 @@ async function saveToWorld() {
     return;
   }
   markSaved(chapter);
-  setSaveStatus(`Saved · ${chapter.id}`, true);
+  savedNote = `Saved · ${chapter.id}`;
   renderChapterTree();
   showCard(chapter.tiles.find((t) => t.id === selected));
 }
@@ -2405,7 +2518,7 @@ function placeTileAt(gx: number, gy: number) {
 }
 
 function deleteSelectedTile() {
-  if (!authoring || !selected) return;
+  if (!cardEditable || !selected) return;
   const tile = chapter.tiles.find((t) => t.id === selected);
   if (!tile) return;
   const label = tile.title || tile.id;
@@ -2436,7 +2549,10 @@ function commitTileDrag(clientX: number, clientY: number) {
   }
   const { gx, gy } = pointerCell(clientX, clientY);
   const occupied = chapter.tiles.some((t) => t.id !== tile.id && t.pos.x === gx && t.pos.y === gy);
-  if ((gx !== drag.ox || gy !== drag.oy) && inGrid(chapter, gx, gy) && !occupied) {
+  const bent = diagonalPartners(tile.id, { x: gx, y: gy });
+  if (bent.length && (gx !== drag.ox || gy !== drag.oy)) {
+    boardNotice(`Not moved: ${tileName(tile)} would be diagonal to ${bent.map(tileName).join(", ")}. Linked quests share a row or column.`);
+  } else if ((gx !== drag.ox || gy !== drag.oy) && inGrid(chapter, gx, gy) && !occupied) {
     pushUndo();
     tile.pos = { x: gx, y: gy };
     rememberChapter();
@@ -2444,6 +2560,26 @@ function commitTileDrag(clientX: number, clientY: number) {
   selected = tile.id;
   showCard(tile);
   draw();
+}
+
+/** Quests linked to {@code id} that would sit diagonally from it if it stood at {@code at}. */
+function diagonalPartners(id: string, at: GridPos): Tile[] {
+  return (chapter.links ?? [])
+    .filter((link) => link.from === id || link.to === id)
+    .map((link) => chapter.tiles.find((t) => t.id === (link.from === id ? link.to : link.from)))
+    .filter((other): other is Tile => Boolean(other) && !straightLink(at, other!.pos));
+}
+
+let boardNoticeTimer = 0;
+
+/** A short line over the board: why a drag was refused, and the like. Visible at every width. */
+function boardNotice(text: string) {
+  const el = document.getElementById("board-notice");
+  if (!el) return;
+  el.textContent = text;
+  el.hidden = false;
+  window.clearTimeout(boardNoticeTimer);
+  boardNoticeTimer = window.setTimeout(() => { el.hidden = true; }, 5000);
 }
 
 function tileName(tile: Tile | undefined): string {
@@ -2549,7 +2685,7 @@ function onSideClick(tile: Tile, side: SideName) {
   const neighbor = chapter.tiles.find((t) => t.pos.x === nx && t.pos.y === ny);
   if (!neighbor) {
     const name = tile.title || tile.id;
-    if (!window.confirm(`Create a quest to the ${way} of “${name}”?\n\nIt links from this quest into the new one. Click that side again to choose AND, OR, or XOR.`)) return;
+    if (!window.confirm(`Create a quest to the ${way} of “${name}”?\n\nIt links from this quest into the new one. Click that side again to choose AND, OR, NOT, or FORK.`)) return;
     let id = `tile_${nx}_${ny}`;
     if (chapter.tiles.some((t) => t.id === id)) id = `tile_${nx}_${ny}_${Date.now()}`;
     pushUndo();
@@ -2720,6 +2856,7 @@ search.addEventListener("keydown", (event) => {
     }
   }
   searchHits = new Set(matches.map((t) => t.id));
+  setSearchCount(matches.length ? `${matches.length} match${matches.length === 1 ? "" : "es"} · Esc clears` : "No match", !matches.length);
   linkHint = matches.length ? "" : `No quest matches "${search.value.trim()}".`;
   if (!matches.length && linkStatus) linkStatus.textContent = linkHint;
   const hit = matches[0];
@@ -2733,116 +2870,32 @@ search.addEventListener("keydown", (event) => {
   draw();
 });
 search.addEventListener("input", () => {
+  // The count belongs to the query that was searched; a changed query has not been searched yet.
+  setSearchCount("", false);
   if (!search.value.trim()) {
     searchHits = null;
     draw();
   }
 });
 
-
-function selectedTiles(): Tile[] {
-  if (!selected) return [...(chapter.tiles ?? [])];
-  const one = chapter.tiles.find((t) => t.id === selected);
-  return one ? [one] : [...(chapter.tiles ?? [])];
+function setSearchCount(text: string, none: boolean) {
+  const el = document.getElementById("search-count");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle("none", none);
 }
 
-function layoutPack() {
-  if (!authoring && !(lens === "author")) return;
-  const tiles = [...(chapter.tiles ?? [])];
-  if (!tiles.length) return;
-  if (!window.confirm("Pack rearranges every quest in this chapter into columns.\n\nYou can press Ctrl+Z to undo.")) return;
-  pushUndo();
-  const starts = startsOf(chapter);
-  const roots = tiles.filter((t) => starts.has(t.id));
-  const ordered = roots.length ? roots : [tiles[0]];
-  const seen = new Set<string>();
-  const queue: Tile[] = [];
-  for (const r of ordered) {
-    queue.push(r);
-    seen.add(r.id);
-  }
-  // BFS columns from starts
-  const cols: Tile[][] = [];
-  let frontier = [...ordered];
-  while (frontier.length) {
-    cols.push(frontier);
-    const next: Tile[] = [];
-    for (const node of frontier) {
-      for (const link of chapter.links ?? []) {
-        if (link.from !== node.id) continue;
-        if (seen.has(link.to)) continue;
-        const dest = tiles.find((t) => t.id === link.to);
-        if (!dest) continue;
-        seen.add(dest.id);
-        next.push(dest);
-      }
-    }
-    frontier = next;
-  }
-  for (const orphan of tiles) {
-    if (!seen.has(orphan.id)) {
-      cols.push([orphan]);
-      seen.add(orphan.id);
-    }
-  }
-  let x = 0;
-  for (const col of cols) {
-    let y = 0;
-    for (const tile of col) {
-      tile.pos = { x, y };
-      y += 1;
-    }
-    x += 1;
-  }
-  rememberChapter();
-  draw();
-}
-
-function layoutAlignSelection() {
-  pushUndo();
-  // Align all tiles sharing selected row (y) to same y; if none selected, align each column's x
-  if (selected) {
-    const sel = chapter.tiles.find((t) => t.id === selected);
-    if (!sel) return;
-    const row = sel.pos.y;
-    for (const t of chapter.tiles) {
-      if (Math.abs(t.pos.y - row) <= 0) t.pos = { ...t.pos, y: row };
-    }
-  } else {
-    // snap all to integer grid (already int) — compact x gaps
-    const sorted = [...chapter.tiles].sort((a, b) => a.pos.x - b.pos.x || a.pos.y - b.pos.y);
-    let x = 0;
-    let last = -999;
-    const map = new Map<number, number>();
-    for (const t of sorted) {
-      if (!map.has(t.pos.x)) {
-        map.set(t.pos.x, x);
-        x += 1;
-      }
-      t.pos = { x: map.get(t.pos.x)!, y: t.pos.y };
-    }
-  }
-  rememberChapter();
-  draw();
-}
-
-function layoutSpreadRow() {
-  const tiles = [...chapter.tiles].sort((a, b) => a.pos.x - b.pos.x || a.pos.y - b.pos.y);
-  if (!tiles.length) return;
-  pushUndo();
-  const y = selected ? (chapter.tiles.find((t) => t.id === selected)?.pos.y ?? 0) : tiles[0].pos.y;
-  const row = tiles.filter((t) => t.pos.y === y);
-  row.forEach((t, i) => { t.pos = { x: i, y }; });
-  rememberChapter();
-  draw();
-}
 
 function syncModeChrome() {
   syncAuthoring();
   for (const id of ["mode-edit", "mode-link", "mode-view"] as const) {
     const btn = document.getElementById(id);
     btn?.classList.toggle("active", btn.dataset.mode === uiMode);
+    btn?.setAttribute("aria-pressed", String(btn.dataset.mode === uiMode));
   }
+  // The grid size changes the chapter, so it works in EDIT only (VIEW and the Player lens never change it).
+  const gridSize = document.getElementById("grid-size") as HTMLSelectElement | null;
+  if (gridSize) gridSize.disabled = !authoring;
   for (const id of ["lens-author", "lens-player"] as const) {
     const btn = document.getElementById(id);
     btn?.classList.toggle("active", btn.dataset.lens === lens);
@@ -2898,6 +2951,7 @@ function syncGateButtons() {
   document.getElementById("gate-and")?.classList.toggle("active", pendingGate === "and");
   document.getElementById("gate-or")?.classList.toggle("active", pendingGate === "or");
   document.getElementById("gate-xor")?.classList.toggle("active", pendingGate === "xor");
+  document.getElementById("gate-not")?.classList.toggle("active", pendingGate === "not");
 }
 
 
@@ -2983,7 +3037,7 @@ function updateLinkStatus() {
     linkStatus.textContent = linkHint;
     return;
   }
-  linkStatus.textContent = "Link — hover a side. Empty side: create the next quest. Side with a quest: choose AND, OR, or XOR.";
+  linkStatus.textContent = "Link — hover a side. Empty side: create the next quest. Side with a quest: choose AND, OR, NOT, or FORK.";
 }
 
 
@@ -2992,6 +3046,7 @@ document.getElementById("link-confirm-no")?.addEventListener("click", () => clea
 document.getElementById("gate-and")?.addEventListener("click", () => setPendingGate("and"));
 document.getElementById("gate-or")?.addEventListener("click", () => setPendingGate("or"));
 document.getElementById("gate-xor")?.addEventListener("click", () => setPendingGate("xor"));
+document.getElementById("gate-not")?.addEventListener("click", () => setPendingGate("not"));
 document.getElementById("gate-ask")?.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-ask-gate]");
   const op = button?.dataset.askGate;
@@ -3004,9 +3059,22 @@ const gridSizeSelect = document.getElementById("grid-size") as HTMLSelectElement
 
 function syncGridSizeSelect() {
   if (!gridSizeSelect) return;
-  const key = `${chapterGridWidth(chapter)}x${chapterGridHeight(chapter)}`;
+  const width = chapterGridWidth(chapter);
+  const height = chapterGridHeight(chapter);
+  const key = `${width}x${height}`;
   const match = GRID_PRESETS.some((preset) => `${preset.width}x${preset.height}` === key);
-  gridSizeSelect.value = match ? key : "custom";
+  // A size that is not a preset shows as itself ("9×6"), not as "Custom…", which reads as an action.
+  let current = gridSizeSelect.querySelector<HTMLOptionElement>("option[data-current]");
+  if (!match) {
+    if (!current) {
+      current = document.createElement("option");
+      current.dataset.current = "";
+      gridSizeSelect.insertBefore(current, gridSizeSelect.querySelector('option[value="custom"]'));
+    }
+    current.value = key;
+    current.textContent = `${width}×${height}`;
+  } else current?.remove();
+  gridSizeSelect.value = key;
 }
 
 function applyGridSize(width: number, height: number) {
@@ -3027,6 +3095,10 @@ function applyGridSize(width: number, height: number) {
 
 gridSizeSelect?.addEventListener("change", () => {
   if (!unlocked || !gridSizeSelect) return;
+  if (!authoring) {
+    syncGridSizeSelect();
+    return;
+  }
   if (gridSizeSelect.value === "custom") {
     const widthRaw = window.prompt("Grid width (1-128)", String(chapterGridWidth(chapter)));
     const heightRaw = window.prompt("Grid height (1-128)", String(chapterGridHeight(chapter)));
@@ -3074,11 +3146,14 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   // Data S1: gate hotkeys only when Link can fire (Author+Link)
-  if (canLink()) {
+  // Never while typing: the quest card takes edits in LINK too, and a "2" in a title is not a gate.
+  const typing = (event.target as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable]");
+  if (canLink() && !typing) {
+    // In the order the toolbar and the side pop-up list them.
     if (event.key === "1") setPendingGate("and");
     if (event.key === "2") setPendingGate("or");
-    if (event.key === "3") setPendingGate("xor");
-    if (event.key === "4") setPendingGate("not");
+    if (event.key === "3") setPendingGate("not");
+    if (event.key === "4") setPendingGate("xor");
   }
   if (event.key === "Escape") {
     tileDrag = null;
@@ -3091,29 +3166,11 @@ window.addEventListener("keydown", (event) => {
     searchHits = null; // Data optional: Esc clears search dim
     const searchEl = document.getElementById("search") as HTMLInputElement | null;
     if (searchEl) searchEl.value = "";
+    setSearchCount("", false);
     syncLinkConfirmChrome();
     updateLinkStatus();
     draw();
   }
-});
-
-document.getElementById("template-blank")!.addEventListener("click", () => {
-  if (!unlocked) return;
-  // Adds the template as a new chapter in the pack's namespace; the open chapters stay as they are.
-  rememberChapter();
-  const added = structuredClone(BLANK);
-  added.id = uniqueChapterId(packChapters, packNamespace(packChapters), added.id.split(":")[1]);
-  packChapters.push(added);
-  switchChapter(added.id);
-});
-document.getElementById("template-starter")!.addEventListener("click", () => {
-  if (!unlocked) return;
-  // Adds the template as a new chapter in the pack's namespace; the open chapters stay as they are.
-  rememberChapter();
-  const added = structuredClone(STARTER);
-  added.id = uniqueChapterId(packChapters, packNamespace(packChapters), added.id.split(":")[1]);
-  packChapters.push(added);
-  switchChapter(added.id);
 });
 
 document.getElementById("load-zip")!.addEventListener("click", () => { if (unlocked) fileZip.click(); });
@@ -3128,9 +3185,6 @@ canvas.addEventListener("wheel", (event) => {
 }, { passive: false });
 
 
-document.getElementById("layout-pack")?.addEventListener("click", () => layoutPack());
-document.getElementById("layout-align")?.addEventListener("click", () => layoutAlignSelection());
-document.getElementById("layout-spread")?.addEventListener("click", () => layoutSpreadRow());
 document.getElementById("zoom-in")?.addEventListener("click", () => {
   setZoomAt(zoom * 1.15, viewW / 2, viewH / 2);
 });
@@ -3149,22 +3203,58 @@ document.getElementById("save-world")?.addEventListener("click", () => { void sa
 fileZip.addEventListener("change", async () => {
   if (!unlocked) return;
   const file = fileZip.files?.[0];
+  // Clear the input so picking the same file again still fires "change".
+  fileZip.value = "";
   if (!file) return;
-  const zip = await JSZip.loadAsync(file);
-  for (const [name, entry] of Object.entries(zip.files)) {
-    if (name.replaceAll("\\", "/").includes("/questqueen/chapters/") && name.endsWith(".json")) {
-      chapter = JSON.parse(await entry.async("string"));
-      ensureTiles(chapter);
-      const existing = packChapters.findIndex((entryChapter) => entryChapter.id === chapter.id);
-      if (existing >= 0) packChapters[existing] = chapter;
-      else packChapters.push(chapter);
-      selected = chapter.tiles[0]?.id ?? "";
-      syncGridSizeSelect();
-      renderChapterTree();
-      draw();
-      if (chapter.tiles[0]) showCard(chapter.tiles[0]);
+  rememberChapter();
+  const loaded: Chapter[] = [];
+  const skipped: string[] = [];
+  try {
+    const zip = await JSZip.loadAsync(file);
+    for (const [name, entry] of Object.entries(zip.files)) {
+      if (!name.replaceAll("\\", "/").includes("/questqueen/chapters/") || !name.endsWith(".json")) continue;
+      try {
+        const parsed = JSON.parse(await entry.async("string")) as Chapter;
+        if (typeof parsed?.id !== "string" || !parsed.id.includes(":")) {
+          skipped.push(`${name} (no chapter id)`);
+          continue;
+        }
+        ensureTiles(parsed);
+        loaded.push(parsed);
+      } catch {
+        skipped.push(`${name} (not valid JSON)`);
+      }
     }
+  } catch {
+    alert(`${file.name} is not a ZIP file the editor can read.`);
+    return;
   }
+  if (!loaded.length) {
+    alert(`${file.name} has no Quest Queen chapters (data/<namespace>/questqueen/chapters/*.json).${skipped.length ? `\n\nSkipped:\n${skipped.join("\n")}` : ""}`);
+    return;
+  }
+  // Replacing a chapter drops whatever was not saved in it, so name those and ask first.
+  const losing = loaded
+    .map((next) => packChapters.find((entry) => entry.id === next.id))
+    .filter((entry): entry is Chapter => Boolean(entry) && isDirty(entry!))
+    .map((entry) => entry.title || entry.id);
+  if (losing.length && !window.confirm(`Loading ${file.name} replaces chapters with unsaved changes:\n\n${losing.join("\n")}\n\nLoad anyway?`)) return;
+  let replaced = 0;
+  for (const next of loaded) {
+    const existing = packChapters.findIndex((entry) => entry.id === next.id);
+    if (existing >= 0) {
+      packChapters[existing] = next;
+      replaced += 1;
+    } else packChapters.push(next);
+  }
+  // switchChapter writes the open chapter back into the pack first; point it at the loaded copy so a stale
+  // open chapter cannot overwrite the one just loaded.
+  chapter = loaded[0];
+  switchChapter(loaded[0].id);
+  const added = loaded.length - replaced;
+  alert(`Loaded ${loaded.length} chapter${loaded.length === 1 ? "" : "s"} from ${file.name}`
+    + ` (${added} new, ${replaced} replaced). They are only in the editor until you save each one to the world.`
+    + (skipped.length ? `\n\nSkipped:\n${skipped.join("\n")}` : ""));
 });
 
 document.getElementById("export-zip")!.addEventListener("click", async () => {
@@ -3188,7 +3278,11 @@ document.getElementById("export-zip")!.addEventListener("click", async () => {
 });
 
 const GUIDE_KEY = "questqueen.editor.guide";
-const GUIDE: { title: string; body: string; target: string }[] = [
+/** {@code whenShown}: leave the step out when its target is not on screen (a stage's steps with no stage open). */
+type GuideStep = { title: string; body: string; target: string; whenShown?: boolean };
+
+/** The first-visit tour: the whole editor once. The How to button gives the steps for the section you are in. */
+const TOUR: GuideStep[] = [
   {
     title: "Start in Author",
     body: "AUTHOR is you, changing the quests. PLAYER is a look at what the player sees, and it does not edit. Stay on AUTHOR while you build.",
@@ -3210,8 +3304,8 @@ const GUIDE: { title: string; body: string; target: string }[] = [
     target: "#mode-link",
   },
   {
-    title: "AND, OR, and XOR",
-    body: "AND means every quest leading in must be finished. OR means any one of them is enough. XOR means the player picks exactly one path and the others stay closed. The same rule applies to every arrow into that quest. The panel lists the steps. Ctrl+Z undoes the choice.",
+    title: "AND, OR, NOT, and FORK",
+    body: "AND means every quest leading in must be finished. OR means any one of them is enough. NOT means open only until a quest leading in is finished, then closed for good. FORK makes the earlier quest a fork: the player picks one path and the others stay closed. Ctrl+Z undoes the choice.",
     target: "#mode-link",
   },
   {
@@ -3221,10 +3315,123 @@ const GUIDE: { title: string; body: string; target: string }[] = [
   },
   {
     title: "Save in the right place",
-    body: "SAVE TO WORLD updates the game you have open. EXPORT ZIP is a backup file. WRITE TO PACK writes the chapter into the pack itself. Those are three different actions. Chapters on the left switch which board you are editing.",
+    body: "SAVE TO WORLD puts the open chapter into the game you have open. EXPORT ZIP downloads every chapter as a backup, and LOAD ZIP brings one back. The chapters on the left switch which board you edit; + adds one.",
     target: "#save-world",
   },
 ];
+
+/** Steps for each part of the editor; the How to button picks the one on screen (guideSection). */
+const SECTION_GUIDES: Record<string, { label: string; steps: GuideStep[] }> = {
+  edit: {
+    label: "Quests · Edit",
+    steps: [
+      { title: "Place a quest", target: "#grid",
+        body: "Click an empty cell (it shows a dashed NEW) to add a quest. Its card opens on the right with the title selected, so you can type its name straight away." },
+      { title: "Fill in the card", target: "#card",
+        body: "TASKS are what the player has to do; REWARDS are what they get. + TASK and + REWARD add rows. The description has a toolbar (bold, headings, glyphs, item icons, pictures) and a preview of how it looks in the book." },
+      { title: "Move and remove", target: "#grid",
+        body: "Drag a quest to an empty cell to move it. Linked quests must stay in the same row or column, so a move that would put a link on a diagonal is refused. Delete, or REMOVE TILE on the card, removes a quest. Ctrl+Z undoes either." },
+      { title: "Connect quests", target: "#mode-link",
+        body: "Switch to LINK to join quests and choose how each one opens." },
+      { title: "Board size", target: "#grid-size",
+        body: "Sets how big the board is. It never shrinks past a quest; move quests first to make it smaller." },
+      { title: "Save", target: "#save-world",
+        body: "SAVE TO WORLD sends the open chapter to the game. The note beside it says Unsaved changes, problems in red (fix them first; hover to read them) or warnings in amber (the save still works). A dot in the chapter list marks every chapter with unsaved changes." },
+    ],
+  },
+  link: {
+    label: "Quests · Link",
+    steps: [
+      { title: "Hover a side", target: "#grid",
+        body: "Hover a quest and its four sides light up. Click an empty side to make the next quest in that direction, already linked from this one." },
+      { title: "Choose how a quest opens", target: "#gate-group",
+        body: "Click a side that meets another quest to choose AND, OR, NOT or FORK, or to remove the link. The buttons up here (or keys 1 to 4) pick the rule new links get." },
+      { title: "What the rules mean", target: "#gate-group",
+        body: "AND: every quest leading in must be finished. OR: any one is enough. NOT: open only until a quest leading in is finished, then closed for good. FORK: the earlier quest becomes a fork, and the player picks one path while the others close." },
+      { title: "Straight lines only", target: "#grid",
+        body: "Links join quests side by side in a row or a column, so the book can draw the arrow between them. Save refuses a link on a diagonal." },
+      { title: "Name it as you go", target: "#card",
+        body: "The card stays editable while you link, so a quest you just made can be named and given tasks without switching tools. Ctrl+Z undoes a link or a rule." },
+    ],
+  },
+  view: {
+    label: "Quests · View",
+    steps: [
+      { title: "Look without changing", target: "#mode-view",
+        body: "VIEW never changes the chapter. Click a quest to read its card. Switch to EDIT to change quests, or LINK to connect them." },
+      { title: "Move around", target: ".zoom-group",
+        body: "Drag with the right mouse button to pan. The wheel, or − and +, zooms. FIT frames the whole chapter, and the map in the corner shows where you are." },
+      { title: "Find a quest", target: "#search",
+        body: "Type part of a title and press Enter. It jumps to the first match, even in another chapter, and dims the rest. Esc clears it." },
+      { title: "Chapters", target: "#chapters",
+        body: "The list on the left switches which chapter you are looking at. + adds one, empty or with example quests. A chapter's own settings (title, icon, parent, unlock) are at the bottom of the card." },
+      { title: "See it as a player", target: "#lens-player",
+        body: "PLAYER shows the board the way a new player sees it." },
+    ],
+  },
+  player: {
+    label: "Player lens",
+    steps: [
+      { title: "What a player sees", target: "#lens-player",
+        body: "This is the board as a player who has not started: what is locked shows a padlock, and what is hidden stays hidden. Nothing can be changed here." },
+      { title: "Back to building", target: "#lens-author",
+        body: "AUTHOR goes back to editing, with the tool you had before." },
+    ],
+  },
+  intro: {
+    label: "Act intro",
+    steps: [
+      { title: "A chapter of chapters", target: "#card",
+        body: "This chapter holds other chapters, so it has no quest board. Players see its intro (picture and text) before the chapters under it. Set both on the card." },
+      { title: "Its chapters", target: "#chapters",
+        body: "The chapters indented under it in the list are its acts. Open one to edit its quests." },
+    ],
+  },
+  stagePopup: {
+    label: "New stage",
+    steps: [
+      { title: "A stage for this quest", target: "#stage-modal-body #stage-name",
+        body: "You are making a stage from a quest's stage field. Name it here; the id is made from the name. When you create it, the field you came from picks it." },
+      { title: "How players get it", target: "#stage-modal-body [data-act=\"pick-quest\"]", whenShown: true,
+        body: "Granted by a quest adds a reward to that quest; save that quest's chapter to keep it. A stage can also come from an advancement, or need other stages first." },
+      { title: "What it locks", target: "#stage-modal-body [data-act=\"add-lock\"]", whenShown: true,
+        body: "+ Lock something: Items, Blocks, Whole mod, Dimension or Mob. Until players have the stage, those stay out of reach. A stage that locks nothing still works as a milestone." },
+      { title: "Create it", target: "#stage-modal-body [data-act=\"save\"]", whenShown: true,
+        body: "Create stage sends it to the game and closes this. Cancel, or Esc, leaves the quest as it was." },
+    ],
+  },
+  stages: {
+    label: "Stages",
+    steps: [
+      { title: "What a stage is", target: "#view-stages",
+        body: "A stage is a milestone a player earns, usually by finishing a quest. Until they have it, whatever the stage locks (items, blocks, a mod, a dimension, mobs) stays out of reach." },
+      { title: "The list", target: "#stage-list",
+        body: "Every stage the game knows. “yours” were made here and can be edited; “pack” come from a datapack and are read-only (Duplicate to edit). Each row says which quests give it, which need it, and how much it locks." },
+      { title: "Make one", target: "#new-stage",
+        body: "+ New stage opens an empty stage; a stage in the list opens that one. Give it a name and the id is made from it (Advanced lets you change it). With a stage open, How to also walks through its three steps." },
+      { title: "How players get it", target: "#stage-detail [data-act=\"pick-quest\"]", whenShown: true,
+        body: "Granted by a quest adds a reward to that quest; save that quest's chapter on the Quests tab to keep it. A stage can also come from an advancement, or need other stages first." },
+      { title: "What it locks", target: "#stage-detail [data-act=\"add-lock\"]", whenShown: true,
+        body: "+ Lock something: pick Items, Blocks, Whole mod, Dimension or Mob, search the pack, then choose what is blocked (use, pick up, craft, hide in JEI and so on)." },
+      { title: "A datapack's stage", target: "#stage-detail [data-act=\"duplicate\"]", whenShown: true,
+        body: "This stage comes from a datapack, so it can't be changed here. Duplicate to edit makes your own copy under a new id, which you can change and give from quests." },
+      { title: "Save it", target: "#stage-detail [data-act=\"save\"]", whenShown: true,
+        body: "The sentence at the bottom says the stage back to you in plain words. Create stage (or Save stage) sends it to the game at once; Delete stage removes it and lists the quests that still mention it." },
+    ],
+  },
+};
+
+/** Which part of the editor is on screen, for the How to button. */
+function guideSection(): string {
+  if (stageModalOpen()) return "stagePopup";
+  if (stagesView) return "stages";
+  if (lens === "player") return "player";
+  if (chapterHasChildren(chapter.id)) return "intro";
+  return uiMode;
+}
+
+let guideSteps: GuideStep[] = TOUR;
+let guideLabel = "";
 let guideStep = 0;
 
 function clearGuideTarget() {
@@ -3232,7 +3439,7 @@ function clearGuideTarget() {
 }
 
 function renderGuide() {
-  const step = GUIDE[guideStep];
+  const step = guideSteps[guideStep];
   const panel = document.getElementById("guide");
   const title = document.getElementById("guide-title");
   const body = document.getElementById("guide-body");
@@ -3243,17 +3450,29 @@ function renderGuide() {
   clearGuideTarget();
   title.textContent = step.title;
   body.textContent = step.body;
-  count.textContent = `Step ${guideStep + 1} of ${GUIDE.length}`;
+  count.textContent = `${guideLabel ? `${guideLabel} · ` : ""}Step ${guideStep + 1} of ${guideSteps.length}`;
   if (back) back.hidden = guideStep === 0;
-  next.textContent = guideStep === GUIDE.length - 1 ? "Done" : "Next";
+  next.textContent = guideStep === guideSteps.length - 1 ? "Done" : "Next";
   const target = document.querySelector(step.target) as HTMLElement | null;
   const visible = target && !target.hidden && target.getClientRects().length > 0;
   (visible ? target : document.getElementById("show-guide"))?.classList.add("guide-target");
   panel.hidden = false;
+  // The card sits at the bottom; when that hides what the step points at (a pop-up's footer), it moves to the top.
+  // A target as big as the board or the card overlaps anyway, so it stays put for those.
+  panel.classList.remove("guide-top");
+  // Centre it: a sticky footer (the stage editor's) would cover a target scrolled only to the edge.
+  if (visible && target.getBoundingClientRect().height < window.innerHeight / 2) target.scrollIntoView({ block: "center" });
+  if (visible && target.getBoundingClientRect().height < window.innerHeight / 2) {
+    const t = target.getBoundingClientRect();
+    const g = panel.getBoundingClientRect();
+    if (t.bottom > g.top && t.top < g.bottom && t.right > g.left && t.left < g.right) panel.classList.add("guide-top");
+  }
 }
 
-function openGuide(step = 0) {
-  guideStep = Math.max(0, Math.min(GUIDE.length - 1, step));
+function openGuide(steps: GuideStep[], label = "") {
+  guideSteps = steps;
+  guideLabel = label;
+  guideStep = 0;
   renderGuide();
 }
 
@@ -3264,9 +3483,16 @@ function closeGuide() {
   localStorage.setItem(GUIDE_KEY, "seen");
 }
 
-document.getElementById("show-guide")?.addEventListener("click", () => openGuide(0));
+document.getElementById("show-guide")?.addEventListener("click", () => {
+  const section = SECTION_GUIDES[guideSection()] ?? SECTION_GUIDES.view;
+  const shown = (step: GuideStep) => {
+    const el = document.querySelector<HTMLElement>(step.target);
+    return Boolean(el && !el.hidden && el.getClientRects().length);
+  };
+  openGuide(section.steps.filter((step) => !step.whenShown || shown(step)), section.label);
+});
 document.getElementById("guide-next")?.addEventListener("click", () => {
-  if (guideStep >= GUIDE.length - 1) closeGuide();
+  if (guideStep >= guideSteps.length - 1) closeGuide();
   else {
     guideStep += 1;
     renderGuide();
@@ -3292,4 +3518,4 @@ window.addEventListener("resize", resize);
 resize();
 void syncFromMinecraft();
 window.setInterval(() => { void syncFromMinecraft(); }, 2000);
-if (!localStorage.getItem(GUIDE_KEY)) openGuide(0);
+if (!localStorage.getItem(GUIDE_KEY)) openGuide(TOUR);

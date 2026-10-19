@@ -2,7 +2,7 @@
 // what makes a quest impossible to finish, so problems show in the editor instead of in game.
 import { commandRewardProblems } from "./commandReward";
 import { descriptionProblems, validItemId } from "./richtext";
-import { chapterGridHeight, chapterGridWidth, gateOp, parentLoops, type Chapter, type Reward, type Task } from "./types";
+import { chapterGridHeight, chapterGridWidth, gateOp, parentLoops, straightLink, type Chapter, type Reward, type Task } from "./types";
 
 /** A resource location, with or without its namespace (the game reads "stone" as minecraft:stone). */
 const RESOURCE = /^([a-z0-9_.-]+:)?[a-z0-9_./-]+$/;
@@ -120,8 +120,17 @@ export function validate(next: Chapter, all: Chapter[] = [next]): string[] {
     (tile.rewards ?? []).forEach((reward, i) => checkReward(`${name} reward ${i + 1} (${reward.type})`, reward, errors));
     descriptionProblems(tile.description).forEach((problem) => errors.push(`${name} description: ${problem}`));
   }
+  const byTileId = new Map(tiles.map((tile) => [tile.id, tile]));
   for (const link of links) {
-    if (!ids.has(link.from) || !ids.has(link.to)) errors.push(`Link ${link.from}->${link.to} missing tile`);
+    if (!ids.has(link.from) || !ids.has(link.to)) {
+      errors.push(`Link ${link.from}->${link.to} missing tile`);
+      continue;
+    }
+    const from = byTileId.get(link.from)!;
+    const to = byTileId.get(link.to)!;
+    if (!straightLink(from.pos, to.pos)) {
+      errors.push(`${from.title || from.id} → ${to.title || to.id} is diagonal: put them in the same row or column, or the book shows no arrow`);
+    }
   }
   const adj = new Map<string, string[]>();
   for (const id of ids) adj.set(id, []);
@@ -187,4 +196,32 @@ function findCycle(ids: Set<string>, adj: Map<string, string[]>): string[] | nul
     if (!visited.has(id) && dfs(id)) break;
   }
   return found;
+}
+
+/**
+ * Stages this chapter waits on that nothing provides: StageLock does not define them and no quest in the pack
+ * gives them. StageLock grants any name, so a stage a quest gives works without a definition. Not a save blocker
+ * (a command, script or advancement may grant it), but until something does, a quest that needs it never opens.
+ */
+export function stageWarnings(next: Chapter, defined: Set<string>, all: Chapter[]): string[] {
+  const given = new Set<string>();
+  for (const entry of all) {
+    for (const tile of Array.isArray(entry.tiles) ? entry.tiles : []) {
+      for (const reward of tile.rewards ?? []) if (reward.type === "stage" && reward.stage) given.add(reward.stage);
+    }
+  }
+  const warnings: string[] = [];
+  const check = (where: string, id: string | undefined) => {
+    if (id && validStageId(id) && !defined.has(id) && !given.has(id)) {
+      warnings.push(`${where} "${id}", but no stage by that name exists and no quest gives it`);
+    }
+  };
+  const unlock = typeof next.unlock === "object" ? next.unlock?.conditions ?? [] : [];
+  for (const condition of unlock) if (STAGE_TYPES.has(condition.type)) check("The chapter unlocks with", condition.id);
+  for (const tile of Array.isArray(next.tiles) ? next.tiles : []) {
+    const name = tile.title || tile.id;
+    check(`${name} requires`, tile.required_stage);
+    if (tile.hidden_until && STAGE_TYPES.has(tile.hidden_until.type)) check(`${name} is hidden until`, tile.hidden_until.id);
+  }
+  return warnings;
 }

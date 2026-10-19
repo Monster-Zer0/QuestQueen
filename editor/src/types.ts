@@ -173,6 +173,14 @@ export interface Scroll { id: string; title: string; text: string; }
 
 export type GateOpName = "and" | "or" | "xor" | "not";
 
+/**
+ * Two quests a link can join: same row or same column. The book draws a link's arrow only then
+ * (GridPos.cardinalTo); a diagonal link still gates the quest but shows the player nothing.
+ */
+export function straightLink(a: GridPos, b: GridPos): boolean {
+  return (a.x === b.x) !== (a.y === b.y);
+}
+
 export function gateOp(link: Link): GateOpName {
   if (!link.gate) return "and";
   if (typeof link.gate === "string") return (link.gate.toLowerCase() as GateOpName) || "and";

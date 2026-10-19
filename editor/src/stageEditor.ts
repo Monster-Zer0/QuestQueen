@@ -166,7 +166,12 @@ export function renderStageEditor(host: HTMLElement, info: StageInfo | null, ctx
   const refreshSummary = () => {
     const summary = host.querySelector<HTMLElement>("#stage-summary");
     const grants = usage().grants.map((use) => use.tileTitle ?? use.chapterTitle);
-    if (summary) summary.innerHTML = esc(summarySentence(draft, grants, names)).replace(/^(Players without )(.+?)( can't)/, "$1<strong>$2</strong>$3");
+    if (summary && readOnly) {
+      // The editor cannot read a datapack stage's locks, so it must not claim there are none.
+      summary.textContent = grants.length
+        ? `${draft.name || draft.id} is locked by the datapack; this editor cannot show what it locks. Completing ${grants.join(", ")} gives it.`
+        : `${draft.name || draft.id} is locked by the datapack; this editor cannot show what it locks. No quest here gives it.`;
+    } else if (summary) summary.innerHTML = esc(summarySentence(draft, grants, names)).replace(/^(Players without )(.+?)( can't)/, "$1<strong>$2</strong>$3");
     const problems = host.querySelector<HTMLElement>("#stage-problems");
     if (problems) {
       const list = readOnly ? [] : stageProblems(draft, ctx.stages(), isNew);
