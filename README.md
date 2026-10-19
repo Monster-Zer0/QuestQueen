@@ -14,9 +14,18 @@ Open the book with **J**. JourneyMap also defaults to J, so rebind one of them i
 
 ## Editor
 
-In-game: `/questqueen editor` starts the browser UI at `http://127.0.0.1:47821`. The quest book itself is play-only.
+In-game: `/questqueen editor` opens the editor at `http://127.0.0.1:47821`. The quest book in game is play-only.
 
-Offline:
+The editor is the book itself: the same ledger tiles, arrows, padlocks and theme colours, drawn with the game's own font.
+
+- **Edit** — click any text or picture to change it. Click an empty square to add a quest (or press **N**); drag a quest to move it; drag a blue diamond onto the next quest to link them (straight across or down only); click an arrow to choose AND, OR, NOT or FORK. The card's task and reward lines change in place; **More** holds the gates into the quest, its unlock rule, what hides it, where it jumps and the scrolls it gives.
+- **Preview as player** — the book as a player sees it. **Previewing:** picks a new player, one who has finished up to a quest, or one with certain stages.
+- **Chapters** — **+** adds one (empty or with example quests). **⋯** renames it, opens its settings (theme, background, icon, unlocks, board size), duplicates or deletes it. Drag a row to reorder it, or onto the right part of another to nest it. A chapter with chapters under it and no quests is an act: its intro page is edited in place.
+- **Save to world** saves every changed chapter; **Ctrl+S** saves the open one. Anything that must be fixed first opens the problems list, and clicking a problem opens that quest at the part it is about.
+- **Find** (**Ctrl+K**) finds any quest, chapter, stage or action. **File** exports every chapter as a datapack ZIP or loads one. **?** explains whatever is on screen.
+- If Minecraft goes away, a strip says so and your changes stay in the page until it is back.
+
+Offline, against the testkit's mock bridge:
 
 ```bat
 cd editor
@@ -24,7 +33,7 @@ npm install
 npm run dev
 ```
 
-Load or export a folder/zip of `data/*/questqueen/**/*.json`. There is no hosted pack updater.
+Then open `http://localhost:5173/?bridge=<port>` with the mock's port. There is no hosted pack updater.
 
 ## Using this in a modpack
 
@@ -144,7 +153,7 @@ ProgressiveStages only grants stages its own stage files define.
 
 ### Making stages in the web editor
 
-The editor's **Stages** tab (and **New stage…** in any stage field on a quest) makes StageLock stages without writing JSON, in three steps:
+The editor's **Stages** page (and **New stage…** under *Requires stage* in a quest's **More**) makes StageLock stages without writing JSON, in three steps:
 
 1. **What is it?** A name (the id is made from it), an icon and a description. Under *Advanced*: the id, who gets it (player, team or everyone) and whether the player is told in chat.
 2. **How do players get it?** The quests whose rewards grant it, with **+ Granted by a quest…** to add one. Optionally, advancements that also grant it and stages it needs first.
