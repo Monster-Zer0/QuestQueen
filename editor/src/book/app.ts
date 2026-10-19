@@ -22,6 +22,7 @@ import { renderIntro } from "./intro";
 import { isIntroChapter } from "../model";
 import { openProblems, saveAll, saveChapter, type SaveDeps } from "./problems";
 import { openStagePopup, openStages, type StagesPageDeps } from "./stagesPage";
+import { openFind, type FindHooks } from "./find";
 import { createStore, type Store } from "./store";
 
 const POLL_MS = 2000;
@@ -225,10 +226,35 @@ function boot() {
       shell.root.classList.remove("stages-open");
     },
   };
+  const showStages = (stageId?: string) => {
+    shell.root.classList.add("stages-open");
+    openStages(stagesPage, store, stagesDeps!, stageId);
+  };
   shell.bar.querySelector("[data-act=stages]")!.addEventListener("click", () => {
     if (!stagesPage.hidden) return stagesDeps!.close();
-    shell.root.classList.add("stages-open");
-    openStages(stagesPage, store, stagesDeps!);
+    showStages();
+  });
+  const click = (act: string) => () => shell.bar.querySelector<HTMLElement>(`[data-act=${act}]`)?.click();
+  const findHooks: FindHooks = {
+    actions: [
+      { label: "Add quest", sub: "Next to the selected quest (N)", run: () => { store.setMode("edit"); stagesDeps!.close(); editing?.addNear(); } },
+      { label: "Add chapter", sub: "Empty, or with example quests", run: () => shell.sidebar.querySelector<HTMLElement>(".sidebar-add")?.click() },
+      { label: "Export ZIP", sub: "Download the pack's chapters", run: click("file") },
+      { label: "Load ZIP", sub: "Open chapters from a ZIP", run: click("file") },
+      { label: "Save to world", sub: "Save every unsaved chapter", run: click("save") },
+      { label: "Preview as player", sub: "See the book as a player does", run: () => store.setMode("preview") },
+      { label: "Open stages", sub: "Milestones that lock things", run: () => showStages() },
+      { label: "Help", sub: "What you can do on this screen", run: click("help") },
+    ],
+    openStage: (id) => showStages(id),
+  };
+  const find = () => openFind(shell.popLayer, store, findHooks);
+  shell.bar.querySelector("[data-act=find]")!.addEventListener("click", find);
+  window.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      find();
+    }
   });
   window.addEventListener("keydown", (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {

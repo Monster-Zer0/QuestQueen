@@ -676,4 +676,15 @@ button.task-row, button.reward-row { cursor: pointer; }
   cursor: pointer;
   text-align: left;
   font: inherit; }
-.stage-scope .stage-editor .item-select-option:hover {background: var(--surface-3); }
+.stage-scope .stage-editor .item-select-option:hover {background: var(--surface-3); }/* Find (Ctrl+K) */
+.find-backdrop { position: fixed; inset: 0; z-index: 40; background: rgba(8, 5, 12, 0.55); display: grid; justify-items: center; align-items: start; padding-top: 10vh; }
+.find-panel { width: min(620px, calc(100vw - 32px)); background: var(--card); border: 2px solid var(--neu); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6); font: 14px system-ui, sans-serif; color: var(--ui); }
+.find-input { width: 100%; box-sizing: border-box; height: 44px; padding: 0 14px; font: 16px system-ui, sans-serif; background: #141019; color: var(--ui); border: 0; border-bottom: 1px solid var(--sidebar-edge); outline: none; }
+.find-hits { max-height: 50vh; overflow: auto; }
+.find-hit { display: grid; grid-template-columns: 72px 1fr; column-gap: 10px; padding: 7px 14px; cursor: pointer; }
+.find-hit.active, .find-hit:hover { background: #241a2f; box-shadow: inset 3px 0 0 var(--edit); }
+.find-kind { grid-row: span 2; align-self: center; font-size: 11px; text-transform: uppercase; color: var(--muted); }
+.find-kind.action { color: var(--edit); }
+.find-label { color: var(--ui); }
+.find-sub { color: var(--muted); font-size: 12px; }
+.find-none { padding: 10px 14px; margin: 0; color: var(--muted); }

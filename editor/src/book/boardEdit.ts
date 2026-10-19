@@ -75,6 +75,8 @@ export interface BoardEditing {
   dispose(): void;
   duplicateSelected(): void;
   deleteSelected(): void;
+  /** Add a quest in the nearest empty cell to the selected one (the N key). */
+  addNear(): void;
 }
 
 export function wireBoardEdit(el: HTMLElement, board: Board, store: Store, notice: (text: string) => void): BoardEditing {
@@ -291,9 +293,16 @@ export function wireBoardEdit(el: HTMLElement, board: Board, store: Store, notic
       duplicateSelected();
     } else if ((event.key === "n" || event.key === "N") && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
-      const at = nearestEmpty(ch, selected?.pos ?? { x: -1, y: 0 });
-      if (at) addQuest(at);
+      addNear();
     }
+  };
+
+  const addNear = () => {
+    const ch = open();
+    if (!ch || !editing()) return;
+    const selected = ch.tiles.find((t) => t.id === store.get().selected);
+    const at = nearestEmpty(ch, selected?.pos ?? { x: -1, y: 0 });
+    if (at) addQuest(at);
   };
 
   const undoKey = (event: KeyboardEvent) => {
@@ -312,6 +321,7 @@ export function wireBoardEdit(el: HTMLElement, board: Board, store: Store, notic
   return {
     duplicateSelected,
     deleteSelected,
+    addNear,
     dispose() {
       el.removeEventListener("pointerdown", down);
       el.removeEventListener("pointermove", move);
