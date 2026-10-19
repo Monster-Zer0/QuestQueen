@@ -14,7 +14,7 @@ import { pickReward, pickTask } from "./taskPicker";
 import { openPreviewAs, previewLabel } from "./previewAs";
 import { ask, choose, setDialogHost, tell } from "./dialog";
 import { h } from "./dom";
-import { applyPalette, mountShell, type ShellParts } from "./shell";
+import { applyPalette, mountShell, setConnection, type ShellParts } from "./shell";
 import { renderSidebar, startRename } from "./sidebar";
 import { addEmptyChapter, addStarterChapter, deleteChapter, duplicateChapter } from "./chapters";
 import { openChapterSettings } from "./chapterSettings";
@@ -23,6 +23,8 @@ import { isIntroChapter } from "../model";
 import { openProblems, saveAll, saveChapter, type SaveDeps } from "./problems";
 import { openStagePopup, openStages, type StagesPageDeps } from "./stagesPage";
 import { openFind, type FindHooks } from "./find";
+import { exportZip, readZip } from "../zipio";
+import { packNamespace } from "../model";
 import { createStore, type Store } from "./store";
 
 const POLL_MS = 2000;
@@ -61,6 +63,48 @@ async function removeChapter(store: Store, chapterId: string) {
   const result = await deleteChapter(store, chapterId, (body) =>
     bridgeFetch("/api/chapter/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body }));
   if (!result.ok) await tell(result.message ?? "Minecraft refused the delete.", { title: "Not deleted" });
+}
+
+/** Export every chapter as a ZIP; load chapters from one (asking before unsaved work is replaced). */
+function fileActions(shell: ShellParts, store: Store) {
+  const input = h("input", { type: "file", accept: ".zip,application/zip", hidden: true, "aria-hidden": "true" }) as HTMLInputElement;
+  shell.root.append(input);
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    let read: Awaited<ReturnType<typeof readZip>>;
+    try {
+      read = await readZip(file, store.get().chapters, (id) => store.dirty(id));
+    } catch (error) {
+      return tell((error as Error).message, { title: "Can't load that" });
+    }
+    const skipped = read.skipped.length ? ` Skipped: ${read.skipped.join("; ")}.` : "";
+    if (!read.loaded.length) return tell(`${file.name} has no Quest Queen chapters (data/<namespace>/questqueen/chapters/*.json).${skipped}`, { title: "Nothing to load" });
+    if (read.losing.length && !(await ask(`Loading ${file.name} replaces chapters with unsaved changes: ${read.losing.join(", ")}.`, { title: "Replace unsaved work?", ok: "Load anyway", danger: true }))) return;
+    const chapters = [...store.get().chapters];
+    let replaced = 0;
+    for (const next of read.loaded) {
+      const at = chapters.findIndex((c) => c.id === next.id);
+      if (at >= 0) {
+        chapters[at] = next;
+        replaced++;
+      } else chapters.push(next);
+    }
+    store.load({ chapters, openId: read.loaded[0].id, selected: null }, "load zip");
+    await tell(`Loaded ${read.loaded.length} chapter${read.loaded.length === 1 ? "" : "s"} (${read.loaded.length - replaced} new, ${replaced} replaced). They're only here until you save them to the world.${skipped}`, { title: "Loaded" });
+  });
+  return {
+    load: () => input.click(),
+    exportAll: async () => {
+      const chapters = store.get().chapters;
+      const problems = chapters.reduce((n, c) => n + store.problems(c.id).length, 0);
+      if (problems && !(await ask(`${problems} problem${problems === 1 ? "" : "s"} would go into the ZIP as they are.`, { title: "Export anyway?", ok: "Export" }))) return;
+      const a = h("a", { href: URL.createObjectURL(await exportZip(chapters)), download: `${packNamespace(chapters)}-questqueen.zip` }) as HTMLAnchorElement;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+    },
+  };
 }
 
 function sidebarHooks(shell: ShellParts, store: Store) {
@@ -234,13 +278,27 @@ function boot() {
     if (!stagesPage.hidden) return stagesDeps!.close();
     showStages();
   });
+  const files = fileActions(shell, store);
+  shell.bar.querySelector("[data-act=file]")!.addEventListener("click", async () => {
+    const pick = await choose("File", [
+      { label: "Export ZIP", hint: "Every chapter as a datapack ZIP: a backup, or to share", value: "export" },
+      { label: "Load ZIP", hint: "Open chapters from a datapack ZIP (unsaved until you save)", value: "load" },
+    ]);
+    if (pick === "export") await files.exportAll();
+    if (pick === "load") files.load();
+  });
+  window.addEventListener("beforeunload", (event) => {
+    if (!store.get().chapters.some((c) => store.dirty(c.id))) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
   const click = (act: string) => () => shell.bar.querySelector<HTMLElement>(`[data-act=${act}]`)?.click();
   const findHooks: FindHooks = {
     actions: [
       { label: "Add quest", sub: "Next to the selected quest (N)", run: () => { store.setMode("edit"); stagesDeps!.close(); editing?.addNear(); } },
       { label: "Add chapter", sub: "Empty, or with example quests", run: () => shell.sidebar.querySelector<HTMLElement>(".sidebar-add")?.click() },
-      { label: "Export ZIP", sub: "Download the pack's chapters", run: click("file") },
-      { label: "Load ZIP", sub: "Open chapters from a ZIP", run: click("file") },
+      { label: "Export ZIP", sub: "Download every chapter as a datapack ZIP", run: () => void files.exportAll() },
+      { label: "Load ZIP", sub: "Open chapters from a datapack ZIP", run: () => files.load() },
       { label: "Save to world", sub: "Save every unsaved chapter", run: click("save") },
       { label: "Preview as player", sub: "See the book as a player does", run: () => store.setMode("preview") },
       { label: "Open stages", sub: "Milestones that lock things", run: () => showStages() },
@@ -269,8 +327,7 @@ function boot() {
     const ready = await bridgeReady();
     bridgeUp = ready;
     // Once a pack is loaded the book stays usable without Minecraft; saving says it is not connected.
-    shell.lock.hidden = ready || loaded;
-    shell.root.classList.toggle("offline", !ready);
+    setConnection(shell, { ready, loaded });
     if (!ready || loaded) return;
     try {
       const pack = await loadPack((path) => bridgeFetch(path));

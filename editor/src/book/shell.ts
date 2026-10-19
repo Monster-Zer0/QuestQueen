@@ -13,6 +13,8 @@ export interface ShellParts {
   popLayer: HTMLElement;
   live: HTMLElement;
   lock: HTMLElement;
+  /** "Minecraft isn't connected" once a pack is loaded: the book stays usable. */
+  strip: HTMLElement;
   hint: HTMLElement;
 }
 
@@ -47,8 +49,17 @@ export function mountShell(root: HTMLElement): ShellParts {
   const live = h("div", { class: "visually-hidden", "aria-live": "polite", role: "status" });
   const lock = h("div", { class: "book-lock", role: "alert" },
     h("div", { class: "lock-card qq-text" }, "Waiting for Minecraft…", h("small", {}, "Run /questqueen editor in game.")));
-  root.replaceChildren(bar, book, popLayer, live, lock);
-  return { root, bar, book, sidebar, board, cardLayer, popLayer, live, lock, hint };
+  const strip = h("div", { class: "offline-strip", role: "status", hidden: true },
+    "Minecraft isn't connected — changes are kept here. Saving works again when it's back (run /questqueen editor in game).");
+  root.replaceChildren(bar, strip, book, popLayer, live, lock);
+  return { root, bar, book, sidebar, board, cardLayer, popLayer, live, lock, strip, hint };
+}
+
+/** Before a pack loads the book waits for Minecraft; after, losing it only shows the strip. */
+export function setConnection(parts: ShellParts, { ready, loaded }: { ready: boolean; loaded: boolean }): void {
+  parts.lock.hidden = ready || loaded;
+  parts.strip.hidden = ready || !loaded;
+  parts.root.classList.toggle("offline", !ready);
 }
 
 /** CSS custom property for a BookPalette field: voidColor → --void, cellLine → --cell-line. */

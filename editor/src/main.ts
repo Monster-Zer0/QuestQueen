@@ -1,4 +1,4 @@
-import JSZip from "jszip";
+import { exportZip, readZip } from "./zipio";
 import { bridgeBase, bridgeFetch } from "./bridge";
 import {
   GRID_PRESETS,
@@ -3116,37 +3116,22 @@ fileZip.addEventListener("change", async () => {
   fileZip.value = "";
   if (!file) return;
   rememberChapter();
-  const loaded: Chapter[] = [];
-  const skipped: string[] = [];
+  let read: Awaited<ReturnType<typeof readZip>>;
   try {
-    const zip = await JSZip.loadAsync(file);
-    for (const [name, entry] of Object.entries(zip.files)) {
-      if (!name.replaceAll("\\", "/").includes("/questqueen/chapters/") || !name.endsWith(".json")) continue;
-      try {
-        const parsed = JSON.parse(await entry.async("string")) as Chapter;
-        if (typeof parsed?.id !== "string" || !parsed.id.includes(":")) {
-          skipped.push(`${name} (no chapter id)`);
-          continue;
-        }
-        ensureTiles(parsed);
-        loaded.push(parsed);
-      } catch {
-        skipped.push(`${name} (not valid JSON)`);
-      }
-    }
-  } catch {
-    alert(`${file.name} is not a ZIP file the editor can read.`);
+    read = await readZip(file, packChapters, (id) => {
+      const entry = packChapters.find((c) => c.id === id);
+      return entry ? isDirty(entry) : false;
+    });
+  } catch (error) {
+    alert((error as Error).message);
     return;
   }
+  const { loaded, skipped, losing } = read;
   if (!loaded.length) {
     alert(`${file.name} has no Quest Queen chapters (data/<namespace>/questqueen/chapters/*.json).${skipped.length ? `\n\nSkipped:\n${skipped.join("\n")}` : ""}`);
     return;
   }
   // Replacing a chapter drops whatever was not saved in it, so name those and ask first.
-  const losing = loaded
-    .map((next) => packChapters.find((entry) => entry.id === next.id))
-    .filter((entry): entry is Chapter => Boolean(entry) && isDirty(entry!))
-    .map((entry) => entry.title || entry.id);
   if (losing.length && !window.confirm(`Loading ${file.name} replaces chapters with unsaved changes:\n\n${losing.join("\n")}\n\nLoad anyway?`)) return;
   let replaced = 0;
   for (const next of loaded) {
@@ -3173,13 +3158,7 @@ document.getElementById("export-zip")!.addEventListener("click", async () => {
   if (problems.length && !window.confirm(`${problems.length} problem(s) found:\n\n${problems.slice(0, 12).join("\n")}\n\nExport anyway?`)) {
     return;
   }
-  const zip = new JSZip();
-  zip.file("pack.mcmeta", JSON.stringify({ pack: { pack_format: 48, description: "Quest Queen export" } }, null, 2));
-  for (const entry of packChapters) {
-    const [ns, path] = entry.id.split(":");
-    zip.file(`data/${ns}/questqueen/chapters/${path}.json`, JSON.stringify(cleanChapter(entry), null, 2));
-  }
-  const blob = await zip.generateAsync({ type: "blob" });
+  const blob = await exportZip(packChapters);
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `${packNamespace(packChapters)}-questqueen.zip`;

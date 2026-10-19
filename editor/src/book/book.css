@@ -688,3 +688,6 @@ button.task-row, button.reward-row { cursor: pointer; }
 .find-label { color: var(--ui); }
 .find-sub { color: var(--muted); font-size: 12px; }
 .find-none { padding: 10px 14px; margin: 0; color: var(--muted); }
+/* Minecraft away after the pack loaded: a strip, not a lock */
+.offline-strip { flex: none; padding: 6px 16px; background: #3a2410; color: #ffd08a; border-bottom: 1px solid #7a5f22; font: 13px system-ui, sans-serif; }
+.offline-strip[hidden] { display: none; }
