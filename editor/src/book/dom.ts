@@ -30,8 +30,8 @@ export function h(tag: string, props: Record<string, unknown> = {}, ...children:
 const KEY = "reconcileKey";
 
 /**
- * Make parent's children match items, in order: an item whose key had a node keeps that node (update runs on it),
- * a new key gets create(), a dropped key's node is removed. Unchanged nodes are never recreated.
+ * Make parent's children match items, in order: an item whose key had a node keeps that node, a new key gets create(); update
+ * runs on every item's node, a dropped key's node is removed. Unchanged nodes are never recreated.
  */
 export function reconcile<T>(
   parent: HTMLElement,
@@ -54,6 +54,7 @@ export function reconcile<T>(
     } else {
       el = create(item);
       el.dataset[KEY] = k;
+      update(el, item);
     }
     if (el !== cursor) parent.insertBefore(el, cursor);
     else cursor = cursor.nextElementSibling;

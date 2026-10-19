@@ -1,7 +1,8 @@
 // The book's text font. The quest book draws text with Minecraft's own font, which this editor may not ship.
 // The player's game has it, though: the bridge serves minecraft:textures/font/ascii.png, and this module turns
 // that bitmap sheet into an OpenType font in the browser, with Minecraft's bitmap-font spacing. Without a game (or
-// with a pack that removes the sheet) the editor's bundled QuestQueen pixel font is used instead.
+// with a pack that removes the sheet) text falls back to system fonts. The bundled public/font/questqueen.png is no
+// stand-in: its cells are not self-contained (descenders of the row above reach into the top of each cell).
 import opentype from "opentype.js";
 import { bridgeBase } from "../bridge";
 
@@ -145,13 +146,12 @@ async function addFontInBrowser(buffer: ArrayBuffer) {
 const BROWSER: FontDeps = { fetch: (url) => fetch(url), decode: decodeInBrowser, addFont: addFontInBrowser };
 
 /**
- * Build and register the book font: the player's Minecraft font when the game serves it, else the bundled one.
- * Resolves with the source used, or "none" when neither could be read (text then falls back to system fonts).
+ * Build and register the book font from the player's Minecraft font. Resolves "minecraft", or "none" when the
+ * game cannot serve it (text then falls back to system fonts).
  */
-export async function loadBookFont(deps: FontDeps = BROWSER): Promise<"minecraft" | "fallback" | "none"> {
-  const sources: { url: string; sheet: FontSheet; name: "minecraft" | "fallback" }[] = [
+export async function loadBookFont(deps: FontDeps = BROWSER): Promise<"minecraft" | "none"> {
+  const sources: { url: string; sheet: FontSheet; name: "minecraft" }[] = [
     { url: `${bridgeBase()}/api/texture?id=${encodeURIComponent("minecraft:textures/font/ascii.png")}`, sheet: ASCII_SHEET, name: "minecraft" },
-    { url: "/font/questqueen.png", sheet: QQ_SHEET, name: "fallback" },
   ];
   for (const source of sources) {
     try {
