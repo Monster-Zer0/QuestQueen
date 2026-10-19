@@ -7,7 +7,11 @@ import com.sun.net.httpserver.HttpServer;
 import dev.aof.questqueen.QuestQueen;
 import dev.aof.questqueen.data.Chapter;
 import dev.aof.questqueen.data.QuestPack;
+import dev.aof.questqueen.data.stage.AuthoredStage;
 import dev.aof.questqueen.net.AuthorSaveC2S;
+import dev.aof.questqueen.net.AuthorChapterDeleteC2S;
+import dev.aof.questqueen.net.AuthorStageDeleteC2S;
+import dev.aof.questqueen.net.AuthorStageSaveC2S;
 import dev.aof.questqueen.net.QuestNetwork;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
@@ -41,6 +45,10 @@ public final class EditorBridge {
     private static volatile String sessionNonce;
     private static final AtomicReference<String> CATALOG = new AtomicReference<>("{\"items\":[]}");
     private static final AtomicReference<String> PACK = new AtomicReference<>("{\"chapters\":[],\"scrolls\":[]}");
+    /** Stages the editor made, as the server last sent them (AuthorStagesS2C). */
+    private static final AtomicReference<String> AUTHORED_STAGES = new AtomicReference<>("[]");
+    /** Every stage the pack defines (id + display name), refreshed on the client thread: reloads change it. */
+    private static final AtomicReference<String> DEFINED_STAGES = new AtomicReference<>("[]");
     private static HttpServer server;
     private static ExecutorService executor;
     /** The pack PACK was last encoded from; re-encode only when the client receives a new one. */
@@ -70,6 +78,10 @@ public final class EditorBridge {
         return enabled;
     }
 
+    public static void setAuthoredStages(String json) {
+        AUTHORED_STAGES.set(json == null || json.isBlank() ? "[]" : json);
+    }
+
     public static void tick(Minecraft minecraft) {
         try {
             if (minecraft.player == null && enabled) {
@@ -83,6 +95,9 @@ public final class EditorBridge {
             // The item catalog is fixed for the session; only the pack changes (reloads, saves).
             if (ticks % 40 == 1 && ClientQuestState.pack != encodedPack) {
                 refreshPack();
+            }
+            if (ticks % 40 == 1) {
+                refreshDefinedStages();
             }
         } catch (Exception exception) {
             QuestQueen.LOGGER.error("Quest editor tick failed; disabling editor", exception);
@@ -112,7 +127,7 @@ public final class EditorBridge {
             server = http;
             String url = "http://127.0.0.1:" + PORT + "/";
             notifyPlayer("questqueen.editor.url", itemCount(), url);
-            // Automated runs (e2e/flow.mjs) drive the editor themselves; they set this so no browser tab opens.
+            // -Dquestqueen.editor.openBrowser=false: start the editor without opening a browser tab.
             if (!"false".equals(System.getProperty("questqueen.editor.openBrowser"))) {
                 Util.getPlatform().openUri(URI.create(url));
             }
@@ -128,8 +143,20 @@ public final class EditorBridge {
         }
     }
 
+    private static void refreshDefinedStages() {
+        com.google.gson.JsonArray defined = new com.google.gson.JsonArray();
+        dev.aof.questqueen.compat.Stages.definedStages().forEach((id, name) -> {
+            com.google.gson.JsonObject entry = new com.google.gson.JsonObject();
+            entry.addProperty("id", id);
+            entry.addProperty("name", name);
+            defined.add(entry);
+        });
+        DEFINED_STAGES.set(defined.toString());
+    }
+
     private static boolean refreshSnapshots() {
         try {
+            refreshDefinedStages();
             CATALOG.set(PackCatalogJson.create());
             ItemIconPng.clear();
             return refreshPack();
@@ -252,12 +279,45 @@ public final class EditorBridge {
             writeBytes(exchange, 200, "image/png", png);
             return;
         }
+        if ("/api/texture".equals(path) && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            var location = TexturePath.parse(queryParam(exchange.getRequestURI().getRawQuery(), "id"));
+            if (location.isEmpty()) {
+                write(exchange, 400, "application/json", "{\"ok\":false,\"error\":\"not a texture id\"}");
+                return;
+            }
+            var bytes = TexturePath.read(location.get());
+            if (bytes.isEmpty()) {
+                write(exchange, 404, "application/json", "{\"ok\":false,\"error\":\"no such texture\"}");
+                return;
+            }
+            writeBytes(exchange, 200, "image/png", bytes.get());
+            return;
+        }
         if ("/api/chapters".equals(path) && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
             write(exchange, 200, "application/json", PACK.get());
             return;
         }
         if ("/api/chapter".equals(path) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
             handleChapterSave(exchange);
+            return;
+        }
+        if ("/api/stages".equals(path) && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            write(exchange, 200, "application/json", "{\"stageLock\":"
+                    + (dev.aof.questqueen.compat.Stages.backend() == dev.aof.questqueen.compat.Stages.Backend.STAGELOCK)
+                    + ",\"defined\":" + DEFINED_STAGES.get()
+                    + ",\"authored\":" + AUTHORED_STAGES.get() + "}");
+            return;
+        }
+        if ("/api/stage".equals(path) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            handleStageSave(exchange);
+            return;
+        }
+        if ("/api/chapter/delete".equals(path) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            handleChapterDelete(exchange);
+            return;
+        }
+        if ("/api/stage/delete".equals(path) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            handleStageDelete(exchange);
             return;
         }
         serveStatic(exchange, path);
@@ -301,6 +361,122 @@ public final class EditorBridge {
         Minecraft.getInstance().execute(() -> QuestNetwork.sendToServer(new AuthorSaveC2S(body)));
         write(exchange, 202, "application/json", "{\"ok\":true,\"queued\":true,\"id\":"
                 + jsonString(chapter.id().toString()) + "}");
+    }
+
+    /** Same gates as a chapter save; the stage is checked with the codec the server applies, then forwarded. */
+    private static void handleStageSave(HttpExchange exchange) throws IOException {
+        String body = authorBody(exchange);
+        if (body == null) {
+            return;
+        }
+        AuthoredStage stage;
+        try {
+            stage = AuthoredStage.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(body))
+                    .getOrThrow(RuntimeException::new);
+        } catch (Exception exception) {
+            write(exchange, 400, "application/json",
+                    "{\"ok\":false,\"error\":" + jsonString(String.valueOf(exception.getMessage())) + "}");
+            return;
+        }
+        Minecraft.getInstance().execute(() -> QuestNetwork.sendToServer(new AuthorStageSaveC2S(body)));
+        write(exchange, 202, "application/json", "{\"ok\":true,\"queued\":true,\"id\":" + jsonString(stage.id()) + "}");
+    }
+
+    private static void handleStageDelete(HttpExchange exchange) throws IOException {
+        String body = authorBody(exchange);
+        if (body == null) {
+            return;
+        }
+        String id;
+        try {
+            id = JsonParser.parseString(body).getAsJsonObject().get("id").getAsString();
+        } catch (Exception exception) {
+            write(exchange, 400, "application/json", "{\"ok\":false,\"error\":\"expected {\\\"id\\\": ...}\"}");
+            return;
+        }
+        if (!dev.aof.questqueen.compat.Stages.validId(id)) {
+            write(exchange, 400, "application/json", "{\"ok\":false,\"error\":\"not a stage id\"}");
+            return;
+        }
+        Minecraft.getInstance().execute(() -> QuestNetwork.sendToServer(new AuthorStageDeleteC2S(id)));
+        write(exchange, 202, "application/json", "{\"ok\":true,\"queued\":true,\"id\":" + jsonString(id) + "}");
+    }
+
+    /** Chapter deletes waiting on the server's {@code AuthorReplyS2C}, by chapter id. */
+    private static final java.util.Map<String, java.util.concurrent.CompletableFuture<String>> PENDING_DELETES =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Delete a chapter. Unlike a save, the answer waits for the server (up to 5 s) so the browser can say why a
+     * chapter that came from a datapack stays. The exchange is answered from the reply, off the bridge thread.
+     */
+    private static void handleChapterDelete(HttpExchange exchange) throws IOException {
+        String body = authorBody(exchange);
+        if (body == null) {
+            return;
+        }
+        String id;
+        try {
+            id = JsonParser.parseString(body).getAsJsonObject().get("id").getAsString().trim();
+        } catch (Exception exception) {
+            write(exchange, 400, "application/json", "{\"ok\":false,\"error\":\"expected {\\\"id\\\": ...}\"}");
+            return;
+        }
+        if (net.minecraft.resources.ResourceLocation.tryParse(id) == null) {
+            write(exchange, 400, "application/json", "{\"ok\":false,\"error\":\"not a chapter id\"}");
+            return;
+        }
+        var connection = Minecraft.getInstance().getConnection();
+        if (connection == null || !connection.hasChannel(AuthorChapterDeleteC2S.TYPE)) {
+            write(exchange, 409, "application/json", "{\"ok\":false,\"id\":" + jsonString(id)
+                    + ",\"message\":\"this server's Quest Queen can't delete chapters; update it there\"}");
+            return;
+        }
+        java.util.concurrent.CompletableFuture<String> answer = new java.util.concurrent.CompletableFuture<>();
+        java.util.concurrent.CompletableFuture<String> earlier = PENDING_DELETES.put(id, answer);
+        if (earlier != null) {
+            earlier.complete(null);
+        }
+        answer.completeOnTimeout(null, 5, java.util.concurrent.TimeUnit.SECONDS).whenComplete((reply, error) -> {
+            PENDING_DELETES.remove(id, answer);
+            try {
+                write(exchange, reply == null ? 202 : reply.startsWith("ok:") ? 200 : 409, "application/json", reply == null
+                        ? "{\"ok\":true,\"queued\":true,\"id\":" + jsonString(id) + "}"
+                        : "{\"ok\":" + reply.startsWith("ok:") + ",\"id\":" + jsonString(id)
+                                + ",\"message\":" + jsonString(reply.substring(reply.indexOf(':') + 1)) + "}");
+            } catch (IOException ignored) {
+                // the browser went away
+            }
+        });
+        Minecraft.getInstance().execute(() -> QuestNetwork.sendToServer(new AuthorChapterDeleteC2S(id)));
+    }
+
+    /** The server answered a chapter delete. */
+    public static void reply(String id, boolean ok, String message) {
+        java.util.concurrent.CompletableFuture<String> answer = PENDING_DELETES.get(id);
+        if (answer != null) {
+            answer.complete((ok ? "ok:" : "no:") + message);
+        }
+    }
+
+    /** The request body of an authoring write, or null after answering 403/413 for one that may not be made. */
+    private static String authorBody(HttpExchange exchange) throws IOException {
+        if (!enabled) {
+            write(exchange, 403, "application/json", "{\"ok\":false,\"error\":\"editor session is off\"}");
+            return null;
+        }
+        if (!ClientQuestState.progress.canAuthor()) {
+            write(exchange, 403, "application/json",
+                    "{\"ok\":false,\"error\":\"not in an authoring session on the server\"}");
+            return null;
+        }
+        byte[] raw = exchange.getRequestBody().readNBytes(MAX_CHAPTER_BYTES + 1);
+        if (raw.length > MAX_CHAPTER_BYTES) {
+            write(exchange, 413, "application/json",
+                    "{\"ok\":false,\"error\":\"body is larger than " + MAX_CHAPTER_BYTES / 1024 + " KB\"}");
+            return null;
+        }
+        return new String(raw, StandardCharsets.UTF_8);
     }
 
     /** Minimal JSON string quoting for an error message we are about to hand to the browser. */

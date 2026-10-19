@@ -51,6 +51,14 @@ export function uniqueChapterId(chapters: Chapter[], ns: string, base: string): 
   return id;
 }
 
+/** A title no other chapter uses ("New Chapter", then "New Chapter 2"), so two new chapters can be told apart. */
+export function uniqueChapterTitle(chapters: Chapter[], base: string): string {
+  const taken = new Set(chapters.map((chapter) => (chapter.title ?? "").trim().toLowerCase()));
+  let title = base;
+  for (let n = 2; taken.has(title.toLowerCase()); n++) title = `${base} ${n}`;
+  return title;
+}
+
 /** Smallest grid that still holds every quest: a shrink below this would push quests off the board. */
 export function minGrid(chapter: Chapter): { width: number; height: number } {
   let width = 1;

@@ -25,6 +25,7 @@ public class QuestQueenClient {
         ClientSync.DEFINITIONS = ClientQuestState::setPack;
         ClientSync.PROGRESS = ClientQuestState::setProgress;
         ClientSync.EDITOR = EditorBridge::setEnabled;
+        ClientSync.AUTHORED_STAGES = EditorBridge::setAuthoredStages;
         ClientSync.ADVANCEMENTS = ClientQuestState::setAdvancements;
         ClientSync.OPEN_BOOK = QuestBookScreen::openFromNetwork;
         modEventBus.addListener(QuestQueenClient::onRegisterKeys);
@@ -38,15 +39,6 @@ public class QuestQueenClient {
         // R/U, inventory sorters, ...) acts on them. Keys that are not Quest Queen's pass through untouched.
         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, QuestQueenClient::onBookKeyPressed);
         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, QuestQueenClient::onBookKeyReleased);
-        if (QuestBookScreen.TEST_HOOKS) {
-            // Dev runs only: a stand-in for "another mod" listening for keys on any screen, so the e2e can check
-            // it never receives the book's keys.
-            NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.ScreenEvent.KeyPressed.Pre event) -> {
-                if (event.getScreen() instanceof QuestBookScreen) {
-                    QuestBookScreen.OTHER_MOD_KEYS.add(event.getKeyCode());
-                }
-            });
-        }
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RecipesUpdatedEvent event) ->
                 dev.aof.questqueen.client.RecipeBlocks.clear());
     }

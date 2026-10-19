@@ -42,6 +42,11 @@ public final class PackCatalogJson {
         JsonArray stages = new JsonArray();
         dev.aof.questqueen.compat.Stages.definedStages().forEach((id, name) -> stages.add(entry(id, name)));
         root.add("stages", stages);
+        root.addProperty("stageLock", dev.aof.questqueen.compat.Stages.backend() == dev.aof.questqueen.compat.Stages.Backend.STAGELOCK);
+        // Installed mods, for "lock a whole mod" in the stage editor.
+        JsonArray mods = new JsonArray();
+        net.neoforged.fml.ModList.get().getMods().forEach(mod -> mods.add(entry(mod.getModId(), mod.getDisplayName())));
+        root.add("mods", mods);
 
         JsonArray biomes = new JsonArray();
         JsonArray structures = new JsonArray();
@@ -53,7 +58,7 @@ public final class PackCatalogJson {
         }
         if (minecraft.getConnection() != null) {
             minecraft.getConnection().levels().forEach(key ->
-                    dimensions.add(entry(key.location().toString(), key.location().getPath())));
+                    dimensions.add(entry(key.location().toString(), key.location().getPath().replace('_', ' '))));
         } else {
             dimensions.add(entry("minecraft:overworld", "overworld"));
             dimensions.add(entry("minecraft:the_nether", "the_nether"));

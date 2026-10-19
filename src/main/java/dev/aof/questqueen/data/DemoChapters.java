@@ -15,22 +15,10 @@ public final class DemoChapters {
             "questqueen:showcase",
             "questqueen:showcase_stage"
     );
-    public static final Set<String> DEV_IDS = Set.of(
-            "questqueen:blank",
-            "questqueen:starter",
-            "questqueen:nether",
-            "questqueen:test",
-            "questqueen:test_bonus"
-    );
     public static final String STAGE_WING = "questqueen:showcase_stage";
     /** NeoForge pack id of this mod's own resources. Other packs must outrank it to own the book title. */
     public static final String JAR_PACK = "mod/questqueen";
     public static final Set<String> PLAYER_SCROLLS = Set.of("questqueen:showcase_brief");
-    public static final Set<String> DEV_SCROLLS = Set.of(
-            "questqueen:chest_note",
-            "questqueen:zombie_note",
-            "questqueen:test_note"
-    );
 
     public enum Mode {
         AUTO, ALWAYS, NEVER;
@@ -48,7 +36,7 @@ public final class DemoChapters {
     }
 
     public record ChromeFile(ResourceLocation id, BookChrome chrome, String packId, int packRank) {
-        /** Tests and callers that only know the resource id. A non-questqueen namespace outranks the jar. */
+        /** For callers that only know the resource id. A non-questqueen namespace outranks the jar. */
         public ChromeFile(ResourceLocation id, BookChrome chrome) {
             this(id, chrome,
                     id != null && "questqueen".equals(id.getNamespace()) ? JAR_PACK : "file/pack",
@@ -66,12 +54,8 @@ public final class DemoChapters {
         return PLAYER_IDS.contains(id);
     }
 
-    public static boolean isDevDemo(String id) {
-        return DEV_IDS.contains(id);
-    }
-
     public static boolean isBuiltin(String id) {
-        return isPlayerDemo(id) || isDevDemo(id);
+        return isPlayerDemo(id);
     }
 
     public static boolean isCustom(Chapter chapter) {
@@ -85,7 +69,6 @@ public final class DemoChapters {
     public static FilterResult filter(
             List<Chapter> loaded,
             Mode mode,
-            boolean includeDevChapters,
             boolean progressiveStagesPresent
     ) {
         boolean custom = hasCustom(loaded);
@@ -95,12 +78,6 @@ public final class DemoChapters {
             String id = chapter.id().toString();
             if (isCustom(chapter)) {
                 kept.add(chapter);
-                continue;
-            }
-            if (isDevDemo(id)) {
-                if (includeDevChapters) {
-                    kept.add(chapter);
-                }
                 continue;
             }
             if (isPlayerDemo(id) && keepPlayer) {
@@ -127,11 +104,8 @@ public final class DemoChapters {
         return JAR_PACK.equals(packId);
     }
 
-    /**
-     * Showcase brief stays only while the showcase chapter does. Dev notes stay only while the harness
-     * chapters do. Every other scroll is pack content.
-     */
-    public static List<Scroll> filterScrolls(List<Scroll> loaded, boolean keepPlayer, boolean includeDevChapters) {
+    /** Showcase brief stays only while the showcase chapter does. Every other scroll is pack content. */
+    public static List<Scroll> filterScrolls(List<Scroll> loaded, boolean keepPlayer) {
         if (loaded == null || loaded.isEmpty()) {
             return List.of();
         }
@@ -143,12 +117,6 @@ public final class DemoChapters {
             String id = scroll.id().toString();
             if (PLAYER_SCROLLS.contains(id)) {
                 if (keepPlayer) {
-                    kept.add(scroll);
-                }
-                continue;
-            }
-            if (DEV_SCROLLS.contains(id)) {
-                if (includeDevChapters) {
                     kept.add(scroll);
                 }
                 continue;

@@ -80,7 +80,7 @@ public final class RewardFaces {
             }
             return marker("glyph", FALLBACK_GLYPH);
         } catch (RuntimeException | LinkageError noGame) {
-            // No registries (unit tests, very early client): no icon rather than a crash.
+            // No registries (very early client): no icon rather than a crash.
             return ItemStack.EMPTY;
         }
     }

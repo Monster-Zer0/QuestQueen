@@ -31,9 +31,6 @@ public final class QuestHudOverlay {
     private static Tile lastTile;
     private static boolean lastDone, lastClaimed;
     private static String lastTitle = "";
-    /** Dev runs only: a cursor position read from {@code qq-hud-hover.json}, since test drivers cannot move the cursor. */
-    private static int[] testHover;
-    private static long testHoverReadAt;
 
     /** Where the pinned quest goes; {@link #parse} reads the config word. */
     enum Anchor {
@@ -159,11 +156,6 @@ public final class QuestHudOverlay {
         }
         int mx = event.getMouseX();
         int my = event.getMouseY();
-        int[] test = testHover();
-        if (test != null) {
-            mx = test[0];
-            my = test[1];
-        }
         if (mx < lastX || mx >= lastX + lastW || my < lastY || my >= lastY + HEIGHT) {
             return;
         }
@@ -174,27 +166,6 @@ public final class QuestHudOverlay {
         Font font = Minecraft.getInstance().font;
         graphics.renderTooltip(font, details(font, lastChapter, lastTile, lastTitle, lastDone, lastClaimed), mx, my);
         pose.popPose();
-    }
-
-    private static int[] testHover() {
-        if (!QuestBookScreen.TEST_HOOKS) {
-            return null;
-        }
-        long now = System.currentTimeMillis();
-        if (now - testHoverReadAt > 250) {
-            testHoverReadAt = now;
-            testHover = null;
-            try {
-                var path = java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "qq-hud-hover.json");
-                if (java.nio.file.Files.exists(path)) {
-                    var json = com.google.gson.JsonParser.parseString(java.nio.file.Files.readString(path)).getAsJsonObject();
-                    testHover = new int[]{json.get("x").getAsInt(), json.get("y").getAsInt()};
-                }
-            } catch (Exception ignored) {
-                testHover = null;
-            }
-        }
-        return testHover;
     }
 
     /**

@@ -40,16 +40,19 @@ public final class QuestDefinitions {
     @SubscribeEvent
     public static void onAddReloadListener(AddReloadListenerEvent event) {
         event.addListener(new QuestReloadListener());
+        event.addListener(new dev.aof.questqueen.data.stage.AuthoredStages.ReloadListener());
     }
 
     @SubscribeEvent
     public static void onDatapackSync(OnDatapackSyncEvent event) {
         if (event.getPlayer() != null) {
             QuestNetwork.sendDefinitions(event.getPlayer());
+            QuestNetwork.sendAuthoredStages(event.getPlayer());
         } else {
             MinecraftServer server = event.getPlayerList().getServer();
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 QuestNetwork.sendDefinitions(player);
+                QuestNetwork.sendAuthoredStages(player);
             }
         }
     }
@@ -131,12 +134,11 @@ public final class QuestDefinitions {
             });
         }
         DemoChapters.Mode mode = DemoChapters.Mode.parse(safeDemoMode());
-        boolean includeDev = safeIncludeDev();
         DemoChapters.FilterResult filtered = DemoChapters.filter(
-                loaded, mode, includeDev, dev.aof.questqueen.compat.Stages.present());
+                loaded, mode, dev.aof.questqueen.compat.Stages.present());
         boolean hasCustom = filtered.customCount() > 0;
         boolean keepPlayer = DemoChapters.keepPlayerDemos(mode, hasCustom);
-        List<Scroll> keptScrolls = DemoChapters.filterScrolls(scrolls, keepPlayer, includeDev);
+        List<Scroll> keptScrolls = DemoChapters.filterScrolls(scrolls, keepPlayer);
         BookChrome chrome = DemoChapters.pickChrome(chromeFiles, hasCustom);
         chromeNamespace = DemoChapters.pickChromeNamespace(chromeFiles, hasCustom);
         QuestQueen.LOGGER.info("Loaded {} quest chapters, {} scrolls, sidebarTitle={} namespace={} demo={} custom={} dropped={}",
@@ -160,14 +162,6 @@ public final class QuestDefinitions {
             return QuestConfig.DEMO_CHAPTERS.get();
         } catch (Exception ignored) {
             return "auto";
-        }
-    }
-
-    private static boolean safeIncludeDev() {
-        try {
-            return QuestConfig.INCLUDE_DEV_CHAPTERS.get();
-        } catch (Exception ignored) {
-            return false;
         }
     }
 

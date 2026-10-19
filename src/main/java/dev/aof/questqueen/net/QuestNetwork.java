@@ -7,6 +7,11 @@ import dev.aof.questqueen.data.BookChrome;
 import dev.aof.questqueen.data.Chapter;
 import dev.aof.questqueen.data.QuestDefinitions;
 import dev.aof.questqueen.data.QuestPack;
+import dev.aof.questqueen.compat.StageLockCompat;
+import dev.aof.questqueen.compat.Stages;
+import dev.aof.questqueen.data.stage.AuthoredStage;
+import dev.aof.questqueen.data.stage.AuthoredStages;
+import net.minecraft.server.MinecraftServer;
 import dev.aof.questqueen.progress.ProgressService;
 import dev.aof.questqueen.progress.ProgressSnapshot;
 import dev.aof.questqueen.task.TaskHooks;
@@ -27,6 +32,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class QuestNetwork {
@@ -47,6 +53,11 @@ public final class QuestNetwork {
         registrar.playToServer(PinC2S.TYPE, PinC2S.STREAM_CODEC, QuestNetwork::handlePin);
         registrar.playToServer(AuthorSaveC2S.TYPE, AuthorSaveC2S.STREAM_CODEC, QuestNetwork::handleAuthorSave);
         registrar.playToServer(AuthorChromeC2S.TYPE, AuthorChromeC2S.STREAM_CODEC, QuestNetwork::handleAuthorChrome);
+        registrar.playToServer(AuthorStageSaveC2S.TYPE, AuthorStageSaveC2S.STREAM_CODEC, QuestNetwork::handleStageSave);
+        registrar.playToServer(AuthorStageDeleteC2S.TYPE, AuthorStageDeleteC2S.STREAM_CODEC, QuestNetwork::handleStageDelete);
+        registrar.playToServer(AuthorChapterDeleteC2S.TYPE, AuthorChapterDeleteC2S.STREAM_CODEC, QuestNetwork::handleChapterDelete);
+        registrar.playToClient(AuthorReplyS2C.TYPE, AuthorReplyS2C.STREAM_CODEC, QuestNetwork::handleAuthorReply);
+        registrar.playToClient(AuthorStagesS2C.TYPE, AuthorStagesS2C.STREAM_CODEC, QuestNetwork::handleAuthoredStages);
         registrar.playToServer(ClaimChoiceC2S.TYPE, ClaimChoiceC2S.STREAM_CODEC, QuestNetwork::handleClaim);
         registrar.playToServer(ClaimRewardsC2S.TYPE, ClaimRewardsC2S.STREAM_CODEC, QuestNetwork::handleClaimRewards);
         registrar.playToServer(ClaimAllC2S.TYPE, ClaimAllC2S.STREAM_CODEC, QuestNetwork::handleClaimAll);
@@ -77,6 +88,20 @@ public final class QuestNetwork {
 
     public static void sendEditorSession(ServerPlayer player, boolean enabled) {
         send(player, new EditorSessionS2C(enabled));
+        if (enabled) {
+            sendAuthoredStages(player);
+        }
+    }
+
+    /** The stages the editor made, for a player in an authoring session. */
+    public static void sendAuthoredStages(ServerPlayer player) {
+        if (ProgressService.canAuthor(player)) {
+            send(player, new AuthorStagesS2C(AuthoredStages.json()));
+        }
+    }
+
+    private static void sendAuthoredStagesToAll(MinecraftServer server) {
+        server.getPlayerList().getPlayers().forEach(QuestNetwork::sendAuthoredStages);
     }
 
     /**
@@ -222,6 +247,138 @@ public final class QuestNetwork {
         });
     }
 
+    private static void handleAuthoredStages(AuthorStagesS2C payload, IPayloadContext context) {
+        context.enqueueWork(() -> ClientSync.applyAuthoredStages(payload.json()));
+    }
+
+    /**
+     * Writes a stage the editor made into the authored datapack (Quest Queen's copy plus StageLock's definition and
+     * rules), then reloads so StageLock enforces it. A stage some other datapack defines is the pack's, not the
+     * editor's: saving over it would make two definitions of one id, so it is refused.
+     */
+    private static void handleStageSave(AuthorStageSaveC2S payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer player) || !ProgressService.canAuthor(player)) {
+                return;
+            }
+            try {
+                AuthoredStage stage = AuthoredStage.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(payload.json()))
+                        .getOrThrow(RuntimeException::new);
+                Optional<AuthoredStages.Entry> existing = AuthoredStages.get(stage.id());
+                if (existing.isEmpty() && Stages.backend() == Stages.Backend.STAGELOCK
+                        && StageLockCompat.serverDefinedStages().contains(stage.id())) {
+                    throw new IllegalStateException("another datapack already defines " + stage.id());
+                }
+                String namespace = existing.map(AuthoredStages.Entry::namespace).orElse(QuestDefinitions.chromeNamespace());
+                AuthoredStageFiles.write(authoredRoot(player), namespace, stage);
+                AuthoredStages.put(new AuthoredStages.Entry(stage, QuestNetwork.safeNamespace(namespace)));
+                sendAuthoredStagesToAll(player.server);
+                StageReload.request(player.server);
+                player.sendSystemMessage(Component.literal("Quest Queen: saved stage "
+                        + (stage.name().isBlank() ? stage.id() : stage.name()) + " — reloading data packs"));
+            } catch (Exception exception) {
+                QuestQueen.LOGGER.error("Failed to save authored stage", exception);
+                player.sendSystemMessage(Component.literal("Quest Queen: stage save failed — " + exception.getMessage()));
+            }
+        });
+    }
+
+    private static void handleStageDelete(AuthorStageDeleteC2S payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer player) || !ProgressService.canAuthor(player)) {
+                return;
+            }
+            String id = payload.id().trim().toLowerCase(java.util.Locale.ROOT);
+            try {
+                Optional<AuthoredStages.Entry> existing = AuthoredStages.get(id);
+                if (existing.isEmpty()) {
+                    throw new IllegalStateException(id + " was not made in the editor");
+                }
+                if (!AuthoredStageFiles.delete(authoredRoot(player), existing.get().namespace(), id)) {
+                    throw new IllegalStateException(id + " comes from another datapack; remove it there");
+                }
+                AuthoredStages.remove(id);
+                sendAuthoredStagesToAll(player.server);
+                StageReload.request(player.server);
+                player.sendSystemMessage(Component.literal("Quest Queen: deleted stage " + id + " — reloading data packs"));
+            } catch (Exception exception) {
+                QuestQueen.LOGGER.error("Failed to delete authored stage", exception);
+                player.sendSystemMessage(Component.literal("Quest Queen: stage delete failed — " + exception.getMessage()));
+            }
+        });
+    }
+
+    /**
+     * Deletes a chapter the editor made. Only the authored pack's own file goes; a chapter some other datapack
+     * defines is refused (remove it from that pack). The browser waits on the {@link AuthorReplyS2C}.
+     */
+    private static void handleChapterDelete(AuthorChapterDeleteC2S payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer player)) {
+                return;
+            }
+            if (!ProgressService.canAuthor(player)) {
+                // The browser is waiting on this answer; say why instead of leaving it to time out.
+                send(player, new AuthorReplyS2C(payload.id().trim(), false, "you can't edit quests on this server"));
+                return;
+            }
+            String raw = payload.id().trim();
+            String message;
+            boolean ok = false;
+            try {
+                ResourceLocation id = ResourceLocation.tryParse(raw);
+                if (id == null) {
+                    throw new IllegalArgumentException(raw + " is not a chapter id");
+                }
+                if (deleteAuthoredChapter(authoredRoot(player), id)) {
+                    ok = true;
+                    message = "deleted chapter " + id + " — reloading data packs";
+                    StageReload.request(player.server);
+                } else if (QuestDefinitions.chapter(id).isPresent()) {
+                    message = id + " comes from a datapack, so it can't be deleted here";
+                } else {
+                    ok = true;
+                    message = id + " was never saved";
+                }
+            } catch (Exception exception) {
+                QuestQueen.LOGGER.error("Failed to delete authored chapter", exception);
+                message = "chapter delete failed — " + exception.getMessage();
+            }
+            player.sendSystemMessage(Component.literal("Quest Queen: " + message));
+            send(player, new AuthorReplyS2C(raw, ok, message));
+        });
+    }
+
+    private static void handleAuthorReply(AuthorReplyS2C payload, IPayloadContext context) {
+        context.enqueueWork(() -> dev.aof.questqueen.client.EditorBridge.reply(payload.id(), payload.ok(), payload.message()));
+    }
+
+    /**
+     * Removes an authored chapter's file from {@code root}. False when the authored pack has no file for it (the
+     * chapter is some other datapack's). Same guards as a save: no {@code ..}, no link between the root and the
+     * file, and the file itself not a link.
+     */
+    static boolean deleteAuthoredChapter(Path root, ResourceLocation id) throws IOException {
+        Path file = authoredChapterFile(root, id);
+        if (!Files.exists(file, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return false;
+        }
+        if (Files.isSymbolicLink(file)) {
+            throw new IOException("Refusing to delete '" + id + "': " + file + " is a symbolic link");
+        }
+        Path realRoot = root.toRealPath();
+        Path realParent = file.getParent().toRealPath();
+        if (!realParent.startsWith(realRoot)) {
+            throw new IOException("Refusing to delete '" + id + "': " + realParent + " resolves outside " + realRoot);
+        }
+        Files.delete(file);
+        return true;
+    }
+
+    private static Path authoredRoot(ServerPlayer player) {
+        return player.server.getWorldPath(LevelResource.DATAPACK_DIR).resolve("questqueen_authored");
+    }
+
     private static void handleAuthorChrome(AuthorChromeC2S payload, IPayloadContext context) {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player) || !ProgressService.canAuthor(player)) {
@@ -258,7 +415,7 @@ public final class QuestNetwork {
     }
 
     /** A resource namespace: no dots-as-parents, no slashes. Anything else falls back to this mod. */
-    private static String safeNamespace(String namespace) {
+    static String safeNamespace(String namespace) {
         if (namespace == null || !namespace.matches("[a-z0-9_.-]+") || hasDotDotSegment(namespace)) {
             return QuestQueen.MODID;
         }
@@ -272,7 +429,7 @@ public final class QuestNetwork {
     /**
      * Writes an authored chapter into {@code root} — the {@code questqueen_authored} datapack folder —
      * and returns the file it landed in. No {@code ServerPlayer} is needed here, so the confinement
-     * below can be attacked from a unit test rather than argued about.
+     * below can be checked on its own.
      *
      * <p>Ordering is the W-2 fix: the id is resolved and refused BEFORE anything is created, and every
      * level this call creates is recorded, so a refused or failed save removes its own traces.
@@ -292,7 +449,7 @@ public final class QuestNetwork {
     }
 
     /** The containment-checked, rolled-back write shared by chapters and the book chrome. */
-    private static Path writeAuthoredJson(Path root, Path file, String what, String json) throws Exception {
+    static Path writeAuthoredJson(Path root, Path file, String what, String json) throws Exception {
         List<Path> created = new ArrayList<>();
         Path wroteMcmeta = null;
         boolean fileExisted = false;

@@ -107,6 +107,7 @@ export function wireItemSelects(
           event.stopPropagation();
           setValue(option.dataset.id ?? "");
           panel.hidden = true;
+          trigger.focus();
         });
       });
     };
@@ -128,6 +129,39 @@ export function wireItemSelects(
     });
 
     filter.addEventListener("input", () => renderList());
+    // The keyboard works like the stage picker's: Enter takes the first match, Escape closes, arrows walk the list.
+    const close = () => {
+      panel.hidden = true;
+      trigger.focus();
+    };
+    filter.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        list.querySelector<HTMLButtonElement>(".item-select-option")?.click();
+        trigger.focus();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        close();
+      } else if (event.key === "ArrowDown") {
+        event.preventDefault();
+        list.querySelector<HTMLButtonElement>(".item-select-option")?.focus();
+      }
+    });
+    list.addEventListener("keydown", (event) => {
+      const options = [...list.querySelectorAll<HTMLButtonElement>(".item-select-option")];
+      const at = options.indexOf(document.activeElement as HTMLButtonElement);
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const next = at + (event.key === "ArrowDown" ? 1 : -1);
+        if (next < 0) filter.focus();
+        else options[Math.min(next, options.length - 1)]?.focus();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        close();
+      }
+    });
     filter.addEventListener("mousedown", (event) => event.stopPropagation());
     panel.addEventListener("mousedown", (event) => event.stopPropagation());
   });

@@ -50,7 +50,7 @@ public final class QuestQueenCommands {
         register(event.getDispatcher());
     }
 
-    /** The whole command tree; split from the event so tests can build it and read its permission gates. */
+    /** The whole command tree, split from the event so it can be built on its own. */
     static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("questqueen")
                 // Teams come from FTB Teams. Quest Queen's own invite/accept teams are gone; this only says where to look.

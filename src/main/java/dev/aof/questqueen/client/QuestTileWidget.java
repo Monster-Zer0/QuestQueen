@@ -745,7 +745,7 @@ public final class QuestTileWidget extends AbstractWidget {
 
     /**
      * Marked truncation. Marker reserved before the shrink so the last line
-     * ends with {@link #TRUNCATION_MARKER}. Width-function seam for headless tests.
+     * ends with {@link #TRUNCATION_MARKER}. The width function is a parameter, so no font is needed.
      */
     static List<String> wrapTiny(ToIntFunction<String> widthOf, String text, int visualMax, int maxLines) {
         String upper = text == null ? "" : text.toUpperCase(Locale.ROOT).trim();

@@ -624,8 +624,8 @@ public final class TaskHooks {
     /**
      * One ERROR line per malformed kill task, on every pack apply. The contract: a kill task must carry
      * {@code entity} and/or {@code tag}, and a named {@code entity} must be a registered entity type.
-     * Every line starts with the stable prefix "kill-task contract violation" so a pack author (and a
-     * test) can grep the load log and the defect cannot come back silently. Tag existence is not checked:
+     * Every line starts with the stable prefix "kill-task contract violation" so a pack author can grep
+     * the load log and the defect cannot come back silently. Tag existence is not checked:
      * the entity-type tag bindings are not reliably readable from the apply path, so an undefined tag is
      * documented rather than rejected — an empty tag matches nothing, same as any other empty tag.
      */
@@ -778,8 +778,7 @@ public final class TaskHooks {
 
     /**
      * True while this exact task is still worth scanning: neither its tile nor the task index itself is
-     * complete. Extracted from {@code forEachOfTypes} so the gate that every one of the nineteen task types
-     * passes through is covered by a test rather than only by play.
+     * complete. Extracted from {@code forEachOfTypes}: every one of the nineteen task types passes through it.
      */
     static boolean stillOpen(ProgressSnapshot snap, Chapter chapter, Tile tile, int taskIndex) {
         String questKey = ProgressSnapshot.questKey(chapter.id(), tile.id());

@@ -78,45 +78,45 @@ public class QuestBookScreen extends Screen {
         return TILE_STEPS[0] / (float) TILE;
     }
     public static final int SIDEBAR = 148;
-    private static final int SIDEBAR_MIN = 96;
+    static final int SIDEBAR_MIN = 96;
     private static final int SIDEBAR_MAX = 260;
     static final int TAB_W = 12;
     static final int TAB_H = 36;
     static final int TOP_H = 26;
     private static final int FIT_S = 14;
-    private static final int LOG_W = 48;
+    static final int LOG_W = 48;
     private static int savedSidebarW = SIDEBAR;
     private static boolean savedSidebarCollapsed;
     public static final ResourceLocation FONT_ID = QuestQueen.id("questqueen");
 
-    private Chapter chapter;
-    private double cameraX = -2 * STRIDE;
-    private double cameraY = -2 * STRIDE;
+    Chapter chapter;
+    double cameraX = -2 * STRIDE;
+    double cameraY = -2 * STRIDE;
     private float zoom = 1f;
-    private String selectedId = "";
-    private boolean expanded;
-    private boolean logOpen;
+    String selectedId = "";
+    boolean expanded;
+    boolean logOpen;
     private float bounce;
     private boolean dragging;
     private boolean resizingSidebar;
     private int sidebarW = savedSidebarW;
-    private boolean sidebarCollapsed = savedSidebarCollapsed;
-    private int sidebarScroll;
+    boolean sidebarCollapsed = savedSidebarCollapsed;
+    int sidebarScroll;
     private int sidebarListH;
-    private int introBodyScroll;
-    private int introBodyContentH;
+    int introBodyScroll;
+    int introBodyContentH;
     private String sidebarHoverTitle = "";
     private final Map<ResourceLocation, int[]> introTexSize = new HashMap<>();
     private double lastMx;
     private double lastMy;
-    private EditBox search;
-    private final List<SearchHit> searchHits = new ArrayList<>();
-    private int searchIndex;
+    EditBox search;
+    final List<SearchHit> searchHits = new ArrayList<>();
+    int searchIndex;
     private static final int SEARCH_HIT_CAP = 12;
     private static final int SEARCH_ROW_H = 14;
-    private ModalKind modal = ModalKind.NONE;
-    private String modalTileId = "";
-    private final List<SidebarRow> sidebarRows = new ArrayList<>();
+    ModalKind modal = ModalKind.NONE;
+    String modalTileId = "";
+    final List<SidebarRow> sidebarRows = new ArrayList<>();
     private boolean bookScaleApplied;
     private boolean closing;
 
@@ -127,27 +127,26 @@ public class QuestBookScreen extends Screen {
      */
     private boolean freshOpen = true;
 
-    /** Probe-only (F8 clause 7): total init() invocations in this client, for the init-count test. */
-    private static int INIT_COUNT;
-    private final List<QuestTileWidget> tileWidgets = new ArrayList<>();
-    private final QuestOverlayWidget inspectPanel = new QuestOverlayWidget();
-    private final QuestOverlayWidget modalPanel = new QuestOverlayWidget();
+    /** Total init() invocations in this client, logged with each init. */
+    static int INIT_COUNT;
+    final List<QuestTileWidget> tileWidgets = new ArrayList<>();
+    final QuestOverlayWidget inspectPanel = new QuestOverlayWidget();
+    final QuestOverlayWidget modalPanel = new QuestOverlayWidget();
     private static String pendingTileId = "";
     private static boolean pendingExpanded;
     private static final Set<String> collapsedChapters = new HashSet<>();
     /** Persisted inspect drag offset while a quest is pinned (chapter/tile key). */
     private static final Map<String, int[]> PINNED_CARD_OFFSET = new HashMap<>();
     private boolean draggingInspect;
-    private int inspectOffX;
-    private int inspectOffY;
+    int inspectOffX;
+    int inspectOffY;
     /** XOR parents whose modal was dismissed. Fork debt stays until a child completes. */
-    private final Set<String> xorDismissed = new HashSet<>();
+    final Set<String> xorDismissed = new HashSet<>();
     /** Choice reward option picked on the card (by its icon) and the tile it belongs to; TAKE sends it. */
-    private String choicePickTile = "";
-    private int choicePick = -1;
+    String choicePickTile = "";
+    int choicePick = -1;
     /** The pinned card was closed with its X: the quest stays pinned (HUD), the card stays shut until reopened. */
     private boolean pinnedCardHidden;
-    /** Marionette / probe hover — sticky until cleared so a screenshot can catch the lock. */
     private static final int[][] EMPTY_PORTS = new int[0][];
     private boolean widgetsDirty = true;
     private int lastSyncCamSx = Integer.MIN_VALUE;
@@ -168,21 +167,14 @@ public class QuestBookScreen extends Screen {
     private ProgressSnapshot occupiedProgress;
     private ResourceLocation occupiedChapterId;
     private int occupiedTileCount = -1;
-    private int hoverOverrideX = Integer.MIN_VALUE;
     /** The last input was a key: the selected tile shows a focus ring. A mouse move turns it off. */
-    private boolean keyboardMode;
+    boolean keyboardMode;
     /** Keyboard focus is inside the open card, on {@link #cardFocusIndex} of {@link #cardTargets()}. */
-    private boolean cardFocus;
-    private int cardFocusIndex;
+    boolean cardFocus;
+    int cardFocusIndex;
     /** The key help panel (help key, or a click on the keyboard icon). */
-    private boolean helpOpen;
-    private static final int KEYS_S = 14;
-    /**
-     * Dev runs only: key codes a stand-in "other mod" listener saw on this screen, to prove Quest Queen's keys
-     * never reach other mods (see {@code QuestQueenClient}).
-     */
-    public static final List<Integer> OTHER_MOD_KEYS = java.util.Collections.synchronizedList(new ArrayList<>());
-    private int hoverOverrideY = Integer.MIN_VALUE;
+    boolean helpOpen;
+    static final int KEYS_S = 14;
     /** Soft fade-lock padlock after GOTCHA cap (screen-space, tile center or sidebar row). */
     private int fadeLockX;
     private int fadeLockY;
@@ -270,15 +262,15 @@ public class QuestBookScreen extends Screen {
     private static final long LOG_DRAWER_MS = 220L;
     private static final long PIN_FLASH_MS = 320L;
     /** Target icons painted on the inspect card this frame: drives their tooltip and the JEI click. */
-    private final List<TaskIconHit> taskIconHits = new ArrayList<>();
+    final List<TaskIconHit> taskIconHits = new ArrayList<>();
     /** Advancement task rows on the open card (icon and label), for the advancement hover. */
-    private record AdvancementHit(int x, int y, int w, int h, net.minecraft.resources.ResourceLocation id) {
+    record AdvancementHit(int x, int y, int w, int h, net.minecraft.resources.ResourceLocation id) {
         boolean over(double mouseX, double mouseY) {
             return mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
         }
     }
 
-    private final List<AdvancementHit> advancementHits = new ArrayList<>();
+    final List<AdvancementHit> advancementHits = new ArrayList<>();
     /** UNLOCKS chips painted on the inspect card this frame. */
     private final List<UnlockHit> unlockHits = new ArrayList<>();
     /** Cap on task rows drawn on the inspect card; matches the authoring cap. */
@@ -312,27 +304,27 @@ public class QuestBookScreen extends Screen {
     static final int REWARD_GAP = 6;
     static final int BUTTON_GAP = 4;
     /** Task rows actually drawn on the last card paint, after the space budget was applied. */
-    private int drawnTaskRows;
-    /** Body-line budget the last card paint used, reported by the probe. */
-    private int lastBodyBudget;
+    int drawnTaskRows;
+    /** Body-line budget the last card paint used. */
+    int lastBodyBudget;
     /** Log view scroll offset in pixels, and the measured content height that bounds it. */
     private int logScroll;
     private int logContentH;
     /** Scroll offset for the CLAIM ALL preview list. */
     private int claimAllScroll;
     /** Description scroll in the card (per open quest) and the viewport the wheel scrolls, as last painted. */
-    private int descScroll;
+    int descScroll;
     private String descScrollKey = "";
-    private int descContentH;
-    private int descViewH;
+    int descContentH;
+    int descViewH;
     private int descX;
     private int descY;
     private int descW;
-    private final List<RichDraw.ItemHit> descItemHits = new ArrayList<>();
+    final List<RichDraw.ItemHit> descItemHits = new ArrayList<>();
     /** The expanded reader window: its own scroll, measured content and painted item icons. */
-    private int readerScroll;
-    private int readerContentH;
-    private int readerViewH;
+    int readerScroll;
+    int readerContentH;
+    int readerViewH;
     private boolean draggingReaderThumb;
     /** Dragging the chapter intro's scrollbar. */
     private boolean draggingIntroThumb;
@@ -357,7 +349,7 @@ public class QuestBookScreen extends Screen {
         }
     };
 
-    private enum ModalKind { NONE, GOTCHA, XOR, CLAIM_ALL, READER }
+    enum ModalKind { NONE, GOTCHA, XOR, CLAIM_ALL, READER }
 
     /**
      * Where the card footer puts things: reward slots left to right from the content inset, buttons right-aligned
@@ -435,7 +427,7 @@ public class QuestBookScreen extends Screen {
     private record SearchHit(ResourceLocation chapterId, String tileId, String title, String chapterTitle) {
     }
 
-    private record PathArrow(String from, String to, int x, int y, boolean locked, int color) {
+    record PathArrow(String from, String to, int x, int y, boolean locked, int color) {
     }
 
     /**
@@ -463,12 +455,12 @@ public class QuestBookScreen extends Screen {
      * {@code stacks} holds the members actually painted (at most {@link #MOSAIC_MAX}); {@code tagMembers} is
      * the tag's true size, or 0 when this is not a tag row, so the tooltip can say how many were hidden.
      */
-    private record TaskIconHit(int x, int y, int w, int h, int taskIndex, List<ItemStack> stacks, int tagMembers) {
+    record TaskIconHit(int x, int y, int w, int h, int taskIndex, List<ItemStack> stacks, int tagMembers) {
         boolean over(double mouseX, double mouseY) {
             return mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
         }
 
-        /** Centre of the painted strip, for the harness's synthetic click. */
+        /** Centre of the painted strip. */
         int centreX() {
             return x + Math.max(1, w) / 2;
         }
@@ -651,7 +643,7 @@ public class QuestBookScreen extends Screen {
         return ClientQuestState.isPinned(chapter, tile);
     }
 
-    private String inspectTileId() {
+    String inspectTileId() {
         if (!pinnedCardHidden && ClientQuestState.hasPin()
                 && ClientQuestState.progress.pinChapter().orElse("").equals(chapter.id().toString())) {
             String pinTile = ClientQuestState.progress.pinTile().orElse("");
@@ -662,7 +654,7 @@ public class QuestBookScreen extends Screen {
         return selectedId;
     }
 
-    private boolean showInspectPanel() {
+    boolean showInspectPanel() {
         return !isIntroChapter() && !logOpen && modal == ModalKind.NONE && !inspectTileId().isEmpty()
                 && (expanded || (!pinnedCardHidden && ClientQuestState.hasPin()
                 && ClientQuestState.progress.pinChapter().orElse("").equals(chapter.id().toString())));
@@ -678,11 +670,11 @@ public class QuestBookScreen extends Screen {
                 && !xorDismissed.contains(ClientQuestState.xorKey(chapter, tile.id()));
     }
 
-    private boolean isIntroChapter() {
+    boolean isIntroChapter() {
         return ClientQuestState.isIntroChapter(chapter);
     }
 
-    private void dismissModal() {
+    void dismissModal() {
         if (modal == ModalKind.XOR && !modalTileId.isEmpty()) {
             xorDismissed.add(ClientQuestState.xorKey(chapter, modalTileId));
         }
@@ -693,13 +685,13 @@ public class QuestBookScreen extends Screen {
         draggingReaderThumb = false;
     }
 
-    /** Locked sidebar / probe chapter — GOTCHA or fade-lock after the cap. */
-    private void showLockedChapterCue() {
+    /** Locked sidebar chapter — GOTCHA or fade-lock after the cap. */
+    void showLockedChapterCue() {
         int[] pos = lockedChapterCuePos(null);
         cueLocked("", pos[0], pos[1]);
     }
 
-    private void showLockedChapterCue(ResourceLocation chapterId) {
+    void showLockedChapterCue(ResourceLocation chapterId) {
         int[] pos = lockedChapterCuePos(chapterId);
         cueLocked("", pos[0], pos[1]);
     }
@@ -880,7 +872,7 @@ public class QuestBookScreen extends Screen {
      * tie-breaker. The floor is the smallest rung (0.5, 32 px tiles): play testing asked to see more of a
      * wide chapter at once, and at that rung tiles keep their icon, rail and claim wash but drop secondary text.
      */
-    private void fitAllContent() {
+    void fitAllContent() {
         int minX = chapter.tiles().stream().mapToInt(t -> t.pos().x()).min().orElse(0);
         int minY = chapter.tiles().stream().mapToInt(t -> t.pos().y()).min().orElse(0);
         int maxX = chapter.tiles().stream().mapToInt(t -> t.pos().x()).max().orElse(0);
@@ -916,7 +908,7 @@ public class QuestBookScreen extends Screen {
             cameraX = choice.camSx() / zoom;
             cameraY = choice.camSy() / zoom;
         }
-        // cam is the WORLD-UNIT camera the drag and probe paths also write; camSx/camSy are the rounded
+        // cam is the WORLD-UNIT camera the drag path also writes; camSx/camSy are the rounded
         // SCREEN pixels the renderer places tiles with and the hit test maps against. Logging only one of
         // the two is what made the earlier fit lines impossible for a reviewer to check (Troi's E1).
         QuestQueen.LOGGER.info("Quest book fit chapter={} zoom={} cam=({}, {}) [world px; screen px {}x{}]"
@@ -1049,11 +1041,11 @@ public class QuestBookScreen extends Screen {
      * the cue reports (Troi's F4 follow-up 2). {@link FitCamera#visibleCount} keeps the stricter
      * wholly-visible meaning used for scoring.
      */
-    private int inViewTileCount() {
+    int inViewTileCount() {
         return FitCamera.inViewCount(fitCells(), camSx(), camSy(), fitView());
     }
 
-    private void setZoom(float next) {
+    void setZoom(float next) {
         int want = Math.round(TILE * next);
         int[] steps = tileSteps();
         int chosen = steps[0];
@@ -1104,7 +1096,7 @@ public class QuestBookScreen extends Screen {
         zoom = steps[idx] / (float) TILE;
     }
 
-    private int tilePx() {
+    int tilePx() {
         int raw = Math.round(TILE * zoom);
         int[] steps = tileSteps();
         int chosen = steps[0];
@@ -1141,7 +1133,7 @@ public class QuestBookScreen extends Screen {
         return (int) Math.round(cameraY * zoom);
     }
 
-    private void rebuildTileWidgets() {
+    void rebuildTileWidgets() {
         for (QuestTileWidget widget : tileWidgets) {
             removeWidget(widget);
         }
@@ -1260,7 +1252,7 @@ public class QuestBookScreen extends Screen {
         syncOverlays();
     }
 
-    private void syncOverlays() {
+    void syncOverlays() {
         String inspectId = drawingInspectTileId();
         boolean showInspect = drawingInspect();
         int accent = QuestColors.CURRENT;
@@ -1389,7 +1381,7 @@ public class QuestBookScreen extends Screen {
         return edge != 0 ? headerLabel(visual, tile) : "";
     }
 
-    private int headerEdge(Tile tile, TileVisual visual) {
+    int headerEdge(Tile tile, TileVisual visual) {
         if (showsChoosePath(tile, visual)) {
             return QuestColors.XOR_EDGE;
         }
@@ -1557,7 +1549,6 @@ public class QuestBookScreen extends Screen {
         }
         ClientQuestState.chapter(chapter.id()).ifPresent(updated -> chapter = updated);
         layoutSearch();
-        drainTestClick();
     }
 
     @Override
@@ -1656,9 +1647,9 @@ public class QuestBookScreen extends Screen {
                         MockChrome.frame(graphics, f.x() - 1, f.y() - 1, f.w() + 2, f.h() + 2, UiFx.withAlpha(QuestColors.EDIT, 0.4f));
                     });
                     int tipX = focus.map(FocusTarget::centreX)
-                            .orElse(hoverOverrideX != Integer.MIN_VALUE ? hoverOverrideX : mouseX);
+                            .orElse(mouseX);
                     int tipY = focus.map(FocusTarget::centreY)
-                            .orElse(hoverOverrideY != Integer.MIN_VALUE ? hoverOverrideY : mouseY);
+                            .orElse(mouseY);
                     drawInspectTooltips(graphics, tipX, tipY);
                     pose.popPose();
                 }
@@ -1697,8 +1688,8 @@ public class QuestBookScreen extends Screen {
                 drawSidebarTitle(graphics);
                 pose.popPose();
             }
-            int keyHx = hoverOverrideX != Integer.MIN_VALUE ? hoverOverrideX : mouseX;
-            int keyHy = hoverOverrideY != Integer.MIN_VALUE ? hoverOverrideY : mouseY;
+            int keyHx = mouseX;
+            int keyHy = mouseY;
             if (!logOpen && !helpOpen && keyHelpIconShown() && over(keysX(), 6, KEYS_S, KEYS_S, keyHx, keyHy)) {
                 var pose = graphics.pose();
                 pose.pushPose();
@@ -1803,7 +1794,7 @@ public class QuestBookScreen extends Screen {
     }
 
     /** A footer reward icon. {@code option} is its index in a choice reward's options, or -1. */
-    private record RewardSlot(Reward reward, ItemStack face, int option) {
+    record RewardSlot(Reward reward, ItemStack face, int option) {
         RewardSlot(Reward reward, ItemStack face) {
             this(reward, face, -1);
         }
@@ -1833,7 +1824,7 @@ public class QuestBookScreen extends Screen {
         }
     }
 
-    private List<ItemStack> collectRewardFaces(Tile tile) {
+    List<ItemStack> collectRewardFaces(Tile tile) {
         List<ItemStack> faces = new ArrayList<>();
         for (RewardSlot slot : collectRewardSlots(tile)) {
             faces.add(slot.face());
@@ -1842,7 +1833,7 @@ public class QuestBookScreen extends Screen {
     }
 
     /** Board / inspect / log face — RewardIcons so XP / toast / stage / loot never leave a blank strip. */
-    private static ItemStack rewardFace(Reward reward) {
+    static ItemStack rewardFace(Reward reward) {
         if (reward == null) {
             return ItemStack.EMPTY;
         }
@@ -1855,9 +1846,9 @@ public class QuestBookScreen extends Screen {
                 .orElse(ItemStack.EMPTY);
     }
 
-    private void applyPathHover(int mouseX, int mouseY) {
-        int hx = hoverOverrideX != Integer.MIN_VALUE ? hoverOverrideX : mouseX;
-        int hy = hoverOverrideY != Integer.MIN_VALUE ? hoverOverrideY : mouseY;
+    void applyPathHover(int mouseX, int mouseY) {
+        int hx = mouseX;
+        int hy = mouseY;
         for (QuestTileWidget widget : tileWidgets) {
             widget.setHover(hx, hy);
         }
@@ -2133,11 +2124,11 @@ public class QuestBookScreen extends Screen {
         return sidebarRowFullyInside(row.y(), SIDEBAR_ROW_H, TOP_H, height);
     }
 
-    private int sidebarMaxScroll() {
+    int sidebarMaxScroll() {
         return sidebarMaxScrollFor(sidebarListH, height);
     }
 
-    private void clampSidebarScroll() {
+    void clampSidebarScroll() {
         sidebarScroll = Math.max(0, Math.min(sidebarScroll, sidebarMaxScroll()));
     }
 
@@ -2174,7 +2165,7 @@ public class QuestBookScreen extends Screen {
         }
     }
 
-    private void rebuildSidebarRows() {
+    void rebuildSidebarRows() {
         sidebarRows.clear();
         int y = TOP_H + 8 - sidebarScroll;
         for (ChapterTree.Node node : ClientQuestState.chapterTreeRoots()) {
@@ -2255,7 +2246,7 @@ public class QuestBookScreen extends Screen {
         return ClientQuestState.pack == null ? BookChrome.DEFAULT : ClientQuestState.pack.chrome();
     }
 
-    private BookChrome resolveChrome() {
+    BookChrome resolveChrome() {
         BookChrome pack = packChrome();
         String title = QuestConfig.SIDEBAR_TITLE.get();
         if (title == null || title.isBlank()) {
@@ -2289,7 +2280,7 @@ public class QuestBookScreen extends Screen {
         return new BookChrome(title, color, scale, shadow, pack.titleUppercase());
     }
 
-    private void applyChrome(BookChrome next) {
+    void applyChrome(BookChrome next) {
         BookChrome chrome = next == null ? BookChrome.DEFAULT : next;
         ClientQuestState.pack = ClientQuestState.pack.withChrome(chrome);
         QuestConfig.SIDEBAR_TITLE.set(chrome.sidebarTitle());
@@ -2531,7 +2522,7 @@ public class QuestBookScreen extends Screen {
         return new int[]{x, y};
     }
 
-    private int[][] tilePorts(Tile tile, TileVisual visual, int ox, int oy, int size) {
+    int[][] tilePorts(Tile tile, TileVisual visual, int ox, int oy, int size) {
         List<int[]> ports = new ArrayList<>();
         boolean lockedPlay = visual == TileVisual.LOCKED;
         if (!lockedPlay) {
@@ -2569,7 +2560,7 @@ public class QuestBookScreen extends Screen {
         return ports.toArray(new int[0][]);
     }
 
-    private List<PathArrow> collectPathArrows() {
+    List<PathArrow> collectPathArrows() {
         List<PathArrow> arrows = new ArrayList<>();
         int size = tilePx();
         for (Tile tile : chapter.tiles()) {
@@ -3038,13 +3029,13 @@ public class QuestBookScreen extends Screen {
         pose.popPose();
     }
 
-    private record ModalLayout(int x, int y, int w, int h, int btnX, int btnY, int btnW, int btnH,
+    record ModalLayout(int x, int y, int w, int h, int btnX, int btnY, int btnW, int btnH,
                                int cancelX, int cancelW,
                                int headerW, int edge, String tag, String title, String sub, String btn,
                                List<String> body, int bodyTop, int bodyH) {
     }
 
-    private ModalLayout modalLayout() {
+    ModalLayout modalLayout() {
         if (modal == ModalKind.CLAIM_ALL) {
             return claimAllLayout();
         }
@@ -3270,7 +3261,7 @@ public class QuestBookScreen extends Screen {
     /** An item in a description: its tooltip, plus how to look it up when a recipe viewer is installed. */
     private void renderDescItemTooltip(GuiGraphics graphics, RichDraw.ItemHit hit, int mouseX, int mouseY) {
         List<Component> lines = new ArrayList<>(Screen.getTooltipFromItem(minecraft, hit.stack()));
-        if (RecipeViewer.available()) {
+        if (viewerAvailable()) {
             lines.add(Component.literal(TaskVerbs.translate("questqueen.desc.lookup",
                     "Left-click: recipe   Right-click: uses")).withStyle(ChatFormatting.DARK_GRAY));
         }
@@ -3282,19 +3273,19 @@ public class QuestBookScreen extends Screen {
      * installed recipe viewer. False when nothing was hit or no viewer is installed (the icons stay hover-only).
      */
     private boolean clickDescItem(List<RichDraw.ItemHit> hits, double mouseX, double mouseY, int button) {
-        if (!RecipeViewer.available() || (button != 0 && button != 1)) {
+        if (!viewerAvailable() || (button != 0 && button != 1)) {
             return false;
         }
         for (RichDraw.ItemHit hit : hits) {
             if (over(hit.x(), hit.y(), hit.w(), hit.h(), mouseX, mouseY)) {
-                RecipeViewer.show(hit.stack(), button == 0);
+                viewerShow(hit.stack(), button == 0);
                 return true;
             }
         }
         return false;
     }
 
-    private void openReader(String tileId) {
+    void openReader(String tileId) {
         readerScroll = 0;
         readerContentH = 0;
         readerViewH = 0;
@@ -3302,7 +3293,7 @@ public class QuestBookScreen extends Screen {
     }
 
     /** The wheel, in pixels, for the reader when it is open and for the card's description otherwise. */
-    private void scrollDescription(int pixels) {
+    void scrollDescription(int pixels) {
         if (modal == ModalKind.READER) {
             readerScroll = RichLayout.clampScroll(readerScroll + pixels, readerContentH, readerViewH);
         } else {
@@ -3884,7 +3875,7 @@ public class QuestBookScreen extends Screen {
     }
 
     /** Reward slots for the footer; a reward set with no item faces still shows the first reward's face. */
-    private List<RewardSlot> footerSlots(Tile tile) {
+    List<RewardSlot> footerSlots(Tile tile) {
         List<RewardSlot> slots = collectRewardSlots(tile);
         if (slots.isEmpty() && tile != null && !tile.rewards().isEmpty()) {
             ItemStack one = rewardFace(tile.rewards().getFirst());
@@ -4001,7 +3992,7 @@ public class QuestBookScreen extends Screen {
             } else {
                 lines.add(hit.stack().getHoverName());
             }
-            if (RecipeViewer.available()) {
+            if (viewerAvailable()) {
                 Optional<Task> task = taskAtIndex(hit.taskIndex());
                 boolean recipe = task.map(QuestBookScreen::opensRecipe).orElse(false);
                 String hint = hit.isTag()
@@ -4034,7 +4025,7 @@ public class QuestBookScreen extends Screen {
     }
 
     /** Open the clicked task's target in the pack's recipe viewer: recipes for "make/find", usages otherwise. */
-    private void openInJei(int taskIndex) {
+    void openInJei(int taskIndex) {
         Optional<Task> task = taskAtIndex(taskIndex);
         if (task.isEmpty()) {
             return;
@@ -4047,7 +4038,7 @@ public class QuestBookScreen extends Screen {
         if (stack.isEmpty()) {
             return;
         }
-        if (!RecipeViewer.show(stack, opensRecipe(task.get())) && minecraft != null && minecraft.player != null) {
+        if (!viewerShow(stack, opensRecipe(task.get())) && minecraft != null && minecraft.player != null) {
             String name = RecipeViewer.label();
             minecraft.player.displayClientMessage(
                     Component.literal(RecipeViewer.loaded()
@@ -4161,7 +4152,7 @@ public class QuestBookScreen extends Screen {
     }
 
     /** Y of the footer's reward icons. The footer is pinned to the card bottom, as the draw puts it. */
-    private int inspectFootY(Tile tile, int x, int y, int w, int h) {
+    int inspectFootY(Tile tile, int x, int y, int w, int h) {
         return y + h - FOOTER_FROM_BOTTOM;
     }
 
@@ -4195,7 +4186,7 @@ public class QuestBookScreen extends Screen {
         graphics.drawString(font, label, tx, bar.y() + Math.max(1, (12 - 8) / 2), ink, false);
     }
 
-    private record PlayBar(boolean action, boolean choice, boolean pin, boolean pinned, String actionLabel, boolean claimedBadge,
+    record PlayBar(boolean action, boolean choice, boolean pin, boolean pinned, String actionLabel, boolean claimedBadge,
                            int y, int actionX, int actionW,
                            int choiceX, int choiceW, int pinX, int pinW, FooterLayout layout) {
     }
@@ -4222,7 +4213,7 @@ public class QuestBookScreen extends Screen {
                 && !ClientQuestState.isConcealed(chapter, tile);
     }
 
-    private PlayBar playBar(Tile tile, int x, int y, int w, int h) {
+    PlayBar playBar(Tile tile, int x, int y, int w, int h) {
         if (!tileInteractive(tile)) {
             FooterLayout layout = footerLayout(x, w, rewardSlotWidths(tile), 0, 0, 0, overflowWidth(tile));
             return new PlayBar(false, false, false, false, "", false, y + h - 16, x + w - CARD_PAD, 0,
@@ -4939,7 +4930,7 @@ public class QuestBookScreen extends Screen {
     // ---- focus inside the card ----------------------------------------------------------------------------
 
     /** A part of the open card the keyboard can focus: where it is, and the item it stands for (if any). */
-    private record FocusTarget(int x, int y, int w, int h, ItemStack stack) {
+    record FocusTarget(int x, int y, int w, int h, ItemStack stack) {
         int centreX() {
             return x + w / 2;
         }
@@ -4953,7 +4944,7 @@ public class QuestBookScreen extends Screen {
      * The open card's focusable parts, as painted last frame: description items and recipe slots, task rows,
      * what the quest unlocks, reward slots, then the action, choice, pin and expand buttons.
      */
-    private List<FocusTarget> cardTargets() {
+    List<FocusTarget> cardTargets() {
         List<FocusTarget> out = new ArrayList<>();
         if (!showInspectPanel()) {
             return out;
@@ -5007,7 +4998,7 @@ public class QuestBookScreen extends Screen {
         return out;
     }
 
-    private Optional<FocusTarget> focusedTarget() {
+    Optional<FocusTarget> focusedTarget() {
         if (!cardFocus) {
             return Optional.empty();
         }
@@ -5049,7 +5040,7 @@ public class QuestBookScreen extends Screen {
         } else if (is(QuestKeybinds.RECIPES, keyCode, scanCode, mods) || is(QuestKeybinds.USES, keyCode, scanCode, mods)) {
             if (!f.stack().isEmpty()) {
                 boolean recipes = is(QuestKeybinds.RECIPES, keyCode, scanCode, mods);
-                if (!RecipeViewer.show(f.stack(), recipes) && minecraft != null && minecraft.player != null) {
+                if (!viewerShow(f.stack(), recipes) && minecraft != null && minecraft.player != null) {
                     minecraft.player.displayClientMessage(Component.literal(RecipeViewer.loaded()
                             ? RecipeViewer.label() + " could not open that item right now."
                             : "Install EMI, REI, or JEI to look up items."), true);
@@ -5098,13 +5089,13 @@ public class QuestBookScreen extends Screen {
         }
     }
 
-    private int keysX() {
+    int keysX() {
         int right = isIntroChapter() ? logX() : fitX();
         return right - 6 - KEYS_S;
     }
 
     /** "Up Arrow / Down Arrow …" for a help row, as the keys are bound now. */
-    private static String bindingText(QuestKeybinds.HelpRow row) {
+    static String bindingText(QuestKeybinds.HelpRow row) {
         if (row.mappings().isEmpty()) {
             return "Esc";
         }
@@ -5532,7 +5523,7 @@ public class QuestBookScreen extends Screen {
     }
 
     /** The choice option picked on this tile's card, or -1 before the player picks one. */
-    private int choicePick(Tile tile) {
+    int choicePick(Tile tile) {
         return tile.id().equals(choicePickTile) ? choicePick : -1;
     }
 
@@ -5605,11 +5596,11 @@ public class QuestBookScreen extends Screen {
         return false;
     }
 
-    private void openChapter(ResourceLocation id) {
+    void openChapter(ResourceLocation id) {
         openChapter(id, "");
     }
 
-    private void openChapter(ResourceLocation id, String tileId) {
+    void openChapter(ResourceLocation id, String tileId) {
         ClientQuestState.chapter(id).ifPresent(next -> {
             if (!ClientQuestState.isChapterListed(next)) {
                 return;
@@ -5653,12 +5644,12 @@ public class QuestBookScreen extends Screen {
      * both drew over it and stole the clicks (the sidebar hit-test runs first), so the task icons and labels
      * in that strip were unusable. Scaling keeps every element inside the board and proportional.
      */
-    private float cardScale() {
+    float cardScale() {
         int avail = Math.max(1, width - boardLeft() - 16);
         return UiFx.clamp01(Math.min(1f, avail / (float) CARD_W_BASE));
     }
 
-    private int cardW() {
+    int cardW() {
         return Math.max(96, Math.round(CARD_W_BASE * cardScale()));
     }
 
@@ -5672,7 +5663,7 @@ public class QuestBookScreen extends Screen {
         return Math.max(2, Math.min(Math.max(0, ideal), Math.max(0, byTitle)));
     }
 
-    private int cardH() {
+    int cardH() {
         // Size against the visible inspect tile (pin may keep the card open while selectedId is cleared).
         Tile tile = chapter.tile(inspectTileId()).orElse(null);
         if (tile == null) {
@@ -5696,7 +5687,7 @@ public class QuestBookScreen extends Screen {
         return Math.max(1, wrapLines(text, max).size());
     }
 
-    private int cardX() {
+    int cardX() {
         int minX = boardLeft() + 8;
         int x = width - cardW() - 16 + inspectOffX;
         // Keep inspect fully on the board (Jerry: was behind sidebar).
@@ -5710,7 +5701,7 @@ public class QuestBookScreen extends Screen {
         return Math.max(minX, Math.min(maxX, x));
     }
 
-    private int cardY() {
+    int cardY() {
         int y = 28 + inspectOffY;
         return Math.max(4, Math.min(height - cardH() - 4, y));
     }
@@ -5723,11 +5714,11 @@ public class QuestBookScreen extends Screen {
         return Math.max(1, height - TOP_H);
     }
 
-    private int sidebarWidth() {
+    int sidebarWidth() {
         return sidebarCollapsed ? 0 : sidebarW;
     }
 
-    private int boardLeft() {
+    int boardLeft() {
         return sidebarCollapsed ? TAB_W : sidebarWidth();
     }
 
@@ -5748,7 +5739,7 @@ public class QuestBookScreen extends Screen {
         return new int[]{left, top, w, h};
     }
 
-    private int[] introBodyPane() {
+    int[] introBodyPane() {
         int pad = 8;
         int left = boardLeft() + pad;
         int top = TOP_H + introImageH() + pad;
@@ -5762,7 +5753,7 @@ public class QuestBookScreen extends Screen {
      * all measure against this one height (the wheel used the whole lower area, which is taller, so it never
      * found anything to scroll).
      */
-    private int introViewH() {
+    int introViewH() {
         return Math.max(8, introBodyPane()[3] - 12);
     }
 
@@ -5896,7 +5887,7 @@ public class QuestBookScreen extends Screen {
     /**
      * Members of a tag task's tag, in registry-id order so the mosaic does not reshuffle between frames.
      * Empty for anything that is not an {@code item_tag} task, for a tag no pack has bound, or when the item
-     * registry is not bootstrapped (unit tests) — in all three cases the row falls back to a single icon,
+     * registry is not bootstrapped — in all three cases the row falls back to a single icon,
      * which is the pre-1.1.168 behaviour.
      */
     static List<Item> taskTagItems(Task task) {
@@ -6150,7 +6141,7 @@ public class QuestBookScreen extends Screen {
         graphics.setColor(1f, 1f, 1f, 1f);
     }
 
-    private int logX() {
+    int logX() {
         return width - 8 - LOG_W;
     }
 
@@ -6167,12 +6158,12 @@ public class QuestBookScreen extends Screen {
         return right - 6 - FIT_S;
     }
 
-    private int searchX() {
+    int searchX() {
         // Expanded-sidebar anchor — collapse must not move or grow the search field.
         return Math.max(sidebarW + 8, 72);
     }
 
-    private int searchW() {
+    int searchW() {
         int right = keyHelpIconShown() ? keysX() - 8 : isIntroChapter() ? logX() - 8 : fitX() - 8;
         return Math.max(48, right - searchX());
     }
@@ -6258,7 +6249,7 @@ public class QuestBookScreen extends Screen {
         return mx >= sidebarWidth() - 3 && mx <= sidebarWidth() + 4 && my > 26 && !overTab(mx, my);
     }
 
-    private void toggleSidebar() {
+    void toggleSidebar() {
         // Keep tiles on-screen: boardLeft changes with collapse; compensate cameraX so screen()
         // positions (boardLeft + world - camSx) stay put. Jerry: minimizing sidebar must not move the board.
         int oldLeft = boardLeft();
@@ -6272,7 +6263,7 @@ public class QuestBookScreen extends Screen {
         rebuildTileWidgets();
     }
 
-    private void setSidebarWidth(int widthPx) {
+    void setSidebarWidth(int widthPx) {
         sidebarW = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, widthPx));
         savedSidebarW = sidebarW;
         sidebarCollapsed = false;
@@ -6332,7 +6323,7 @@ public class QuestBookScreen extends Screen {
         });
     }
 
-    private int[] screen(int gx, int gy) {
+    int[] screen(int gx, int gy) {
         return new int[]{
                 boardLeft() + gx * stridePx() - camSx(),
                 gy * stridePx() - camSy()
@@ -6412,752 +6403,21 @@ public class QuestBookScreen extends Screen {
         graphics.drawString(Minecraft.getInstance().font, label, tx, y + Math.max(1, (h - 8) / 2), ink, false);
     }
 
+    /** Whether the installed recipe viewer can take a lookup right now. */
+    boolean viewerAvailable() {
+        return RecipeViewer.available();
+    }
+
+    /** Opens an item's recipes (or its uses) in the installed viewer; false when none took it. */
+    boolean viewerShow(ItemStack stack, boolean recipes) {
+        return RecipeViewer.show(stack, recipes);
+    }
+
     static boolean over(int x, int y, int w, int h, double mx, double my) {
         return mx >= x && my >= y && mx < x + w && my < y + h;
     }
 
-    /**
-     * The qq-click.json test hook drives the book (clicks, claims, pins) from a file in the temp folder. It is for
-     * dev runs and Marionette checks only: a released jar ignores it unless {@code -Dquestqueen.testHooks=true}.
-     */
-    public static final boolean TEST_HOOKS = !net.neoforged.fml.loading.FMLEnvironment.production
-            || Boolean.getBoolean("questqueen.testHooks");
-
-    private void drainTestClick() {
-        if (!TEST_HOOKS) {
-            return;
-        }
-        // Avoid Files.exists every client tick; Marionette wait(12) still hits within a few polls.
-        if (Minecraft.getInstance().level == null
-                || Minecraft.getInstance().level.getGameTime() % 5L != 0L) {
-            return;
-        }
-        java.nio.file.Path path = java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "qq-click.json");
-        if (!java.nio.file.Files.exists(path)) {
-            return;
-        }
-        try {
-            String raw = java.nio.file.Files.readString(path).trim();
-            java.nio.file.Files.deleteIfExists(path);
-            if (raw.isEmpty()) {
-                return;
-            }
-            com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(raw).getAsJsonObject();
-            if (json.has("search")) {
-                if (search != null) {
-                    search.setValue(json.get("search").getAsString());
-                    search.setFocused(true);
-                    setFocused(search);
-                }
-                return;
-            }
-            if (json.has("resync") && json.get("resync").getAsBoolean()) {
-                // Marionette FAILED path: after /questqueen reload (or fail), force a widget rebuild
-                // from the latest ClientQuestState snapshot before screenshot.
-                rebuildTileWidgets();
-                writeProbeJson();
-                return;
-            }
-            if (json.has("probe") && json.get("probe").getAsBoolean()) {
-                writeProbeJson();
-                return;
-            }
-            if (json.has("clearHover") && json.get("clearHover").getAsBoolean()) {
-                hoverOverrideX = Integer.MIN_VALUE;
-                hoverOverrideY = Integer.MIN_VALUE;
-                applyPathHover(-1000, -1000);
-                return;
-            }
-            if (json.has("hoverX") && json.has("hoverY")) {
-                hoverOverrideX = json.get("hoverX").getAsInt();
-                hoverOverrideY = json.get("hoverY").getAsInt();
-                applyPathHover(hoverOverrideX, hoverOverrideY);
-                writeProbeJson();
-                return;
-            }
-            if (json.has("hoverPath")) {
-                com.google.gson.JsonObject hover = json.getAsJsonObject("hoverPath");
-                String from = hover.get("from").getAsString();
-                String to = hover.get("to").getAsString();
-                for (PathArrow arrow : collectPathArrows()) {
-                    if (from.equals(arrow.from()) && to.equals(arrow.to())) {
-                        hoverOverrideX = arrow.x();
-                        hoverOverrideY = arrow.y();
-                        applyPathHover(hoverOverrideX, hoverOverrideY);
-                        writeProbeJson();
-                        return;
-                    }
-                }
-                return;
-            }
-            if (json.has("chapter")) {
-                ResourceLocation id = ResourceLocation.parse(json.get("chapter").getAsString());
-                ClientQuestState.chapter(id).ifPresent(next -> {
-                    if (!ClientQuestState.isChapterUnlocked(next)) {
-                        if (!next.hideUntilUnlocked()) {
-                            showLockedChapterCue(next.id());
-                        }
-                        writeProbeJson();
-                        return;
-                    }
-                    openChapter(next.id());
-                });
-                return;
-            }
-            if (json.has("tile")) {
-                chapter.tile(json.get("tile").getAsString()).ifPresent(tile -> {
-                    int[] s = screen(tile.pos().x(), tile.pos().y());
-                    int size = tilePx();
-                    clickGui(s[0] + size / 2.0, s[1] + size / 2.0);
-                });
-                return;
-            }
-            if (json.has("expand") && json.get("expand").getAsBoolean()) {
-                if (modal == ModalKind.READER) {
-                    dismissModal();
-                } else {
-                    chapter.tile(inspectTileId()).ifPresent(tile -> openReader(tile.id()));
-                }
-                return;
-            }
-            if (json.has("scroll")) {
-                scrollDescription(json.get("scroll").getAsInt());
-                return;
-            }
-            if (json.has("confirm") && json.get("confirm").getAsBoolean()) {
-                ModalLayout box = modalLayout();
-                clickGui(box.btnX() + box.btnW() / 2.0, box.btnY() + box.btnH() / 2.0);
-                return;
-            }
-            if (json.has("close") && json.get("close").getAsBoolean()) {
-                if (expanded) {
-                    clickGui(cardX() + cardW() - 8, cardY() + 6);
-                } else {
-                    onClose();
-                }
-                return;
-            }
-            if (json.has("pin") && json.get("pin").getAsBoolean()) {
-                chapter.tile(selectedId).ifPresent(tile -> {
-                    PlayBar bar = playBar(tile, cardX(), cardY(), cardW(), cardH());
-                    if (bar.pin()) {
-                        clickGui(bar.pinX() + 8, bar.y() + 6);
-                    }
-                });
-                return;
-            }
-            if (json.has("mouseDrag") && json.get("mouseDrag").isJsonObject()) {
-                // A left-button press, drag and release through the real mouse handlers.
-                com.google.gson.JsonObject drag = json.getAsJsonObject("mouseDrag");
-                double x0 = drag.get("x").getAsDouble();
-                double y0 = drag.get("y").getAsDouble();
-                double x1 = drag.has("toX") ? drag.get("toX").getAsDouble() : x0;
-                double y1 = drag.has("toY") ? drag.get("toY").getAsDouble() : y0;
-                mouseClicked(x0, y0, 0);
-                mouseDragged(x1, y1, 0, x1 - x0, y1 - y0);
-                mouseReleased(x1, y1, 0);
-                writeProbeJson();
-                return;
-            }
-            if (json.has("inspectDrag") && json.get("inspectDrag").isJsonObject() && showInspectPanel()) {
-                com.google.gson.JsonObject drag = json.getAsJsonObject("inspectDrag");
-                int dx = drag.has("dx") ? drag.get("dx").getAsInt() : 0;
-                int dy = drag.has("dy") ? drag.get("dy").getAsInt() : 0;
-                double x0 = cardX() + Math.min(40, cardW() / 2.0);
-                double y0 = cardY() + 6;
-                mouseClicked(x0, y0, 0);
-                mouseDragged(x0 + dx, y0 + dy, 0, dx, dy);
-                mouseReleased(x0 + dx, y0 + dy, 0);
-                syncOverlays();
-                writeProbeJson();
-                return;
-            }
-            if (json.has("action") && json.get("action").getAsBoolean()) {
-                chapter.tile(selectedId).ifPresent(tile -> {
-                    PlayBar bar = playBar(tile, cardX(), cardY(), cardW(), cardH());
-                    if (bar.action()) {
-                        clickGui(bar.actionX() + 20, bar.y() + 6);
-                    }
-                });
-                writeProbeJson();
-                return;
-            }
-            if (json.has("key")) {
-                // A key press (and release) through the same path as the real keyboard: the screen key events
-                // first (where Quest Queen and other mods listen), then the screen if nothing cancelled it.
-                String name = json.get("key").getAsString().toUpperCase(Locale.ROOT);
-                int mods = json.has("mods") ? json.get("mods").getAsInt() : 0;
-                int code;
-                try {
-                    code = GLFW.class.getField("GLFW_KEY_" + name).getInt(null);
-                } catch (ReflectiveOperationException unknown) {
-                    QuestQueen.LOGGER.warn("qq-click.json: unknown key {}", name);
-                    return;
-                }
-                int scan = GLFW.glfwGetKeyScancode(code);
-                if (!net.neoforged.neoforge.client.ClientHooks.onScreenKeyPressedPre(this, code, scan, mods)) {
-                    if (!keyPressed(code, scan, mods)) {
-                        net.neoforged.neoforge.client.ClientHooks.onScreenKeyPressedPost(this, code, scan, mods);
-                    }
-                }
-                if (json.has("char")) {
-                    // The character a real key press also sends (GLFW delivers it after the key).
-                    for (char c : json.get("char").getAsString().toCharArray()) {
-                        if (!net.neoforged.neoforge.client.ClientHooks.onScreenCharTypedPre(this, c, mods)) {
-                            charTyped(c, mods);
-                        }
-                    }
-                }
-                if (!net.neoforged.neoforge.client.ClientHooks.onScreenKeyReleasedPre(this, code, scan, mods)) {
-                    keyReleased(code, scan, mods);
-                }
-                if (minecraft != null && minecraft.screen == this) {
-                    writeProbeJson();
-                }
-                return;
-            }
-            if (json.has("type")) {
-                for (char c : json.get("type").getAsString().toCharArray()) {
-                    charTyped(c, 0);
-                }
-                writeProbeJson();
-                return;
-            }
-            if (json.has("resetOtherMod")) {
-                OTHER_MOD_KEYS.clear();
-                writeProbeJson();
-                return;
-            }
-            if (json.has("pretendViewer")) {
-                RecipeViewer.pretend = json.get("pretendViewer").getAsBoolean();
-                RecipeViewer.lastLookup = "";
-                writeProbeJson();
-                return;
-            }
-            if (json.has("descClick") && json.get("descClick").isJsonObject()) {
-                // A real click on the description: {x, y, button} through mouseClicked.
-                com.google.gson.JsonObject click = json.getAsJsonObject("descClick");
-                mouseClicked(click.get("x").getAsDouble(), click.get("y").getAsDouble(),
-                        click.has("button") ? click.get("button").getAsInt() : 0);
-                writeProbeJson();
-                return;
-            }
-            if (json.has("jei")) {
-                int idx = json.get("jei").isJsonPrimitive() && json.get("jei").getAsJsonPrimitive().isNumber()
-                        ? json.get("jei").getAsInt() : 0;
-                if (!taskIconHits.isEmpty()) {
-                    TaskIconHit hit = taskIconHits.stream()
-                            .filter(h -> h.taskIndex() == idx)
-                            .findFirst()
-                            .orElse(taskIconHits.getFirst());
-                    // Click the strip's own centre: a tag row's hit rect is wider than one 16x16 icon.
-                    clickGui(hit.centreX(), hit.centreY());
-                } else {
-                    openInJei(idx);
-                }
-                writeProbeJson();
-                return;
-            }
-            if (json.has("claim")) {
-                chapter.tile(selectedId).ifPresent(tile -> {
-                    PlayBar bar = playBar(tile, cardX(), cardY(), cardW(), cardH());
-                    if (bar.choice()) {
-                        choicePickTile = tile.id();
-                        choicePick = json.get("claim").getAsInt();
-                        clickGui(bar.choiceX() + bar.choiceW() / 2.0, bar.y() + 6);
-                    }
-                });
-                return;
-            }
-            if (json.has("sidebarTitle") || json.has("chromeTitle") || json.has("chrome")) {
-                BookChrome cur = resolveChrome();
-                if (json.has("sidebarTitle")) {
-                    cur = cur.withTitle(json.get("sidebarTitle").getAsString());
-                } else if (json.has("chromeTitle")) {
-                    cur = cur.withTitle(json.get("chromeTitle").getAsString());
-                }
-                if (json.has("sidebarTitleColor")) {
-                    cur = cur.withColor(json.get("sidebarTitleColor").getAsInt());
-                }
-                if (json.has("sidebarTitleScale")) {
-                    cur = cur.withScale(json.get("sidebarTitleScale").getAsFloat());
-                }
-                if (json.has("sidebarTitleShadow")) {
-                    cur = cur.withShadow(json.get("sidebarTitleShadow").getAsBoolean());
-                }
-                if (json.has("chrome") && json.get("chrome").isJsonObject()) {
-                    var c = json.getAsJsonObject("chrome");
-                    if (c.has("sidebarTitle")) cur = cur.withTitle(c.get("sidebarTitle").getAsString());
-                    if (c.has("titleColor")) cur = cur.withColor(c.get("titleColor").getAsInt());
-                    if (c.has("titleScale")) cur = cur.withScale(c.get("titleScale").getAsFloat());
-                    if (c.has("titleShadow")) cur = cur.withShadow(c.get("titleShadow").getAsBoolean());
-                }
-                applyChrome(cur);
-                writeProbeJson();
-                return;
-            }
-            if (json.has("sidebar")) {
-                String mode = json.get("sidebar").getAsString();
-                if ("toggle".equals(mode)) {
-                    toggleSidebar();
-                } else if ("collapse".equals(mode)) {
-                    if (!sidebarCollapsed) {
-                        toggleSidebar();
-                    }
-                } else if ("expand".equals(mode)) {
-                    if (sidebarCollapsed) {
-                        toggleSidebar();
-                    }
-                } else if ("wide".equals(mode)) {
-                    setSidebarWidth(220);
-                } else if ("narrow".equals(mode)) {
-                    setSidebarWidth(SIDEBAR_MIN);
-                } else if ("default".equals(mode)) {
-                    setSidebarWidth(SIDEBAR);
-                }
-                writeProbeJson();
-                return;
-            }
-            if (json.has("sidebarScroll")) {
-                sidebarScroll = json.get("sidebarScroll").getAsInt();
-                clampSidebarScroll();
-                rebuildSidebarRows();
-                writeProbeJson();
-                return;
-            }
-            if (json.has("sidebarScrollBy")) {
-                sidebarScroll += json.get("sidebarScrollBy").getAsInt();
-                clampSidebarScroll();
-                rebuildSidebarRows();
-                writeProbeJson();
-                return;
-            }
-            if (json.has("wheel") && json.get("wheel").isJsonObject()) {
-                // The real wheel, at a screen point: whatever is under it (board zoom, intro body, sidebar) handles it.
-                com.google.gson.JsonObject wheel = json.getAsJsonObject("wheel");
-                mouseScrolled(wheel.get("x").getAsDouble(), wheel.get("y").getAsDouble(), 0,
-                        wheel.get("dir").getAsInt() > 0 ? 1 : -1);
-                writeProbeJson();
-                return;
-            }
-            if (json.has("fitTarget")) {
-                // Flag only, so both targets can be captured in frames for Troi's comparison. The default
-                // stays ANCHOR and this cannot change it by accident: an unknown value leaves it untouched.
-                String want = json.get("fitTarget").getAsString();
-                if ("count".equalsIgnoreCase(want)) {
-                    setFitTarget(FitCamera.Target.COUNT);
-                } else if ("anchor".equalsIgnoreCase(want)) {
-                    setFitTarget(FitCamera.Target.ANCHOR);
-                }
-                QuestQueen.LOGGER.info("Quest book fit target={}", fitTarget());
-                return;
-            }
-            if (json.has("fit") && json.get("fit").getAsBoolean()) {
-                fitAllContent();
-                return;
-            }
-            if (json.has("cameraX") || json.has("cameraY") || json.has("zoom")) {
-                if (json.has("cameraX")) {
-                    cameraX = json.get("cameraX").getAsDouble();
-                }
-                if (json.has("cameraY")) {
-                    cameraY = json.get("cameraY").getAsDouble();
-                }
-                if (json.has("zoom")) {
-                    setZoom(json.get("zoom").getAsFloat());
-                }
-                return;
-            }
-            if (json.has("log") && json.get("log").getAsBoolean()) {
-                clickGui(logX() + LOG_W / 2.0, 13);
-                return;
-            }
-            if (json.has("x") && json.has("y")) {
-                clickGui(json.get("x").getAsDouble(), json.get("y").getAsDouble());
-            }
-        } catch (Exception exception) {
-            QuestQueen.LOGGER.warn("qq-click.json failed: {}", exception.toString());
-        }
-    }
-
-    private void writeProbeJson() {
-        com.google.gson.JsonObject out = new com.google.gson.JsonObject();
-        out.addProperty("searchFocused", search != null && search.isFocused());
-        out.addProperty("searchValue", search == null ? "" : search.getValue());
-        out.addProperty("searchHitCount", searchHits.size());
-        out.addProperty("searchIndex", searchIndex);
-        BookChrome probeChrome = resolveChrome();
-        out.addProperty("sidebarTitle", probeChrome.displayTitle());
-        out.addProperty("sidebarTitleColor", probeChrome.titleColor());
-        out.addProperty("sidebarTitleScale", probeChrome.titleScale());
-        out.addProperty("sidebarTitleShadow", probeChrome.titleShadow());
-        out.addProperty("selected", selectedId);
-        out.addProperty("expanded", expanded);
-        out.addProperty("showInspect", showInspectPanel());
-        out.addProperty("inspectOffX", inspectOffX);
-        out.addProperty("inspectOffY", inspectOffY);
-        out.addProperty("cardX", cardX());
-        out.addProperty("cardY", cardY());
-        out.addProperty("cardW", cardW());
-        out.addProperty("cardH", cardH());
-        out.addProperty("inspectTile", inspectTileId());
-        out.addProperty("overlayX", inspectPanel.getX());
-        out.addProperty("overlayY", inspectPanel.getY());
-        out.addProperty("overlayW", inspectPanel.getWidth());
-        out.addProperty("overlayH", inspectPanel.getHeight());
-        out.addProperty("overlayVisible", inspectPanel.visible);
-        out.addProperty("chromeMatchesCard", inspectPanel.getX() == cardX() && inspectPanel.getY() == cardY()
-                && inspectPanel.getWidth() == cardW() && inspectPanel.getHeight() == cardH());
-        out.addProperty("modal", modal.name());
-        out.addProperty("modalTile", modalTileId);
-        out.addProperty("chapterLockedModal", modal == ModalKind.GOTCHA && (modalTileId == null || modalTileId.isEmpty()));
-        out.addProperty("gotchaShowCount", ClientQuestState.gotchaShowCount);
-        out.addProperty("initCount", INIT_COUNT);
-        String cueKind = ClientQuestState.lastLockedCueKind;
-        out.addProperty("lastLockedCueKind", cueKind == null ? "" : cueKind);
-        out.addProperty("chapter", chapter.id().toString());
-        // Layout diagnostics: the raw inputs behind cardX/cardY/cardW/cardH, so an audit can tell whether a
-        // card is off-window because of the window, the sidebar, or the drag offset.
-        out.addProperty("guiW", width);
-        out.addProperty("guiH", height);
-        out.addProperty("sidebarW", sidebarWidth());
-        out.addProperty("boardLeftPx", boardLeft());
-        out.addProperty("tilePxNow", tilePx());
-        out.addProperty("tilesInView", isIntroChapter() ? 0 : inViewTileCount());
-        out.addProperty("tilesPlaced", chapter.tiles().size());
-        com.google.gson.JsonObject tileCentres = new com.google.gson.JsonObject();
-        if (!isIntroChapter()) {
-            int half = tilePx() / 2;
-            for (Tile tile : chapter.tiles()) {
-                int[] at = screen(tile.pos().x(), tile.pos().y());
-                com.google.gson.JsonArray xy = new com.google.gson.JsonArray();
-                xy.add(at[0] + half);
-                xy.add(at[1] + half);
-                tileCentres.add(tile.id(), xy);
-            }
-        }
-        out.add("tileCentres", tileCentres);
-        // The open card's footer rewards: what each shows (name, icon kind) and where, for hover checks.
-        com.google.gson.JsonArray cardRewards = new com.google.gson.JsonArray();
-        if (showInspectPanel()) {
-            chapter.tile(selectedId).ifPresent(tile -> {
-                List<RewardSlot> slots = footerSlots(tile);
-                FooterLayout layout = playBar(tile, cardX(), cardY(), cardW(), cardH()).layout();
-                int iconY = inspectFootY(tile, cardX(), cardY(), cardW(), cardH());
-                for (int i = 0; i < slots.size(); i++) {
-                    RewardSlot slot = slots.get(i);
-                    com.google.gson.JsonObject r = new com.google.gson.JsonObject();
-                    r.addProperty("label", RewardFaces.label(slot.reward()));
-                    r.addProperty("realItem", RewardFaces.realItem(slot.face()));
-                    r.addProperty("item", BuiltInRegistries.ITEM.getKey(slot.face().getItem()).toString());
-                    r.addProperty("shown", i < layout.shown());
-                    if (i < layout.shown()) {
-                        r.addProperty("x", layout.slotX()[i] + 8);
-                        r.addProperty("y", iconY + 8);
-                    }
-                    cardRewards.add(r);
-                }
-            });
-        }
-        out.add("cardRewards", cardRewards);
-        com.google.gson.JsonArray advRows = new com.google.gson.JsonArray();
-        for (AdvancementHit hit : advancementHits) {
-            com.google.gson.JsonObject row = new com.google.gson.JsonObject();
-            row.addProperty("id", hit.id().toString());
-            row.addProperty("x", hit.x() + 8);
-            row.addProperty("y", hit.y() + 8);
-            row.addProperty("title", ClientQuestState.advancementInfo(hit.id()).map(info -> info.title().getString()).orElse(""));
-            com.google.gson.JsonArray lines = new com.google.gson.JsonArray();
-            ClientQuestState.advancementInfo(hit.id()).ifPresent(info -> info.lines().forEach(line -> lines.add(line.getString())));
-            row.add("lines", lines);
-            advRows.add(row);
-        }
-        out.add("advancementRows", advRows);
-        out.addProperty("lastLookup", RecipeViewer.lastLookup);
-        out.addProperty("selected", selectedId);
-        out.addProperty("expanded", expanded);
-        out.addProperty("cardFocus", cardFocus);
-        out.addProperty("cardFocusIndex", cardFocusIndex);
-        out.addProperty("cardTargets", cardTargets().size());
-        focusedTarget().ifPresent(f -> {
-            out.addProperty("focusItem", f.stack().isEmpty() ? "" : BuiltInRegistries.ITEM.getKey(f.stack().getItem()).toString());
-            out.addProperty("focusX", f.centreX());
-            out.addProperty("focusY", f.centreY());
-        });
-        out.addProperty("keyboardMode", keyboardMode);
-        out.addProperty("pin", ClientQuestState.progress.pinTile().orElse(""));
-        out.addProperty("helpOpen", helpOpen);
-        out.addProperty("logOpen", logOpen);
-        out.addProperty("searchFocused", typingInSearch());
-        out.addProperty("searchText", search == null ? "" : search.getValue());
-        out.addProperty("keysIconX", keysX() + KEYS_S / 2);
-        com.google.gson.JsonArray otherKeys = new com.google.gson.JsonArray();
-        synchronized (OTHER_MOD_KEYS) {
-            OTHER_MOD_KEYS.forEach(otherKeys::add);
-        }
-        out.add("otherModKeys", otherKeys);
-        com.google.gson.JsonArray help = new com.google.gson.JsonArray();
-        for (QuestKeybinds.HelpRow row : QuestKeybinds.HELP_ROWS) {
-            help.add(row.fallback() + " = " + bindingText(row));
-        }
-        out.add("keyHelp", help);
-        com.google.gson.JsonArray descItems = new com.google.gson.JsonArray();
-        for (RichDraw.ItemHit hit : descItemHits) {
-            com.google.gson.JsonObject item = new com.google.gson.JsonObject();
-            item.addProperty("item", BuiltInRegistries.ITEM.getKey(hit.stack().getItem()).toString());
-            item.addProperty("x", hit.x() + hit.w() / 2);
-            item.addProperty("y", hit.y() + hit.h() / 2);
-            descItems.add(item);
-        }
-        out.add("descItems", descItems);
-        com.google.gson.JsonArray taskIcons = new com.google.gson.JsonArray();
-        for (TaskIconHit hit : taskIconHits) {
-            com.google.gson.JsonObject icon = new com.google.gson.JsonObject();
-            icon.addProperty("task", hit.taskIndex());
-            icon.addProperty("item", BuiltInRegistries.ITEM.getKey(hit.stack().getItem()).toString());
-            taskIcons.add(icon);
-        }
-        out.add("taskIcons", taskIcons);
-        int[] introPane = introBodyPane();
-        com.google.gson.JsonArray introRect = new com.google.gson.JsonArray();
-        for (int v : introPane) {
-            introRect.add(v);
-        }
-        out.add("introPane", introRect);
-        out.addProperty("introScroll", introBodyScroll);
-        out.addProperty("introContentH", introBodyContentH);
-        out.addProperty("introViewH", introViewH());
-        out.addProperty("cardRight", cardX() + cardW());
-        out.addProperty("cardBottom", cardY() + cardH());
-        out.addProperty("cardScale", cardScale());
-        out.addProperty("taskRowsDrawn", drawnTaskRows);
-        // Report the same budget the last paint used, so a probe can verify it against the drawn layout.
-        out.addProperty("bodyBudget", lastBodyBudget);
-        boolean selectedXor = !selectedId.isEmpty()
-                && chapter.tile(selectedId).map(t -> ClientQuestState.needsXorChoice(chapter, t)).orElse(false);
-        List<String> unresolved = ClientQuestState.unresolvedXorKeys();
-        out.addProperty("needsXorSelected", selectedXor);
-        out.addProperty("needsXor", !unresolved.isEmpty());
-        com.google.gson.JsonArray xorArr = new com.google.gson.JsonArray();
-        for (String key : unresolved) {
-            xorArr.add(key);
-        }
-        out.add("unresolvedXor", xorArr);
-        out.addProperty("xorCue", modal == ModalKind.NONE && !unresolved.isEmpty());
-        out.addProperty("xorDismissed", !selectedId.isEmpty()
-                && xorDismissed.contains(ClientQuestState.xorKey(chapter, selectedId)));
-        boolean selectedDone = !selectedId.isEmpty()
-                && ClientQuestState.progress.tileCompleted(chapter.id().toString(), selectedId);
-        out.addProperty("selectedDone", selectedDone);
-        com.google.gson.JsonObject visuals = new com.google.gson.JsonObject();
-        com.google.gson.JsonArray failedTiles = new com.google.gson.JsonArray();
-        for (Tile tile : chapter.tiles()) {
-            TileVisual visual = ClientQuestState.visual(chapter, tile);
-            visuals.addProperty(tile.id(), visual.name());
-            if (visual == TileVisual.FAILED) {
-                failedTiles.add(tile.id());
-            }
-        }
-        out.add("visuals", visuals);
-        out.add("failedTiles", failedTiles);
-        com.google.gson.JsonArray lockedExpand = new com.google.gson.JsonArray();
-        com.google.gson.JsonArray bareRewards = new com.google.gson.JsonArray();
-        com.google.gson.JsonArray filledRewards = new com.google.gson.JsonArray();
-        com.google.gson.JsonArray completedBareRewards = new com.google.gson.JsonArray();
-        com.google.gson.JsonArray completedFilledRewards = new com.google.gson.JsonArray();
-        com.google.gson.JsonObject rewardFaces = new com.google.gson.JsonObject();
-        int pathGates = 0;
-        int inboundPorts = 0;
-        int blueArrows = 0;
-        int redArrows = 0;
-        for (Tile tile : chapter.tiles()) {
-            TileVisual visual = ClientQuestState.visual(chapter, tile);
-            if (visual == TileVisual.LOCKED && showExpandGlyph(visual, headerEdge(tile, visual))) {
-                lockedExpand.add(tile.id());
-            }
-            if (visual != TileVisual.LOCKED && !tile.rewards().isEmpty()) {
-                Reward first = tile.rewards().getFirst();
-                var icon = RewardIcons.iconId(first);
-                if (icon.isPresent() && !rewardFace(first).isEmpty()) {
-                    filledRewards.add(tile.id());
-                    rewardFaces.addProperty(tile.id(), first.type() + ":" + icon.get().getPath());
-                    if (visual == TileVisual.COMPLETED) {
-                        completedFilledRewards.add(tile.id());
-                    }
-                } else {
-                    bareRewards.add(tile.id());
-                    if (visual == TileVisual.COMPLETED) {
-                        completedBareRewards.add(tile.id());
-                    }
-                }
-            }
-            int[] s = screen(tile.pos().x(), tile.pos().y());
-            int[][] ports = tilePorts(tile, visual, s[0], s[1], tilePx());
-            for (int[] port : ports) {
-                if (port.length >= 9 && port[8] != 0) {
-                    inboundPorts++;
-                }
-            }
-            if (visual != TileVisual.LOCKED) {
-                for (Link link : chapter.links()) {
-                    if (link.from().equals(tile.id()) && chapter.tile(link.to()).filter(to ->
-                            tile.pos().cardinalTo(to.pos())
-                                    && !ClientQuestState.isConcealed(chapter, to)).isPresent()) {
-                        pathGates++;
-                    }
-                }
-            }
-        }
-        com.google.gson.JsonArray pathArrows = new com.google.gson.JsonArray();
-        for (PathArrow arrow : collectPathArrows()) {
-            if (arrow.color() == QuestColors.PORT_RED || arrow.color() == QuestColors.LOCKED_EDGE) {
-                redArrows++;
-            } else if (arrow.color() == QuestColors.NEW) {
-                blueArrows++;
-            }
-            com.google.gson.JsonObject row = new com.google.gson.JsonObject();
-            row.addProperty("from", arrow.from());
-            row.addProperty("to", arrow.to());
-            row.addProperty("x", arrow.x());
-            row.addProperty("y", arrow.y());
-            row.addProperty("locked", arrow.locked());
-            row.addProperty("color", (arrow.color() == QuestColors.PORT_RED || arrow.color() == QuestColors.LOCKED_EDGE) ? "red"
-                    : arrow.color() == QuestColors.NEW ? "blue" : "other");
-            row.addProperty("shape", MockChrome.pathArrowShape(arrow.locked()));
-            pathArrows.add(row);
-        }
-        String hoverLock = "";
-        if (hoverOverrideX != Integer.MIN_VALUE) {
-            for (PathArrow arrow : collectPathArrows()) {
-                if (MockChrome.pathHoverHit(hoverOverrideX, hoverOverrideY, arrow.x(), arrow.y())) {
-                    hoverLock = arrow.locked() ? "locked" : "open";
-                    break;
-                }
-            }
-        } else {
-            for (QuestTileWidget widget : tileWidgets) {
-                if (!widget.hoverLock().isEmpty()) {
-                    hoverLock = widget.hoverLock();
-                    break;
-                }
-            }
-        }
-        com.google.gson.JsonArray unlockedChapters = new com.google.gson.JsonArray();
-        com.google.gson.JsonArray lockedChapters = new com.google.gson.JsonArray();
-        for (Chapter entry : ClientQuestState.pack.chapters()) {
-            if (ClientQuestState.isChapterUnlocked(entry)) {
-                unlockedChapters.add(entry.id().toString());
-            } else {
-                lockedChapters.add(entry.id().toString());
-            }
-        }
-        out.addProperty("pathGates", pathGates);
-        out.addProperty("inboundPorts", inboundPorts);
-        out.addProperty("blueArrows", blueArrows);
-        out.addProperty("redArrows", redArrows);
-        out.addProperty("arrowPlacement", "path-arrow");
-        out.addProperty("sidebarCollapsed", sidebarCollapsed);
-        out.addProperty("sidebarScroll", sidebarScroll);
-        out.addProperty("sidebarScrollMax", sidebarMaxScroll());
-        out.addProperty("sidebarRowCount", sidebarRows.size());
-        out.addProperty("searchX", searchX());
-        out.addProperty("searchW", searchW());
-        out.addProperty("searchWidgetX", search == null ? -1 : search.getX());
-        out.addProperty("searchWidgetW", search == null ? -1 : search.getWidth());
-        out.addProperty("sidebarTitleVisible", true);
-        out.addProperty("boardLeft", boardLeft());
-        out.addProperty("dimLeft", modalPanel.dimLeft());
-        com.google.gson.JsonArray rewardPlusIds = new com.google.gson.JsonArray();
-        com.google.gson.JsonObject rewardCounts = new com.google.gson.JsonObject();
-        com.google.gson.JsonObject rewardCaptions = new com.google.gson.JsonObject();
-        for (Tile tile : chapter.tiles()) {
-            rewardCounts.addProperty(tile.id(), tile.rewards().size());
-            if (showsRewardPlus(tile)) {
-                rewardPlusIds.add(tile.id());
-                rewardCaptions.addProperty(tile.id(), rewardsCaption(tile));
-            }
-        }
-        out.add("rewardPlus", rewardPlusIds);
-        out.add("rewardCounts", rewardCounts);
-        out.add("rewardCaptions", rewardCaptions);
-        out.addProperty("lockedEdge", String.format("%08X", QuestColors.LOCKED_EDGE));
-        out.addProperty("failed", String.format("%08X", QuestColors.FAILED));
-        out.addProperty("closed", String.format("%08X", QuestColors.CLOSED));
-        out.addProperty("modalPink", String.format("%08X", QuestColors.MODAL_PINK));
-        out.addProperty("reader", modal == ModalKind.READER);
-        out.addProperty("descScroll", descScroll);
-        out.addProperty("descContentH", descContentH);
-        out.addProperty("descViewH", descViewH);
-        out.addProperty("readerScroll", readerScroll);
-        out.addProperty("readerContentH", readerContentH);
-        out.addProperty("readerViewH", readerViewH);
-        if (modal != ModalKind.NONE) {
-            ModalLayout box = modalLayout();
-            out.addProperty("modalX", box.x());
-            out.addProperty("modalY", box.y());
-            out.addProperty("modalW", box.w());
-            out.addProperty("modalH", box.h());
-            out.addProperty("modalCloseX", box.x() + box.w() - 12);
-        }
-        if (expanded && !selectedId.isEmpty()) {
-            chapter.tile(selectedId).ifPresent(tile -> {
-                out.addProperty("inspectBody", inspectBody(tile));
-                com.google.gson.JsonArray nx = new com.google.gson.JsonArray();
-                for (ItemStack face : collectRewardFaces(tile)) {
-                    if (face.getCount() > 1) {
-                        nx.add(face.getCount() + "x");
-                    }
-                }
-                out.add("inspectNx", nx);
-            });
-        }
-        com.google.gson.JsonObject rewardNx = new com.google.gson.JsonObject();
-        for (Tile tile : chapter.tiles()) {
-            com.google.gson.JsonArray nx = new com.google.gson.JsonArray();
-            for (ItemStack face : collectRewardFaces(tile)) {
-                if (!face.isEmpty() && face.getCount() > 1) {
-                    nx.add(face.getCount() + "x");
-                }
-            }
-            if (!nx.isEmpty()) {
-                rewardNx.add(tile.id(), nx);
-            }
-        }
-        out.add("rewardNx", rewardNx);
-        out.addProperty("hoverLock", hoverLock);
-        out.addProperty("hoverX", hoverOverrideX);
-        out.addProperty("hoverY", hoverOverrideY);
-        out.add("pathArrows", pathArrows);
-        out.add("lockedExpand", lockedExpand);
-        out.add("bareRewards", bareRewards);
-        out.add("filledRewards", filledRewards);
-        out.add("completedBareRewards", completedBareRewards);
-        out.add("completedFilledRewards", completedFilledRewards);
-        out.add("rewardFaces", rewardFaces);
-        out.add("unlockedChapters", unlockedChapters);
-        out.add("lockedChapters", lockedChapters);
-        if (!selectedId.isEmpty()) {
-            chapter.tile(selectedId).ifPresent(tile -> {
-                out.addProperty("visual", ClientQuestState.visual(chapter, tile).name());
-                PlayBar bar = playBar(tile, cardX(), cardY(), cardW(), cardH());
-                out.addProperty("actionLabel", bar.action() ? bar.actionLabel() : (bar.claimedBadge() ? "CLAIMED" : ""));
-                out.addProperty("actionVisible", bar.action());
-                out.addProperty("claimedBadge", bar.claimedBadge());
-                out.addProperty("choiceVisible", bar.choice());
-                out.addProperty("rewardsClaimed", ClientQuestState.progress.taskCompleted(
-                        chapter.id() + "/" + tile.id(), "claimed"));
-            });
-        }
-        try {
-            java.nio.file.Files.writeString(
-                    java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "qq-probe.json"),
-                    out.toString());
-        } catch (Exception exception) {
-            QuestQueen.LOGGER.warn("qq-probe.json write failed: {}", exception.toString());
-        }
-    }
-
-    private void clickGui(double x, double y) {
+    void clickGui(double x, double y) {
         mouseClicked(x, y, 0);
         mouseReleased(x, y, 0);
     }

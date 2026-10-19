@@ -11,7 +11,7 @@ import java.util.Map;
  * <p>Deliberately not declared on {@link Task}. Holding these constants in the interface made
  * {@code Task.<clinit>} resolve all nineteen task codecs, while each of those codecs resolves
  * {@code Task::type} — a class-initialization cycle that left {@code CODECS} entries null and poisoned the
- * whole task/reward class graph (every codec test failed with {@code Could not initialize class
+ * whole task/reward class graph (every codec failed with {@code Could not initialize class
  * dev.aof.questqueen.data.task.Task}).
  */
 final class TaskCodecs {

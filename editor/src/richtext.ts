@@ -1,6 +1,5 @@
 // Quest description markup, mirrored from the game's RichText.java so the editor's preview shows what the book
-// will draw. The two parsers are kept in step by editor/src/richtext.test.ts and src/test/resources/richtext-cases.json,
-// which both sides read.
+// will draw. Keep the two parsers in step.
 //
 //   # Heading   ## Smaller heading   - bullet   ---   **bold**  *italic*  __underline__
 //   {#RRGGBB}coloured{/#}   {size:12}bigger{/size}
@@ -313,6 +312,8 @@ export function descriptionProblems(source: string | null | undefined): string[]
 export interface PreviewOptions {
   /** URL of an item's icon, as the bridge serves it. */
   iconUrl?: (id: string) => string;
+  /** URL of a resource-pack texture (GET /api/texture). Without it a picture is a labelled frame. */
+  pictureUrl?: (texture: string) => string;
 }
 
 function esc(text: string): string {
@@ -358,7 +359,10 @@ export function richToHtml(source: string | null | undefined, options: PreviewOp
         + (!block.byId && options.iconUrl ? ` <img class="desc-item" alt="" src="${esc(options.iconUrl(block.target))}" width="14" height="14" />` : "")
         + "</div>");
     } else if (block.kind === "image") {
-      html.push(`<figure class="desc-pic"><div class="desc-pic-frame" title="${esc(block.texture)}">${esc(block.texture)}</div>`
+      const picture = options.pictureUrl
+        ? `<img class="desc-pic-img" alt="${esc(block.caption || block.texture)}" src="${esc(options.pictureUrl(block.texture))}" />`
+        : `<div class="desc-pic-frame" title="${esc(block.texture)}">${esc(block.texture)}</div>`;
+      html.push(`<figure class="desc-pic">${picture}`
         + (block.caption ? `<figcaption>${esc(block.caption)}</figcaption>` : "") + "</figure>");
     } else {
       const inner = block.inlines.map((inline) => inlineHtml(inline, block.heading, options)).join("");

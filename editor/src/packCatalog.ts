@@ -17,6 +17,10 @@ export interface PackCatalog {
   stats?: CatalogEntry[];
   /** Stages the pack defines (StageLock), with display names. */
   stages?: CatalogEntry[];
+  /** Installed mods, for "lock a whole mod". */
+  mods?: CatalogEntry[];
+  /** True when StageLock is the stage mod, so stages can lock things. */
+  stageLock?: boolean;
 }
 
 export function emptyCatalog(): PackCatalog {
@@ -33,6 +37,8 @@ export function emptyCatalog(): PackCatalog {
     dimensions: [],
     stats: [],
     stages: [],
+    mods: [],
+    stageLock: false,
   };
 }
 
@@ -50,6 +56,8 @@ export function fromApi(raw: Record<string, unknown>): PackCatalog {
     dimensions: asEntries(raw.dimensions),
     stats: asEntries(raw.stats),
     stages: asEntries(raw.stages),
+    mods: asEntries(raw.mods),
+    stageLock: raw.stageLock === true,
   };
 }
 

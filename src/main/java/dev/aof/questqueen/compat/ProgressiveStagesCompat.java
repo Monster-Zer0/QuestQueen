@@ -23,7 +23,7 @@ public final class ProgressiveStagesCompat {
 
     private static final boolean PRESENT = loaded();
 
-    /** Safe without a mod list (unit tests): the matching rules below are usable on their own. */
+    /** Safe without a mod list: the matching rules below are usable on their own. */
     private static boolean loaded() {
         try {
             ModList mods = ModList.get();

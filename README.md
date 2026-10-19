@@ -10,15 +10,22 @@ gradlew runClient
 
 If `runClient` exits at once with `NoSuchElementException: No value present` in `BootstrapLauncher`, the run classpath file lists jars under a Gradle home that is gone. The build now rewrites that file whenever the Gradle home changes; on an older checkout, run `gradlew writeMinecraftClasspathClient --rerun`.
 
-Machine-specific test fixtures are optional Gradle properties: `-Pqq.devInstance=<instance dir>` (JEI API drift check) and `-Pskylore.chapters=<chapters dir>` (caption corpus). Tests that need them skip when they are absent.
-
 Open the book with **J**. JourneyMap also defaults to J, so rebind one of them in a pack that has both. With no pack chapters loaded, the book opens on the built-in Feature Showcase.
 
 ## Editor
 
-In-game: `/questqueen editor` starts the browser UI at `http://127.0.0.1:47821`. The quest book itself is play-only.
+In-game: `/questqueen editor` opens the editor at `http://127.0.0.1:47821`. The quest book in game is play-only.
 
-Offline:
+The editor is the book itself: the same ledger tiles, arrows, padlocks and theme colours, drawn with the game's own font.
+
+- **Edit** — click any text or picture to change it. Click an empty square to add a quest (or press **N**); drag a quest to move it; drag a blue diamond onto the next quest to link them (straight across or down only); click an arrow to choose AND, OR, NOT or FORK. The card's task and reward lines change in place; **More** holds the gates into the quest, its unlock rule, what hides it, where it jumps and the scrolls it gives.
+- **Preview as player** — the book as a player sees it. **Previewing:** picks a new player, one who has finished up to a quest, or one with certain stages.
+- **Chapters** — **+** adds one (empty or with example quests). **⋯** renames it, opens its settings (theme, background, icon, unlocks, board size), duplicates or deletes it. Drag a row to reorder it, or onto the right part of another to nest it. A chapter with chapters under it and no quests is an act: its intro page is edited in place.
+- **Save to world** saves every changed chapter; **Ctrl+S** saves the open one. Anything that must be fixed first opens the problems list, and clicking a problem opens that quest at the part it is about.
+- **Find** (**Ctrl+K**) finds any quest, chapter, stage or action. **File** exports every chapter as a datapack ZIP or loads one. **?** explains whatever is on screen.
+- If Minecraft goes away, a strip says so and your changes stay in the page until it is back.
+
+Offline, against the testkit's mock bridge:
 
 ```bat
 cd editor
@@ -26,7 +33,7 @@ npm install
 npm run dev
 ```
 
-Load or export a folder/zip of `data/*/questqueen/**/*.json`. There is no hosted pack updater.
+Then open `http://localhost:5173/?bridge=<port>` with the mock's port. There is no hosted pack updater.
 
 ## Using this in a modpack
 
@@ -38,9 +45,9 @@ data/<pack>/questqueen/scrolls/<name>.json
 data/<pack>/questqueen/book.json
 ```
 
-Each file's `"id"` should use that pack's namespace (`"<pack>:<name>"`). These ids are reserved for the built-in book and are hidden once a pack chapter exists: `questqueen:showcase`, `questqueen:showcase_stage`, `questqueen:blank`, `questqueen:starter`, `questqueen:nether`, `questqueen:test`, `questqueen:test_bonus`, and the scrolls `questqueen:showcase_brief`, `questqueen:chest_note`, `questqueen:zombie_note`, `questqueen:test_note`.
+Each file's `"id"` should use that pack's namespace (`"<pack>:<name>"`). These ids are reserved for the built-in book and are hidden once a pack chapter exists: `questqueen:showcase`, `questqueen:showcase_stage`, and the scroll `questqueen:showcase_brief`.
 
-`demoChapters` in the common config is `auto` (hide the Feature Showcase when the pack has chapters), `always`, or `never`. `includeDevChapters` loads the harness chapters; those files are only on the dev run classpath, not in the published jar.
+`demoChapters` in the common config is `auto` (hide the Feature Showcase when the pack has chapters), `always`, or `never`.
 
 The pinned quest shows on the HUD at `[pinnedQuest] position` (`top_left` by default; also `top_center`, `top_right`, `middle_left`, `middle_right`, `bottom_left`, `bottom_right`), nudged by `offsetX` / `offsetY`. With the cursor free (chat, the inventory or any other screen), hovering it shows the quest's description, tasks and rewards. The survival inventory has a quest book button in its top-right corner; `[inventoryButton]` turns it off (`enabled`) or moves it (`offsetX`, `offsetY`) to clear another mod's button.
 
@@ -144,11 +151,20 @@ With StageLock, stage ids are exact: lowercase, 1–64 characters of `a-z 0-9 _ 
 
 ProgressiveStages only grants stages its own stage files define.
 
+### Making stages in the web editor
+
+The editor's **Stages** page (and **New stage…** under *Requires stage* in a quest's **More**) makes StageLock stages without writing JSON, in three steps:
+
+1. **What is it?** A name (the id is made from it), an icon and a description. Under *Advanced*: the id, who gets it (player, team or everyone) and whether the player is told in chat.
+2. **How do players get it?** The quests whose rewards grant it, with **+ Granted by a quest…** to add one. Optionally, advancements that also grant it and stages it needs first.
+3. **Until then, players can't…** Lock items (or `#tags`), blocks, a whole mod, a dimension or mobs, each with plain on/off toggles (use, craft, pick up, hide in JEI/EMI/REI; break, place, use; attack, interact, spawn near players).
+
+A sentence under the form says it back ("Players without Iron Age can't use 4 items or enter The Nether. They get it by completing Smelt Iron."). **Save stage** writes three files into the world's `datapacks/questqueen_authored` pack: Quest Queen's copy (`data/<ns>/questqueen/stages/<id>.json`), StageLock's definition (`data/<ns>/stagelock/stages/<id>.json`, with an explicit `"id"`) and its rules (`data/<ns>/stagelock/restrictions/questqueen/<id>.json`). The server then runs `/reload` itself. Stages from other datapacks are listed read-only; **Duplicate to edit** copies one. Without StageLock, stages still work as quest flags but cannot lock anything.
+
 ## Layout
 
 - `src/main/java/dev/aof/questqueen/` - mod
 - `src/main/resources/data/questqueen/questqueen/` - Feature Showcase shipped in the jar
-- `src/dev/resources/data/questqueen/questqueen/` - harness chapters, dev runs only
 - `schema/questqueen.schema.json` - shared schema
 - `editor/` - Vite authoring UI
 

@@ -15,8 +15,6 @@ public final class QuestConfig {
     public static final ModConfigSpec.IntValue SIDEBAR_TITLE_SHADOW;
     /** auto | always | never — see DemoChapters. */
     public static final ModConfigSpec.ConfigValue<String> DEMO_CHAPTERS;
-    /** Load Test Range / blank / starter / nether. Default false. */
-    public static final ModConfigSpec.BooleanValue INCLUDE_DEV_CHAPTERS;
     /** Master switch for the book's motion layer (path flow, flares, pips, shimmer). */
     public static final ModConfigSpec.BooleanValue ANIMATIONS;
     /** Reveal chapter-intro body text progressively on first open. */
@@ -59,10 +57,6 @@ public final class QuestConfig {
         DEMO_CHAPTERS = builder
                 .comment("Built-in Feature Showcase: auto (hide when a pack has chapters), always, or never.")
                 .define("demoChapters", "auto");
-        INCLUDE_DEV_CHAPTERS = builder
-                .comment("Load the dev-run harness chapters (test range, blank, starter, nether).",
-                        "Those files are not in the published jar, so this does nothing in a distributed build.")
-                .define("includeDevChapters", false);
         builder.pop();
         builder.push("sidebarTitleChrome");
         SIDEBAR_TITLE = builder
