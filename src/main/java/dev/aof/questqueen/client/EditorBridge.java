@@ -9,6 +9,7 @@ import dev.aof.questqueen.data.Chapter;
 import dev.aof.questqueen.data.QuestPack;
 import dev.aof.questqueen.data.stage.AuthoredStage;
 import dev.aof.questqueen.net.AuthorSaveC2S;
+import dev.aof.questqueen.net.AuthorChapterDeleteC2S;
 import dev.aof.questqueen.net.AuthorStageDeleteC2S;
 import dev.aof.questqueen.net.AuthorStageSaveC2S;
 import dev.aof.questqueen.net.QuestNetwork;
@@ -311,6 +312,10 @@ public final class EditorBridge {
             handleStageSave(exchange);
             return;
         }
+        if ("/api/chapter/delete".equals(path) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            handleChapterDelete(exchange);
+            return;
+        }
         if ("/api/stage/delete".equals(path) && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
             handleStageDelete(exchange);
             return;
@@ -395,6 +400,57 @@ public final class EditorBridge {
         }
         Minecraft.getInstance().execute(() -> QuestNetwork.sendToServer(new AuthorStageDeleteC2S(id)));
         write(exchange, 202, "application/json", "{\"ok\":true,\"queued\":true,\"id\":" + jsonString(id) + "}");
+    }
+
+    /** Chapter deletes waiting on the server's {@code AuthorReplyS2C}, by chapter id. */
+    private static final java.util.Map<String, java.util.concurrent.CompletableFuture<String>> PENDING_DELETES =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Delete a chapter. Unlike a save, the answer waits for the server (up to 5 s) so the browser can say why a
+     * chapter that came from a datapack stays. The exchange is answered from the reply, off the bridge thread.
+     */
+    private static void handleChapterDelete(HttpExchange exchange) throws IOException {
+        String body = authorBody(exchange);
+        if (body == null) {
+            return;
+        }
+        String id;
+        try {
+            id = JsonParser.parseString(body).getAsJsonObject().get("id").getAsString().trim();
+        } catch (Exception exception) {
+            write(exchange, 400, "application/json", "{\"ok\":false,\"error\":\"expected {\\\"id\\\": ...}\"}");
+            return;
+        }
+        if (net.minecraft.resources.ResourceLocation.tryParse(id) == null) {
+            write(exchange, 400, "application/json", "{\"ok\":false,\"error\":\"not a chapter id\"}");
+            return;
+        }
+        java.util.concurrent.CompletableFuture<String> answer = new java.util.concurrent.CompletableFuture<>();
+        java.util.concurrent.CompletableFuture<String> earlier = PENDING_DELETES.put(id, answer);
+        if (earlier != null) {
+            earlier.complete(null);
+        }
+        answer.completeOnTimeout(null, 5, java.util.concurrent.TimeUnit.SECONDS).whenComplete((reply, error) -> {
+            PENDING_DELETES.remove(id, answer);
+            try {
+                write(exchange, reply == null ? 202 : reply.startsWith("ok:") ? 200 : 409, "application/json", reply == null
+                        ? "{\"ok\":true,\"queued\":true,\"id\":" + jsonString(id) + "}"
+                        : "{\"ok\":" + reply.startsWith("ok:") + ",\"id\":" + jsonString(id)
+                                + ",\"message\":" + jsonString(reply.substring(reply.indexOf(':') + 1)) + "}");
+            } catch (IOException ignored) {
+                // the browser went away
+            }
+        });
+        Minecraft.getInstance().execute(() -> QuestNetwork.sendToServer(new AuthorChapterDeleteC2S(id)));
+    }
+
+    /** The server answered a chapter delete. */
+    public static void reply(String id, boolean ok, String message) {
+        java.util.concurrent.CompletableFuture<String> answer = PENDING_DELETES.get(id);
+        if (answer != null) {
+            answer.complete((ok ? "ok:" : "no:") + message);
+        }
     }
 
     /** The request body of an authoring write, or null after answering 403/413 for one that may not be made. */

@@ -12,14 +12,13 @@ import { confirmDelete, wireBoardEdit, type BoardEditing } from "./boardEdit";
 import { renderCard } from "./card";
 import { pickReward, pickTask } from "./taskPicker";
 import { openPreviewAs, previewLabel } from "./previewAs";
-import { setDialogHost } from "./dialog";
+import { ask, choose, setDialogHost, tell } from "./dialog";
 import { h } from "./dom";
 import { applyPalette, mountShell, type ShellParts } from "./shell";
 import { renderSidebar, startRename } from "./sidebar";
-import { addEmptyChapter, addStarterChapter, duplicateChapter } from "./chapters";
+import { addEmptyChapter, addStarterChapter, deleteChapter, duplicateChapter } from "./chapters";
 import { openChapterSettings } from "./chapterSettings";
 import { renderIntro } from "./intro";
-import { choose } from "./dialog";
 import { isIntroChapter } from "../model";
 import { createStore, type Store } from "./store";
 
@@ -46,6 +45,21 @@ function openSettingsPage(shell: ShellParts, store: Store, chapterId: string) {
   page.querySelector<HTMLElement>("input, select")?.focus();
 }
 
+/** Ask, then delete: the game deletes a saved chapter first and may refuse one that a datapack defines. */
+async function removeChapter(store: Store, chapterId: string) {
+  const s = store.get();
+  const chapter = s.chapters.find((c) => c.id === chapterId);
+  if (!chapter) return;
+  const quests = chapter.tiles?.length ?? 0;
+  const kids = s.chapters.some((c) => c.parent === chapterId);
+  const yes = await ask(`Delete ${chapter.title || chapterId}?${quests ? ` Its ${quests === 1 ? "quest goes" : `${quests} quests go`} too.` : ""}${kids ? " Child chapters move up a level." : ""}`,
+    { ok: "Delete", danger: true });
+  if (!yes) return;
+  const result = await deleteChapter(store, chapterId, (body) =>
+    bridgeFetch("/api/chapter/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body }));
+  if (!result.ok) await tell(result.message ?? "Minecraft refused the delete.", { title: "Not deleted" });
+}
+
 function sidebarHooks(shell: ShellParts, store: Store) {
   return {
     add: async () => {
@@ -68,7 +82,7 @@ function sidebarHooks(shell: ShellParts, store: Store) {
       if (pick === "rename") startRename(shell.sidebar, store, chapterId);
       if (pick === "settings") openSettingsPage(shell, store, chapterId);
       if (pick === "duplicate") duplicateChapter(store, chapterId);
-      if (pick === "delete") shell.root.dispatchEvent(new CustomEvent("qq-delete-chapter", { detail: chapterId }));
+      if (pick === "delete") await removeChapter(store, chapterId);
     },
   };
 }

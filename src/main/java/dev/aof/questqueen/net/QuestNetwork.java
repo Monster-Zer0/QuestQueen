@@ -55,6 +55,8 @@ public final class QuestNetwork {
         registrar.playToServer(AuthorChromeC2S.TYPE, AuthorChromeC2S.STREAM_CODEC, QuestNetwork::handleAuthorChrome);
         registrar.playToServer(AuthorStageSaveC2S.TYPE, AuthorStageSaveC2S.STREAM_CODEC, QuestNetwork::handleStageSave);
         registrar.playToServer(AuthorStageDeleteC2S.TYPE, AuthorStageDeleteC2S.STREAM_CODEC, QuestNetwork::handleStageDelete);
+        registrar.playToServer(AuthorChapterDeleteC2S.TYPE, AuthorChapterDeleteC2S.STREAM_CODEC, QuestNetwork::handleChapterDelete);
+        registrar.playToClient(AuthorReplyS2C.TYPE, AuthorReplyS2C.STREAM_CODEC, QuestNetwork::handleAuthorReply);
         registrar.playToClient(AuthorStagesS2C.TYPE, AuthorStagesS2C.STREAM_CODEC, QuestNetwork::handleAuthoredStages);
         registrar.playToServer(ClaimChoiceC2S.TYPE, ClaimChoiceC2S.STREAM_CODEC, QuestNetwork::handleClaim);
         registrar.playToServer(ClaimRewardsC2S.TYPE, ClaimRewardsC2S.STREAM_CODEC, QuestNetwork::handleClaimRewards);
@@ -304,6 +306,68 @@ public final class QuestNetwork {
                 player.sendSystemMessage(Component.literal("Quest Queen: stage delete failed — " + exception.getMessage()));
             }
         });
+    }
+
+    /**
+     * Deletes a chapter the editor made. Only the authored pack's own file goes; a chapter some other datapack
+     * defines is refused (remove it from that pack). The browser waits on the {@link AuthorReplyS2C}.
+     */
+    private static void handleChapterDelete(AuthorChapterDeleteC2S payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer player) || !ProgressService.canAuthor(player)) {
+                return;
+            }
+            String raw = payload.id().trim();
+            String message;
+            boolean ok = false;
+            try {
+                ResourceLocation id = ResourceLocation.tryParse(raw);
+                if (id == null) {
+                    throw new IllegalArgumentException(raw + " is not a chapter id");
+                }
+                if (deleteAuthoredChapter(authoredRoot(player), id)) {
+                    ok = true;
+                    message = "deleted chapter " + id + " — reloading data packs";
+                    StageReload.request(player.server);
+                } else if (QuestDefinitions.chapter(id).isPresent()) {
+                    message = id + " comes from a datapack, so it can't be deleted here";
+                } else {
+                    ok = true;
+                    message = id + " was never saved";
+                }
+            } catch (Exception exception) {
+                QuestQueen.LOGGER.error("Failed to delete authored chapter", exception);
+                message = "chapter delete failed — " + exception.getMessage();
+            }
+            player.sendSystemMessage(Component.literal("Quest Queen: " + message));
+            send(player, new AuthorReplyS2C(raw, ok, message));
+        });
+    }
+
+    private static void handleAuthorReply(AuthorReplyS2C payload, IPayloadContext context) {
+        context.enqueueWork(() -> dev.aof.questqueen.client.EditorBridge.reply(payload.id(), payload.ok(), payload.message()));
+    }
+
+    /**
+     * Removes an authored chapter's file from {@code root}. False when the authored pack has no file for it (the
+     * chapter is some other datapack's). Same guards as a save: no {@code ..}, no link between the root and the
+     * file, and the file itself not a link.
+     */
+    static boolean deleteAuthoredChapter(Path root, ResourceLocation id) throws IOException {
+        Path file = authoredChapterFile(root, id);
+        if (!Files.exists(file, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return false;
+        }
+        if (Files.isSymbolicLink(file)) {
+            throw new IOException("Refusing to delete '" + id + "': " + file + " is a symbolic link");
+        }
+        Path realRoot = root.toRealPath();
+        Path realParent = file.getParent().toRealPath();
+        if (!realParent.startsWith(realRoot)) {
+            throw new IOException("Refusing to delete '" + id + "': " + realParent + " resolves outside " + realRoot);
+        }
+        Files.delete(file);
+        return true;
     }
 
     private static Path authoredRoot(ServerPlayer player) {

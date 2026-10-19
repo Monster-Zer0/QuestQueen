@@ -87,3 +87,43 @@ export function moveChapter(store: Store, id: string, where: { before: string } 
   });
   return true;
 }
+
+const NOT_CONNECTED = "Minecraft isn't connected. The chapter is still here.";
+
+/**
+ * Delete a chapter. One the game has never saved just goes; a saved one is deleted by the game first (which
+ * refuses a chapter another datapack defines) and goes here only once it agrees. Its child chapters move up to
+ * its parent; they are then unsaved until Save.
+ */
+export async function deleteChapter(store: Store, id: string, post: (body: string) => Promise<Response>): Promise<{ ok: boolean; message?: string }> {
+  const s = store.get();
+  const gone = s.chapters.find((c) => c.id === id);
+  if (!gone) return { ok: true };
+  if (s.savedJson.has(id)) {
+    let response: Response;
+    try {
+      response = await post(JSON.stringify({ id }));
+    } catch {
+      return { ok: false, message: NOT_CONNECTED };
+    }
+    let body: { message?: string; error?: string } = {};
+    try {
+      body = await response.json();
+    } catch {
+      /* no JSON: the status says enough */
+    }
+    if (!response.ok) return { ok: false, message: body.message || body.error || "Minecraft refused the delete." };
+  }
+  const now = store.get();
+  const chapters = now.chapters.filter((c) => c.id !== id).map((c) => {
+    if (c.parent !== id) return c;
+    const moved = { ...c };
+    if (gone.parent) moved.parent = gone.parent;
+    else delete moved.parent;
+    return moved;
+  });
+  now.savedJson.delete(id);
+  const openId = now.openId === id ? (gone.parent && chapters.some((c) => c.id === gone.parent) ? gone.parent : chapters[0]?.id ?? "") : now.openId;
+  store.load({ chapters, openId, selected: now.openId === id ? null : now.selected }, "delete chapter");
+  return { ok: true };
+}
