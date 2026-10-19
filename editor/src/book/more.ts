@@ -17,7 +17,12 @@ function select(data: string, options: [string, string][], value: string, label:
   return el;
 }
 
-export function renderMore(host: HTMLElement, store: Store): void {
+export interface MoreHooks {
+  /** "New stage…": make a stage (named from what was typed) and resolve its id, or null. */
+  newStage?: (prefill: string) => Promise<string | null>;
+}
+
+export function renderMore(host: HTMLElement, store: Store, hooks: MoreHooks = {}): void {
   const s = store.get();
   const ch = s.chapters.find((c) => c.id === s.openId);
   const tile = ch?.tiles.find((t) => t.id === s.selected);
@@ -102,7 +107,13 @@ export function renderMore(host: HTMLElement, store: Store): void {
 
   host.replaceChildren(
     opens,
-    h("section", { class: "more-section" }, h("h3", {}, "Requires stage"), required,
+    h("section", { class: "more-section" }, h("h3", {}, "Requires stage"), h("div", { class: "more-row" }, required,
+      hooks.newStage ? h("button", { type: "button", class: "picker-btn small", dataset: { act: "new-stage" }, onclick: async () => {
+        const id = await hooks.newStage!(required.value.trim());
+        if (!id) return;
+        required.value = id;
+        required.dispatchEvent(new Event("change"));
+      } }, "New stage…") : null),
       h("datalist", { id: stagesList }, ...s.stages.stages.map((st) => h("option", { value: st.id }, st.name)))),
     h("section", { class: "more-section" }, h("h3", {}, "Hidden"), h("div", { class: "more-row" }, hiddenType, hiddenId)),
     h("section", { class: "more-section" }, h("h3", {}, "Jump to"), h("div", { class: "more-row" }, jumpChapter, jumpTile)),

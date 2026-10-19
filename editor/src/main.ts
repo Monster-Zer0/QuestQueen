@@ -44,7 +44,8 @@ import { descriptionProblems, richToHtml, validTexture } from "./richtext";
 import { commandPreviewHtml, parseGive, rewardName } from "./commandReward";
 import { stageSelectHtml, wireStageSelects, type StageSelectContext } from "./stageSelect";
 import { renderStageEditor, type StageEditorContext } from "./stageEditor";
-import { cleanStage, lockClauses, lockCount, mergeStages, stageUsage, type AuthoredStage, type StageInfo, type StagesState } from "./stages";
+import { stageEditorContext as sharedStageContext, type StageHost } from "./stageContext";
+import { lockClauses, lockCount, mergeStages, stageUsage, type AuthoredStage, type StageInfo, type StagesState } from "./stages";
 import {
   DEFAULT_THEME_ID,
   STOCK_BACKGROUNDS,
@@ -2040,74 +2041,6 @@ function stageInfo(id: string): StageInfo | undefined {
   return stagesState.stages.find((entry) => entry.id === id);
 }
 
-function stableJson(value: unknown): string {
-  return JSON.stringify(value, (_key, v) => v && typeof v === "object" && !Array.isArray(v)
-    ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
-    : v);
-}
-
-/** Poll the bridge until {@code done} holds or {@code ms} passes. */
-async function waitForStages(done: () => boolean, ms: number): Promise<boolean> {
-  const until = Date.now() + ms;
-  while (Date.now() < until) {
-    await refreshStages();
-    if (done()) return true;
-    await new Promise((resolve) => window.setTimeout(resolve, 500));
-  }
-  return false;
-}
-
-async function bridgeError(response: Response, fallback: string): Promise<string> {
-  try {
-    const detail = (await response.json()) as { error?: string };
-    if (detail?.error) return `Minecraft refused it: ${detail.error}`;
-  } catch {
-    /* not JSON */
-  }
-  return fallback;
-}
-
-async function saveStage(stage: AuthoredStage, progress: (text: string) => void): Promise<string | null> {
-  if (!unlocked) return "Minecraft isn't connected.";
-  let response: Response;
-  try {
-    response = await bridgeFetch("/api/stage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(stage),
-    });
-  } catch {
-    return "Couldn't reach Minecraft.";
-  }
-  if (!response.ok) return bridgeError(response, "Minecraft refused the stage. Is the editor still on?");
-  progress("Saved. Reloading the game's data packs…");
-  const want = stableJson(cleanStage(stage));
-  const stored = await waitForStages(() => {
-    const info = stageInfo(stage.id);
-    return !!info?.authored && !!info.stage && stableJson(cleanStage(info.stage)) === want;
-  }, 8000);
-  if (!stored) return "Sent to Minecraft, but it didn't confirm. Check the game chat for the reason.";
-  return null;
-}
-
-async function deleteStage(id: string): Promise<string | null> {
-  let response: Response;
-  try {
-    response = await bridgeFetch("/api/stage/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-  } catch {
-    return "Couldn't reach Minecraft.";
-  }
-  if (!response.ok) return bridgeError(response, "Minecraft refused the delete.");
-  const gone = await waitForStages(() => !stageInfo(id)?.authored, 8000);
-  // StageLock's own list catches up after the reload; give it a moment so the stage doesn't reappear as "pack".
-  if (gone) await waitForStages(() => !stageInfo(id), 4000);
-  return gone ? null : "Sent to Minecraft, but it didn't confirm. Check the game chat for the reason.";
-}
-
 /** Put a "grant this stage" reward on a quest. The chapter's Save writes it to the world. */
 function grantStageFromQuest(stageId: string, chapterId: string, tileId: string) {
   const target = packChapters.find((entry) => entry.id === chapterId);
@@ -2131,21 +2064,19 @@ function jumpToQuest(chapterId: string, tileId?: string) {
   draw();
 }
 
+const stageHost: StageHost = {
+  catalog: () => ({ ...catalog, stageLock: stagesState.stageLock }),
+  stages: () => stagesState.stages,
+  chapters: () => packChapters,
+  refreshStages,
+  connected: () => unlocked,
+  grant: grantStageFromQuest,
+  jump: jumpToQuest,
+  open: (id) => openStage(id),
+};
+
 function stageEditorContext(onDone: (id: string) => void, onCancel?: () => void): StageEditorContext {
-  return {
-    catalog: () => ({ ...catalog, stageLock: stagesState.stageLock }),
-    stages: () => stagesState.stages,
-    chapters: () => packChapters,
-    bridgeBase,
-    iconUrl: (item) => iconUrl(bridgeBase(), item),
-    onSave: saveStage,
-    onDelete: deleteStage,
-    onGrantFromQuest: grantStageFromQuest,
-    onJump: jumpToQuest,
-    onDone,
-    onCancel,
-    onOpen: (id) => openStage(id),
-  };
+  return sharedStageContext(stageHost, onDone, onCancel);
 }
 
 function stageModalOpen(): boolean {

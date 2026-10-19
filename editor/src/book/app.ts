@@ -21,6 +21,7 @@ import { openChapterSettings } from "./chapterSettings";
 import { renderIntro } from "./intro";
 import { isIntroChapter } from "../model";
 import { openProblems, saveAll, saveChapter, type SaveDeps } from "./problems";
+import { openStagePopup, openStages, type StagesPageDeps } from "./stagesPage";
 import { createStore, type Store } from "./store";
 
 const POLL_MS = 2000;
@@ -88,6 +89,8 @@ function sidebarHooks(shell: ShellParts, store: Store) {
   };
 }
 let editing: BoardEditing | null = null;
+let stagesDeps: StagesPageDeps | null = null;
+let bridgeUp = false;
 
 function render(shell: ShellParts, store: Store, board: Board) {
   const state = store.get();
@@ -131,6 +134,7 @@ function render(shell: ShellParts, store: Store, board: Board) {
   minimap?.render();
   renderCard(shell.cardLayer, store, {
     board,
+    newStage: (prefill) => (stagesDeps ? openStagePopup(shell.popLayer, store, stagesDeps, prefill) : Promise.resolve(null)),
     duplicate: () => editing?.duplicateSelected(),
     editTask: async (index, anchor) => {
       if (index >= 0) return;
@@ -210,6 +214,22 @@ function boot() {
     if ((await saveAll(store, saveDeps)) && unsaved > 1) notice(`All ${unsaved} chapters saved.`);
   });
   shell.bar.querySelector("[data-act=problems]")!.addEventListener("click", () => openProblems(saveDeps.host, store));
+  const stagesPage = h("div", { class: "stages-host", hidden: true });
+  shell.board.parentElement!.append(stagesPage);
+  stagesDeps = {
+    fetcher: (path) => bridgeFetch(path),
+    connected: () => bridgeUp,
+    save: (chapterId) => saveChapter(store, chapterId, saveDeps),
+    close: () => {
+      stagesPage.hidden = true;
+      shell.root.classList.remove("stages-open");
+    },
+  };
+  shell.bar.querySelector("[data-act=stages]")!.addEventListener("click", () => {
+    if (!stagesPage.hidden) return stagesDeps!.close();
+    shell.root.classList.add("stages-open");
+    openStages(stagesPage, store, stagesDeps!);
+  });
   window.addEventListener("keydown", (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
       event.preventDefault();
@@ -221,6 +241,7 @@ function boot() {
   let loaded = false;
   const poll = async () => {
     const ready = await bridgeReady();
+    bridgeUp = ready;
     // Once a pack is loaded the book stays usable without Minecraft; saving says it is not connected.
     shell.lock.hidden = ready || loaded;
     shell.root.classList.toggle("offline", !ready);

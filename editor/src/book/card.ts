@@ -26,6 +26,7 @@ export interface CardHooks {
   editReward?: (index: number, anchor: HTMLElement) => void;
   duplicate?: () => void;
   remove?: () => void;
+  newStage?: (prefill: string) => Promise<string | null>;
 }
 
 const STATE_VAR: Record<string, string> = {
@@ -246,7 +247,7 @@ export function renderCard(layer: HTMLElement, store: Store, hooks: CardHooks = 
 
   const top = h("div", { class: "card-top" }, iconBtn, title);
   const more = editing && moreOpen.has(`${chapterId}#${tileId}`) ? h("div", { class: "card-more" }) : null;
-  if (more) renderMore(more, store);
+  if (more) renderMore(more, store, { newStage: hooks.newStage });
   const body = hidden && !editing ? [head, h("p", { class: "card-desc qq-text" }, "???")] : [head, top, desc, tasks, rewards, foot, ...(more ? [more] : [])];
   card.replaceChildren(...body);
   releaseImages(card);
