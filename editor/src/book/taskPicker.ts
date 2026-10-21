@@ -8,7 +8,9 @@ import { commandPreviewHtml } from "../commandReward";
 import { iconUrl } from "../itemSelect";
 import type { CatalogEntry } from "../packCatalog";
 import type { Reward, Task } from "../types";
-import { attachCombo } from "./combo";
+import { GLYPH_IDS } from "../glyphs";
+import { attachCombo, itemIcon, textureIcon } from "./combo";
+import { npcEntries, stageEntries, triggerEntries } from "./lists";
 import { h } from "./dom";
 import { namer } from "./names";
 import { REWARD_KINDS, TASK_KINDS, emptyReward, emptyTask, rewardKindOf, kindOf, rewardSentence, taskSentence, type FieldSpec, type Kind, type Picker } from "./sentences";
@@ -16,10 +18,15 @@ import type { BookState } from "./store";
 
 const LISTS: Partial<Record<Picker, (s: BookState) => CatalogEntry[]>> = {
   item: (s) => s.catalog.items, entity: (s) => s.catalog.entities, block: (s) => s.catalog.blocks, tag: (s) => s.catalog.tags,
-  entityTag: () => [], biome: (s) => s.catalog.biomes, structure: (s) => s.catalog.structures, dimension: (s) => s.catalog.dimensions ?? [],
+  entityTag: (s) => s.catalog.entityTags ?? [], biome: (s) => s.catalog.biomes, structure: (s) => s.catalog.structures, dimension: (s) => s.catalog.dimensions ?? [],
   fluid: (s) => s.catalog.fluids ?? [], advancement: (s) => s.catalog.advancements, loot: (s) => s.catalog.loot,
-  stage: (s) => s.stages.stages.map((st) => ({ id: st.id, name: st.name })),
+  // A command reward's icon: an item, a glyph or a texture.
+  icon: (s) => [...s.catalog.items, ...GLYPH_IDS.map((g) => ({ id: `glyph:${g}`, name: `Glyph: ${g}` })), ...(s.catalog.textures ?? [])],
+  stage: stageEntries, stat: (s) => s.catalog.stats ?? [], npc: npcEntries, trigger: triggerEntries,
 };
+/** Boxes for words the author makes up (a name, a trigger): their list is a reminder, not a check. */
+const FREE: Partial<Record<Picker, true>> = { npc: true, trigger: true, icon: true };
+const rowIcon = (id: string) => (id.startsWith("glyph:") ? undefined : id.includes(":textures/") ? textureIcon(id) : itemIcon(id));
 
 /** The pack's entries for a picker kind (what its dropdown lists). */
 export function catalogEntries(picker: Picker, state: BookState): CatalogEntry[] {
@@ -34,10 +41,10 @@ function field(spec: FieldSpec, value: Value, state: BookState, set: (key: strin
   const input = h("input", {
     class: `box${number ? " num" : ""}`, type: number ? "number" : "text", dataset: { field: spec.key },
     value: raw === undefined ? "" : String(raw),
-    "aria-label": spec.label, placeholder: number ? "" : spec.picker === "text" ? spec.label : "namespace:id",
+    "aria-label": spec.label, placeholder: number ? "" : spec.picker === "text" || FREE[spec.picker] ? spec.label : "namespace:id",
     min: number && spec.key !== "x" && spec.key !== "y" && spec.key !== "z" ? "1" : undefined, spellcheck: "false",
   }) as HTMLInputElement;
-  if (LISTS[spec.picker]) attachCombo(input, () => catalogEntries(spec.picker, state), { icons: spec.picker === "item" });
+  if (LISTS[spec.picker]) attachCombo(input, () => catalogEntries(spec.picker, state), { icon: spec.picker === "item" ? itemIcon : spec.picker === "icon" ? rowIcon : undefined });
   const icon = spec.picker === "item" ? h("img", { class: "field-icon icon", alt: "", hidden: !raw }) as HTMLImageElement : null;
   const showIcon = () => {
     if (!icon) return;
@@ -125,7 +132,7 @@ export function rewardLine(reward: Reward, state: BookState, onChange: (reward: 
       parts.push(list, h("button", { type: "button", class: "picker-btn small", onclick: () => { options.push(emptyReward("item")); value.options = options; emit(); draw(); } }, "+ Option"));
     } else if (value.type === "command") {
       const commandFields: FieldSpec[] = [
-        { key: "command", label: "Command", picker: "text" }, { key: "icon", label: "Icon (item, glyph:id or a texture)", picker: "text" },
+        { key: "command", label: "Command", picker: "text" }, { key: "icon", label: "Icon (item, glyph:id or a texture)", picker: "icon" },
         { key: "name", label: "Name players see", picker: "text" }, { key: "description", label: "Description on hover", picker: "text" },
       ];
       const previewEl = h("div", { class: "command-preview" });

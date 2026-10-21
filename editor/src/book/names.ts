@@ -4,7 +4,7 @@ import type { BookState } from "./store";
 import type { Namer } from "./sentences";
 
 const LIST: Record<string, keyof BookState["catalog"]> = {
-  item: "items", entity: "entities", entityTag: "tags", tag: "tags", block: "blocks", biome: "biomes",
+  item: "items", entity: "entities", entityTag: "entityTags", tag: "tags", stat: "stats", block: "blocks", biome: "biomes",
   structure: "structures", dimension: "dimensions", fluid: "fluids", advancement: "advancements", loot: "loot",
 };
 
@@ -17,6 +17,8 @@ export function prettyId(id: string): string {
 export function namer(state: BookState): Namer {
   return (kind, raw) => {
     const id = raw.split("[")[0];
+    // Typed by the author, not ids from a registry: shown as written.
+    if (kind === "npc" || kind === "trigger") return raw;
     if (kind === "stage") return state.stages.stages.find((s) => s.id === id)?.name || prettyId(id);
     const list = LIST[kind] ? (state.catalog[LIST[kind]] as CatalogEntry[] | undefined) : undefined;
     const full = id.includes(":") ? id : `minecraft:${id}`;

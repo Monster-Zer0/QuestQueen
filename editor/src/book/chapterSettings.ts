@@ -2,7 +2,8 @@
 // background, icon, unlock conditions, hide until unlocked and the board size. Each field saves as you leave it.
 import { descendantIds, minGrid } from "../model";
 import { chapterGridHeight, chapterGridWidth, GRID_PRESETS, type Chapter, type UnlockCondition } from "../types";
-import { attachCombo } from "./combo";
+import { attachCombo, itemIcon, textureIcon } from "./combo";
+import { conditionEntries } from "./lists";
 import { h } from "./dom";
 import { BOOK_PALETTES } from "./palettes";
 import type { Store } from "./store";
@@ -50,6 +51,7 @@ export function openChapterSettings(host: HTMLElement, store: Store, chapterId: 
   const bgMode = select("bg_mode", [["", "Theme colour"], ["color", "Colour"], ["image", "Picture"]], ch.background?.mode ?? "", "Background");
   const bgColor = h("input", { type: "color", value: ch.background?.color ?? "#24142c", dataset: { setting: "bg_color" }, "aria-label": "Background colour" }) as HTMLInputElement;
   const bgImage = h("input", { value: ch.background?.image ?? "", placeholder: "mypack:textures/gui/bg.png", dataset: { setting: "bg_image" }, "aria-label": "Background picture" }) as HTMLInputElement;
+  attachCombo(bgImage, () => store.get().catalog.textures ?? [], { icon: textureIcon });
   const bgOpacity = h("input", { type: "range", min: "0", max: "1", step: "0.05", value: String(ch.background?.opacity ?? 1), dataset: { setting: "bg_opacity" }, "aria-label": "Background opacity" }) as HTMLInputElement;
   const writeBg = () => edit("chapter background", (c) => {
     if (!bgMode.value) delete c.background;
@@ -58,7 +60,7 @@ export function openChapterSettings(host: HTMLElement, store: Store, chapterId: 
   [bgMode, bgColor, bgImage, bgOpacity].forEach((el) => el.addEventListener("change", writeBg));
 
   const icon = h("input", { value: ch.icon?.item ?? (ch.icon?.glyph ? `glyph:${ch.icon.glyph}` : ""), placeholder: "minecraft:book or glyph:star", dataset: { setting: "icon" }, "aria-label": "Chapter icon" }) as HTMLInputElement;
-  attachCombo(icon, () => store.get().catalog.items, { icons: true });
+  attachCombo(icon, () => store.get().catalog.items, { icon: itemIcon });
   icon.addEventListener("change", () => edit("chapter icon", (c) => {
     const v = icon.value.trim();
     if (!v) delete c.icon;
@@ -74,6 +76,7 @@ export function openChapterSettings(host: HTMLElement, store: Store, chapterId: 
   const unlockRows = h("div", { class: "settings-conditions" }, ...conditions.map((cond, i) => {
     const type = select("unlock_type", CONDITION_TYPES, cond.type, "Condition type");
     const value = h("input", { value: cond.id, "aria-label": "Condition id", dataset: { setting: "unlock_id" } }) as HTMLInputElement;
+    attachCombo(value, () => conditionEntries(type.value, store.get()), {});
     const update = () => { conditions[i] = { type: type.value, id: value.value.trim() }; writeUnlock(); };
     type.addEventListener("change", update);
     value.addEventListener("change", update);

@@ -15,6 +15,14 @@ export interface PackCatalog {
   fluids?: CatalogEntry[];
   dimensions?: CatalogEntry[];
   stats?: CatalogEntry[];
+  /** Mob tags, for "any mob in a tag". */
+  entityTags?: CatalogEntry[];
+  /** Scoreboard objectives, by name, for scoreboard gates. */
+  objectives?: CatalogEntry[];
+  /** The pack's scrolls (id and title), for "Scrolls it gives". */
+  scrolls?: CatalogEntry[];
+  /** Every texture PNG in the loaded resource packs, for picture boxes. */
+  textures?: CatalogEntry[];
   /** Stages the pack defines (StageLock), with display names. */
   stages?: CatalogEntry[];
   /** Installed mods, for "lock a whole mod". */
@@ -36,6 +44,10 @@ export function emptyCatalog(): PackCatalog {
     fluids: [],
     dimensions: [],
     stats: [],
+    entityTags: [],
+    objectives: [],
+    scrolls: [],
+    textures: [],
     stages: [],
     mods: [],
     stageLock: false,
@@ -55,6 +67,10 @@ export function fromApi(raw: Record<string, unknown>): PackCatalog {
     fluids: asEntries(raw.fluids),
     dimensions: asEntries(raw.dimensions),
     stats: asEntries(raw.stats),
+    entityTags: asEntries(raw.entityTags),
+    objectives: asEntries(raw.objectives),
+    scrolls: asEntries(raw.scrolls),
+    textures: asEntries(raw.textures),
     stages: asEntries(raw.stages),
     mods: asEntries(raw.mods),
     stageLock: raw.stageLock === true,

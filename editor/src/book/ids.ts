@@ -8,6 +8,8 @@ import { kindOf, rewardKindOf, type Picker } from "./sentences";
 const LISTS: Partial<Record<Picker, { list: keyof PackCatalog; noun: string }>> = {
   item: { list: "items", noun: "item" },
   tag: { list: "tags", noun: "tag" },
+  entityTag: { list: "entityTags", noun: "mob tag" },
+  stat: { list: "stats", noun: "statistic" },
   entity: { list: "entities", noun: "mob" },
   block: { list: "blocks", noun: "block" },
   biome: { list: "biomes", noun: "biome" },

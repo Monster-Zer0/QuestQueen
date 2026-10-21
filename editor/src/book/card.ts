@@ -9,7 +9,7 @@ import { iconUrl } from "../itemSelect";
 import { richToHtml } from "../richtext";
 import type { Chapter, Reward, Task, Tile } from "../types";
 import type { Board } from "./board";
-import { attachCombo } from "./combo";
+import { attachCombo, itemIcon } from "./combo";
 import { flushDescribe, openDescribe } from "./describe";
 import { renderMore } from "./more";
 import { h, keptImage, releaseImages } from "./dom";
@@ -62,7 +62,7 @@ function iconBox(scope: HTMLElement, item: string | undefined, glyph: string | u
 function openIconPicker(anchor: HTMLElement, state: BookState, current: Tile["icon"], onPick: (icon: Tile["icon"]) => void) {
   document.querySelector(".icon-picker")?.remove();
   const input = h("input", { class: "icon-picker-input", placeholder: "Item id, e.g. minecraft:diamond", "aria-label": "Item", value: current?.item ?? "" }) as HTMLInputElement;
-  attachCombo(input, () => state.catalog.items, { icons: true });
+  attachCombo(input, () => state.catalog.items, { icon: itemIcon });
   const close = () => pop.remove();
   const glyphs = h("div", { class: "icon-picker-glyphs", role: "group", "aria-label": "QuestQueen glyphs" },
     ...GLYPH_IDS.map((id) => {
@@ -162,7 +162,7 @@ export function renderCard(layer: HTMLElement, store: Store, hooks: CardHooks = 
     const openEditor = () => {
       if (desc.dataset.editing) return;
       desc.classList.add("describing");
-      openDescribe(desc, { value: tile.description ?? "", preview, onCommit: (text) => editTile("description", (t) => { t.description = text; }) });
+      openDescribe(desc, { value: tile.description ?? "", preview, catalog: () => s.catalog, onCommit: (text) => editTile("description", (t) => { t.description = text; }) });
     };
     desc.addEventListener("click", (event) => { if (!desc.dataset.editing && !(event.target as HTMLElement).closest("a")) openEditor(); });
     desc.addEventListener("keydown", (event) => { if (!desc.dataset.editing && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); openEditor(); } });

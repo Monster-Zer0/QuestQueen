@@ -3,12 +3,16 @@
 // under it. Done keeps it, Cancel or Esc puts it back. Toolbar inserts go after the selection, never over it.
 import { GLYPH_IDS } from "../glyphs";
 import { descriptionProblems, richToHtml, validTexture, type PreviewOptions } from "../richtext";
+import type { PackCatalog } from "../packCatalog";
+import { attachCombo, itemIcon, textureIcon } from "./combo";
 import { h } from "./dom";
 
 export interface DescribeOptions {
   value: string;
   onCommit: (value: string) => void;
   preview: PreviewOptions;
+  /** The pack's lists, for the item and picture boxes. */
+  catalog?: () => PackCatalog;
 }
 
 /** Open editors, each able to commit itself: a redraw that is about to replace one flushes it first. */
@@ -80,6 +84,11 @@ export function openDescribe(host: HTMLElement, opts: DescribeOptions): void {
   });
   const item = h("input", { class: "desc-item-id", placeholder: "minecraft:diamond", "aria-label": "Item id to show in the text" }) as HTMLInputElement;
   const picPath = h("input", { class: "desc-pic-path", placeholder: "mypack:textures/quest/castle.png", "aria-label": "Picture: resource pack texture" }) as HTMLInputElement;
+  if (opts.catalog) {
+    const catalog = opts.catalog;
+    attachCombo(item, () => catalog().items, { icon: itemIcon });
+    attachCombo(picPath, () => catalog().textures ?? [], { icon: textureIcon });
+  }
   const picCaption = h("input", { class: "desc-pic-caption", placeholder: "caption (optional)", "aria-label": "Picture caption" }) as HTMLInputElement;
   const tool = (label: string, title: string, run: () => void) =>
     h("button", { type: "button", class: "desc-tool", title, "aria-label": title, onclick: (event: Event) => { event.preventDefault(); note.textContent = ""; run(); } }, label);

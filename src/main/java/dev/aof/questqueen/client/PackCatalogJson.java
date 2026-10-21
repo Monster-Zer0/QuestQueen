@@ -2,6 +2,7 @@ package dev.aof.questqueen.client;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
@@ -9,10 +10,18 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.storage.loot.BuiltInLootTables;
+import net.minecraft.world.scores.Objective;
+import net.minecraft.world.scores.Scoreboard;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 
 public final class PackCatalogJson {
@@ -68,23 +77,84 @@ public final class PackCatalogJson {
         root.add("structures", structures);
         root.add("dimensions", dimensions);
 
-        JsonArray advancements = new JsonArray();
-        for (String id : new String[]{
-                "minecraft:story/root", "minecraft:story/mine_stone", "minecraft:adventure/root",
-                "minecraft:nether/root", "minecraft:end/root", "minecraft:husbandry/root"
-        }) {
-            advancements.add(entry(id, id));
-        }
-        root.add("advancements", advancements);
-        JsonArray loot = new JsonArray();
-        for (String id : new String[]{
-                "minecraft:chests/simple_dungeon", "minecraft:chests/abandoned_mineshaft",
-                "minecraft:chests/desert_pyramid", "minecraft:chests/end_city_treasure"
-        }) {
-            loot.add(entry(id, id));
-        }
-        root.add("loot", loot);
+        root.add("advancements", advancements(minecraft));
+        root.add("loot", lootTables(minecraft));
+        JsonArray entityTags = new JsonArray();
+        BuiltInRegistries.ENTITY_TYPE.getTagNames().forEach(tag -> entityTags.add(entry(tag.location().toString(), tag.location().toString())));
+        root.add("entityTags", entityTags);
+        root.add("objectives", objectives(minecraft));
+        JsonArray scrolls = new JsonArray();
+        ClientQuestState.pack.scrolls().forEach(scroll -> scrolls.add(entry(scroll.id().toString(), scroll.title())));
+        root.add("scrolls", scrolls);
+        root.add("textures", textures(minecraft));
         return root.toString();
+    }
+
+    /** Every advancement the game knows (the whole set in single player, what the server sent otherwise), titled. */
+    private static JsonArray advancements(Minecraft minecraft) {
+        JsonArray array = new JsonArray();
+        Collection<AdvancementHolder> holders = new ArrayList<>();
+        MinecraftServer server = minecraft.getSingleplayerServer();
+        if (server != null) {
+            holders.addAll(server.getAdvancements().getAllAdvancements());
+        } else if (minecraft.getConnection() != null) {
+            minecraft.getConnection().getAdvancements().getTree().nodes().forEach(node -> holders.add(node.holder()));
+        }
+        holders.stream()
+                // One hidden "you can now craft X" advancement per recipe: thousands of rows nobody gates on.
+                .filter(holder -> !holder.id().getPath().startsWith("recipes/"))
+                .sorted(Comparator.comparing(holder -> holder.id().toString()))
+                .forEach(holder -> array.add(entry(holder.id().toString(), holder.value().display()
+                        .map(display -> display.getTitle().getString())
+                        .filter(title -> !title.isBlank())
+                        .orElse(holder.id().toString()))));
+        if (array.isEmpty()) {
+            for (String id : new String[]{
+                    "minecraft:story/root", "minecraft:story/mine_stone", "minecraft:adventure/root",
+                    "minecraft:nether/root", "minecraft:end/root", "minecraft:husbandry/root"
+            }) {
+                array.add(entry(id, id));
+            }
+        }
+        return array;
+    }
+
+    /** Every loot table the pack loads in single player; vanilla's built-in tables otherwise. */
+    private static JsonArray lootTables(Minecraft minecraft) {
+        MinecraftServer server = minecraft.getSingleplayerServer();
+        List<ResourceLocation> ids = new ArrayList<>();
+        if (server != null) {
+            ids.addAll(server.reloadableRegistries().getKeys(Registries.LOOT_TABLE));
+        } else {
+            BuiltInLootTables.all().forEach(key -> ids.add(key.location()));
+        }
+        ids.sort(Comparator.comparing(ResourceLocation::toString));
+        JsonArray array = new JsonArray();
+        ids.forEach(id -> array.add(entry(id.toString(), id.toString())));
+        return array;
+    }
+
+    /** Scoreboard objectives, by name (what a scoreboard gate names) and display name. */
+    private static JsonArray objectives(Minecraft minecraft) {
+        JsonArray array = new JsonArray();
+        MinecraftServer server = minecraft.getSingleplayerServer();
+        Scoreboard scoreboard = server != null ? server.getScoreboard() : minecraft.level != null ? minecraft.level.getScoreboard() : null;
+        if (scoreboard != null) {
+            scoreboard.getObjectives().stream()
+                    .sorted(Comparator.comparing(Objective::getName))
+                    .forEach(objective -> array.add(entry(objective.getName(), objective.getDisplayName().getString())));
+        }
+        return array;
+    }
+
+    /** Every PNG under textures/ in the loaded resource packs, as ids the book's pictures take. */
+    private static JsonArray textures(Minecraft minecraft) {
+        JsonArray array = new JsonArray();
+        minecraft.getResourceManager().listResources("textures", id -> id.getPath().endsWith(".png")).keySet().stream()
+                .map(ResourceLocation::toString)
+                .sorted()
+                .forEach(array::add);
+        return array;
     }
 
     private static RegistryAccess registryAccess(Minecraft minecraft) {

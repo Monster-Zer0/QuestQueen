@@ -4,6 +4,7 @@ import { bridgeBase } from "../bridge";
 import { iconUrl } from "../itemSelect";
 import { richToHtml } from "../richtext";
 import type { Chapter } from "../types";
+import { attachCombo, textureIcon } from "./combo";
 import { flushDescribe, openDescribe } from "./describe";
 import { h } from "./dom";
 import { inlineText } from "./inline";
@@ -29,13 +30,14 @@ export function renderIntro(host: HTMLElement, store: Store, chapter: Chapter): 
   const image = chapter.intro?.image ?? "";
   const picture = image ? h("img", { class: "intro-picture", alt: "", src: pictureUrl(image) }) : h("div", { class: "intro-picture empty" }, editing ? "No picture yet" : "");
   const path = editing ? h("input", { class: "intro-path", value: image, placeholder: "mypack:textures/gui/intro/act1.png", "aria-label": "Intro picture (resource pack texture)" }) as HTMLInputElement : null;
+  if (path) attachCombo(path, () => store.get().catalog.textures ?? [], { icon: textureIcon });
   path?.addEventListener("change", () => edit("intro picture", (c) => { c.intro = { ...(c.intro ?? {}), image: path.value.trim() || undefined }; }));
   const body = h("div", { class: `intro-body qq-text${editing ? " editable" : ""}`, tabindex: editing ? "0" : undefined, role: editing ? "button" : undefined, "aria-label": editing ? "Edit the intro text" : undefined });
   body.innerHTML = chapter.intro?.body ? richToHtml(chapter.intro.body, preview) : editing ? '<span class="card-empty">Write the intro players read before these chapters…</span>' : "";
   if (editing) {
     const open = () => {
       if (body.dataset.editing) return;
-      openDescribe(body, { value: chapter.intro?.body ?? "", preview, onCommit: (v) => edit("intro text", (c) => { c.intro = { ...(c.intro ?? {}), body: v }; }) });
+      openDescribe(body, { value: chapter.intro?.body ?? "", preview, catalog: () => store.get().catalog, onCommit: (v) => edit("intro text", (c) => { c.intro = { ...(c.intro ?? {}), body: v }; }) });
     };
     body.addEventListener("click", open);
     body.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); open(); } });
