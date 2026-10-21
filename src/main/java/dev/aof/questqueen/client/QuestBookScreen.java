@@ -287,7 +287,7 @@ public class QuestBookScreen extends Screen {
     static final int STRIP_LABEL_GAP = 4;
     /** Right edge of the task-label band, as an inset from the card's right edge. */
     static final int LABEL_RIGHT_MARGIN = 74;
-    /** Left inset of the icon strip, and the vertical inset that centres an 8px mosaic in a 12px row. */
+    /** Left inset of the icon strip, and the vertical inset that centers an 8px mosaic in a 12px row. */
     static final int STRIP_X = 10;
     private static final int MOSAIC_INSET_Y = 4;
     /** Left and right inset of card content; the 3px state rail sits inside the left inset. */
@@ -434,7 +434,7 @@ public class QuestBookScreen extends Screen {
      * One painted line of the progress log. {@code y} is in scroll-independent content space, so the same
      * layout can be measured and drawn at any offset. The icon is an {@code Optional} rather than an
      * {@code ItemStack.EMPTY} sentinel so the layout stays constructible without bootstrapping Minecraft
-     * (touching {@code ItemStack.EMPTY} runs its static initialiser, which needs the game registries).
+     * (touching {@code ItemStack.EMPTY} runs its static initializer, which needs the game registries).
      */
     private record LogRow(int y, String text, int color, Optional<ItemStack> stack, int inset) {
     }
@@ -460,12 +460,12 @@ public class QuestBookScreen extends Screen {
             return mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
         }
 
-        /** Centre of the painted strip. */
-        int centreX() {
+        /** Center of the painted strip. */
+        int centerX() {
             return x + Math.max(1, w) / 2;
         }
 
-        int centreY() {
+        int centerY() {
             return y + Math.max(1, h) / 2;
         }
 
@@ -499,7 +499,7 @@ public class QuestBookScreen extends Screen {
         // returning, or a resize re-init). `closing` is set by removed() and was never cleared, so on
         // the way back the scale re-apply below early-returned (F8: the book drew at the player's
         // scale) and focusStartTile() re-ran the FIT and wiped the selection. Gate on the INSTANCE
-        // flag (freshOpen), NOT on `closing`, so the behaviour survives any number of re-entries
+        // flag (freshOpen), NOT on `closing`, so the behavior survives any number of re-entries
         // (F8 clause 7 - the init count goes above one); re-assert the place after every writer.
         boolean fresh = freshOpen;
         freshOpen = false;
@@ -510,7 +510,7 @@ public class QuestBookScreen extends Screen {
         QuestQueen.LOGGER.info("[questqueen] book init #{} fresh={}", INIT_COUNT, fresh);
         applyBookGuiScale();
         search = new EditBox(font, searchX(), 7, searchW(), 12, Component.literal("Search"));
-        // EditBox draws the hint in the text colour, so an unstyled hint looked like typed text.
+        // EditBox draws the hint in the text color, so an unstyled hint looked like typed text.
         search.setHint(Component.literal("Search quests").withColor(QuestColors.SIDEBAR_HEADER & 0x00FFFFFF));
         search.setBordered(false);
         search.setTextColor(QuestColors.SIDEBAR_TEXT);
@@ -848,11 +848,11 @@ public class QuestBookScreen extends Screen {
     }
 
     /**
-     * What FIT optimises for, and the flag Troi asked for so both targets can be compared in frames.
+     * What FIT optimizes for, and the flag Troi asked for so both targets can be compared in frames.
      *
      * <p>The type is {@link FitCamera.Target} rather than a second enum declared here: two enums for one
      * concept drift apart the moment either gains a value. The default is ANCHOR and must stay so, on her
-     * explicit condition that the comparison cannot become the shipped behaviour by inaction.
+     * explicit condition that the comparison cannot become the shipped behavior by inaction.
      */
     private static volatile FitCamera.Target fitTarget = FitCamera.Target.ANCHOR;
 
@@ -888,11 +888,11 @@ public class QuestBookScreen extends Screen {
         setZoom(Math.max(fitFloor(), Math.min(2f, fit)));
         FitCamera.Choice choice = FitCamera.choose(fitCells(), anchorCell(), fitTarget, fitView());
         if (choice.total() == 0) {
-            // No placed tiles at all: keep the old bounding-box framing so an empty chapter still centres.
+            // No placed tiles at all: keep the old bounding-box framing so an empty chapter still centers.
             cameraX = worldLeft - (contentWidth() - worldW * zoom) / (2.0 * zoom);
             cameraY = worldTop - (TOP_H + (contentHeight() - worldH * zoom) / 2.0) / zoom;
         } else if (contentFitsView(minX, minY, maxX, maxY)) {
-            // The whole chapter fits at this zoom, so there is nothing for the anchor rule to trade off: centre
+            // The whole chapter fits at this zoom, so there is nothing for the anchor rule to trade off: center
             // the content. The anchor rule alone parked small chapters against one edge with the rest of the
             // board empty.
             FitCamera.View view = fitView();
@@ -1301,7 +1301,7 @@ public class QuestBookScreen extends Screen {
                             ready ? QuestColors.CURRENT : QuestColors.MUTED, !ready));
                 }
                 if (bar.pin()) {
-                    // PIN is an outline in the card's state colour; PINNED fills, so the active state reads at once.
+                    // PIN is an outline in the card's state color; PINNED fills, so the active state reads at once.
                     int pinColor = bar.pinned() ? QuestColors.EDIT : accent;
                     boolean outline = !bar.pinned();
                     if (UiFx.enabled() && fxPinFlashAt >= 0L) {
@@ -1646,9 +1646,9 @@ public class QuestBookScreen extends Screen {
                         MockChrome.frame(graphics, f.x() - 2, f.y() - 2, f.w() + 4, f.h() + 4, QuestColors.EDIT);
                         MockChrome.frame(graphics, f.x() - 1, f.y() - 1, f.w() + 2, f.h() + 2, UiFx.withAlpha(QuestColors.EDIT, 0.4f));
                     });
-                    int tipX = focus.map(FocusTarget::centreX)
+                    int tipX = focus.map(FocusTarget::centerX)
                             .orElse(mouseX);
-                    int tipY = focus.map(FocusTarget::centreY)
+                    int tipY = focus.map(FocusTarget::centerY)
                             .orElse(mouseY);
                     drawInspectTooltips(graphics, tipX, tipY);
                     pose.popPose();
@@ -2155,7 +2155,7 @@ public class QuestBookScreen extends Screen {
         // vanish has no affordance value (C spec, t_5a9d5cde).
         MockChrome.box(graphics, trackX, thumbY, 2, thumbH, UiFx.withAlpha(QuestColors.SIDEBAR_HEADER, thumbAlpha));
         if (moreBelow(sidebarScroll, max)) {
-            // Non-colour-only affordance: text AND a down-chevron.
+            // Non-color-only affordance: text AND a down-chevron.
             int cx = sidebarWidth() - 8;
             int cy = height - 14;
             for (int i = 0; i < 4; i++) {
@@ -2931,7 +2931,7 @@ public class QuestBookScreen extends Screen {
         }
     }
 
-    /** Bright pip travelling from the source tile's port to the destination port when a gate opens. */
+    /** Bright pip traveling from the source tile's port to the destination port when a gate opens. */
     private void drawGatePip(GuiGraphics graphics, Tile from, Tile to, int size, long startMs) {
         float p = UiFx.easeOut(UiFx.progress(startMs, PIP_MS));
         if (p >= 1f) {
@@ -3509,7 +3509,7 @@ public class QuestBookScreen extends Screen {
         int x = cardX();
         int y = cardY();
         String header = headerLabel(visual, tile);
-        // State word in the state colour, where the corner tab used to be (close X is drawn by the overlay).
+        // State word in the state color, where the corner tab used to be (close X is drawn by the overlay).
         tinyString(graphics, header, x + CARD_PAD, y + 4, color);
 
 
@@ -3705,7 +3705,7 @@ public class QuestBookScreen extends Screen {
             int sx = layout.slotX()[i];
             boolean option = slot.option() >= 0;
             if (option && bar.choice()) {
-                // Pickable: the picked icon is framed in the state colour, the hovered one in a muted frame.
+                // Pickable: the picked icon is framed in the state color, the hovered one in a muted frame.
                 if (slot.option() == picked) {
                     MockChrome.frame(graphics, sx - 2, iconY - 2, 20, 20, stateInk == 0 ? QuestColors.CURRENT : stateInk);
                 } else if (over(sx - 1, iconY - 1, 18, 18, mouseX, mouseY)) {
@@ -3735,7 +3735,7 @@ public class QuestBookScreen extends Screen {
         if (bar.action()) {
             drawButtonLabel(graphics, bar.actionX(), bar.y(), bar.actionW(), 12, bar.actionLabel());
             // Breathing highlight while there is something to claim/turn in, so the one actionable
-            // button on the card draws the eye. Alpha only — the button colour stays semantic.
+            // button on the card draws the eye. Alpha only — the button color stays semantic.
             if (UiFx.enabled()) {
                 float breath = UiFx.wave(1900L, 0L);
                 int halo = UiFx.withAlpha(actionColor(bar), 0.18f + 0.32f * breath);
@@ -3864,7 +3864,7 @@ public class QuestBookScreen extends Screen {
         return from + Math.round((to - from) * UiFx.clamp01(fraction));
     }
 
-    /** Fill colour of the primary button:CLAIM takes the COMPLETED colour, SUBMIT the CURRENT one. */
+    /** Fill color of the primary button:CLAIM takes the COMPLETED color, SUBMIT the CURRENT one. */
     private static int actionColor(PlayBar bar) {
         return "CLAIM".equals(bar.actionLabel()) ? QuestColors.COMPLETED : QuestColors.CURRENT;
     }
@@ -4787,7 +4787,7 @@ public class QuestBookScreen extends Screen {
         if (is(QuestKeybinds.ZOOM_IN, keyCode, scanCode, mods) || is(QuestKeybinds.ZOOM_OUT, keyCode, scanCode, mods)) {
             int[] at = selectedId.isEmpty() || chapter.tile(selectedId).isEmpty()
                     ? new int[]{boardLeft() + contentWidth() / 2, TOP_H + contentHeight() / 2}
-                    : chapter.tile(selectedId).map(this::tileCentre).orElseThrow();
+                    : chapter.tile(selectedId).map(this::tileCenter).orElseThrow();
             stepZoom(is(QuestKeybinds.ZOOM_IN, keyCode, scanCode, mods) ? 1 : -1, at[0], at[1]);
             return;
         }
@@ -4870,7 +4870,7 @@ public class QuestBookScreen extends Screen {
                 });
     }
 
-    private int[] tileCentre(Tile tile) {
+    private int[] tileCenter(Tile tile) {
         int[] s = screen(tile.pos().x(), tile.pos().y());
         return new int[]{s[0] + tilePx() / 2, s[1] + tilePx() / 2};
     }
@@ -4931,11 +4931,11 @@ public class QuestBookScreen extends Screen {
 
     /** A part of the open card the keyboard can focus: where it is, and the item it stands for (if any). */
     record FocusTarget(int x, int y, int w, int h, ItemStack stack) {
-        int centreX() {
+        int centerX() {
             return x + w / 2;
         }
 
-        int centreY() {
+        int centerY() {
             return y + h / 2;
         }
     }
@@ -5024,10 +5024,10 @@ public class QuestBookScreen extends Screen {
         if (dir != null && focused.isPresent()) {
             List<KeyNav.Point> points = new ArrayList<>();
             for (int i = 0; i < targets.size(); i++) {
-                points.add(new KeyNav.Point(Integer.toString(i), targets.get(i).centreX(), targets.get(i).centreY()));
+                points.add(new KeyNav.Point(Integer.toString(i), targets.get(i).centerX(), targets.get(i).centerY()));
             }
             FocusTarget f = focused.get();
-            KeyNav.next(points, new KeyNav.Point(Integer.toString(cardFocusIndex), f.centreX(), f.centreY()), dir)
+            KeyNav.next(points, new KeyNav.Point(Integer.toString(cardFocusIndex), f.centerX(), f.centerY()), dir)
                     .ifPresent(point -> cardFocusIndex = Integer.parseInt(point.id()));
             return;
         }
@@ -5036,7 +5036,7 @@ public class QuestBookScreen extends Screen {
         }
         FocusTarget f = focused.get();
         if (is(QuestKeybinds.SELECT, keyCode, scanCode, mods)) {
-            clickGui(f.centreX(), f.centreY());
+            clickGui(f.centerX(), f.centerY());
         } else if (is(QuestKeybinds.RECIPES, keyCode, scanCode, mods) || is(QuestKeybinds.USES, keyCode, scanCode, mods)) {
             if (!f.stack().isEmpty()) {
                 boolean recipes = is(QuestKeybinds.RECIPES, keyCode, scanCode, mods);
@@ -5878,7 +5878,7 @@ public class QuestBookScreen extends Screen {
             tint = QuestConfig.CLAIM_TINT.get();
             edge = QuestConfig.CLAIM_EDGE.get();
         } catch (IllegalStateException notLoaded) {
-            // Config not loaded yet: the theme's own claim colours stand.
+            // Config not loaded yet: the theme's own claim colors stand.
         }
         QuestColors.apply(palette.withClaim(BookPalette.parseArgb(tint, palette.claimTint()),
                 BookPalette.parseArgb(edge, palette.claimEdge())));
@@ -5888,7 +5888,7 @@ public class QuestBookScreen extends Screen {
      * Members of a tag task's tag, in registry-id order so the mosaic does not reshuffle between frames.
      * Empty for anything that is not an {@code item_tag} task, for a tag no pack has bound, or when the item
      * registry is not bootstrapped — in all three cases the row falls back to a single icon,
-     * which is the pre-1.1.168 behaviour.
+     * which is the pre-1.1.168 behavior.
      */
     static List<Item> taskTagItems(Task task) {
         if (task == null || !"item_tag".equals(task.type()) || task.tagId().isEmpty()) {
@@ -5944,7 +5944,7 @@ public class QuestBookScreen extends Screen {
     /**
      * The stack that visually represents a task's target, or empty for tasks with no item to show.
      * Item tasks show the item; block / fluid / observation tasks show the block or fluid as an item,
-     * because that is what the player recognises and what JEI can look up.
+     * because that is what the player recognizes and what JEI can look up.
      */
     static ItemStack taskStack(Task task) {
         if (task == null) {
@@ -6042,7 +6042,7 @@ public class QuestBookScreen extends Screen {
         }
     }
 
-    /** Sparse colour-coded specks falling slowly — circuit traces / drifting leaves. */
+    /** Sparse color-coded specks falling slowly — circuit traces / drifting leaves. */
     private void drawAmbientDrift(GuiGraphics graphics, int left, int top, int w, int h, int base) {
         final int count = 18;
         for (int i = 0; i < count; i++) {

@@ -633,7 +633,7 @@ public final class EditorBridge {
     /**
      * Constant-time comparison of the presented session nonce, and it FAILS CLOSED: an absent or
      * blank presented value is a refusal, and so is an empty expected value (no live session), so
-     * a write can never be authorised by the absence of both sides.
+     * a write can never be authorized by the absence of both sides.
      */
     private static boolean nonceAccepted(HttpExchange exchange) {
         String expected = sessionNonce;
@@ -660,7 +660,7 @@ public final class EditorBridge {
             exchange.getResponseHeaders().add("Access-Control-Allow-Origin", origin.trim());
         }
         exchange.getResponseHeaders().add("Vary", "Origin");
-        // Q2-2 (lands with the nonce, no behaviour change): a JSON or HTML body must not be
+        // Q2-2 (lands with the nonce, no behavior change): a JSON or HTML body must not be
         // sniffed into an executable type by a client that trusts its own content guess.
         exchange.getResponseHeaders().add("X-Content-Type-Options", "nosniff");
         exchange.getResponseHeaders().add("Content-Type", type);

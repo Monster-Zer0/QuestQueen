@@ -1,6 +1,6 @@
 // Stages as a book page: the stage list on the left page, the stage editor on the right. The editor is the same
 // component the old UI used (stageEditor.ts) with the shared bridge context (stageContext.ts); only its frame and
-// colours are the book's. Giving a stage from a quest edits that quest's chapter, so the page says which chapter
+// colors are the book's. Giving a stage from a quest edits that quest's chapter, so the page says which chapter
 // changed and offers to save it instead of changing it silently.
 import { iconUrl } from "../bridge";
 import { stageEditorContext, type StageHost } from "../stageContext";

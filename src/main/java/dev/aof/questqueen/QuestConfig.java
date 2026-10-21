@@ -43,7 +43,7 @@ public final class QuestConfig {
                 .define("githubIssuesUrl", "");
         builder.push("effects");
         ANIMATIONS = builder
-                .comment("Book motion: travelling path arrows, completion flares, gate pips, modal shimmer,",
+                .comment("Book motion: traveling path arrows, completion flares, gate pips, modal shimmer,",
                         "breathing CLAIM, sidebar slide, inspect settle, log drawer, claim sparks,",
                         "choice arrival, selection halo, task fill. Turn off for a completely static book.")
                 .define("animations", true);

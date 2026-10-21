@@ -1,4 +1,4 @@
-// The quest card, in the original mock's chrome: a 1px frame in the state colour, a filled state tab with the
+// The quest card, in the original mock's chrome: a 1px frame in the state color, a filled state tab with the
 // angled notch top-left, close × top-right, the title, the description, the tasks as sentences, and a REWARD
 // section. In Edit it is the mock's EDIT MODE card: orange frame and tab, title and text in EDIT gold, everything
 // editable in place, rewards in the EDIT ring, ⊕ TASK / ⊕ REWARD chips and a bottom strip (More, Duplicate,

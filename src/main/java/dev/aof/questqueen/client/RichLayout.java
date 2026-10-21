@@ -44,7 +44,7 @@ public final class RichLayout {
         int height();
     }
 
-    /** A run of text; {@code color} 0 means the caller's default, {@code muted} asks for the muted colour. */
+    /** A run of text; {@code color} 0 means the caller's default, {@code muted} asks for the muted color. */
     public record TextPiece(int x, int y, int height, String text, int color, int size, boolean bold, boolean italic,
                             boolean underline, boolean muted) implements Piece {
         public int width(Measure m) {
@@ -66,7 +66,7 @@ public final class RichLayout {
         }
     }
 
-    /** {@code missing} pictures are drawn as a labelled empty frame. */
+    /** {@code missing} pictures are drawn as a labeled empty frame. */
     public record ImagePiece(int x, int y, int w, int h, ResourceLocation texture, int texW, int texH,
                              boolean missing) implements Piece {
         @Override
@@ -75,7 +75,7 @@ public final class RichLayout {
         }
     }
 
-    /** A recipe block; {@code missing} is drawn as a labelled empty frame, like a missing picture. */
+    /** A recipe block; {@code missing} is drawn as a labeled empty frame, like a missing picture. */
     public record RecipePiece(int x, int y, int w, int h, RichText.Recipe recipe, boolean missing, int column)
             implements Piece {
         @Override

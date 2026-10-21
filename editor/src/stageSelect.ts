@@ -9,7 +9,7 @@ export interface StageSelectContext {
   stages: () => StageInfo[];
   iconUrl: (item: string) => string;
   onChange: () => void;
-  /** Make a new stage named {@code name}; call {@code done} with its id once it is saved (or never, if cancelled). */
+  /** Make a new stage named {@code name}; call {@code done} with its id once it is saved (or never, if canceled). */
   onCreate: (name: string, done: (id: string) => void) => void;
   onEdit: (id: string) => void;
   /** One line under the field about the chosen stage, as HTML. */

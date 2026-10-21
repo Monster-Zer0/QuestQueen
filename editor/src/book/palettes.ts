@@ -1,6 +1,6 @@
 // GENERATED from BookTheme.java / BookPalette.java by QuestQueen-testkit/editor/tools/gen-palettes.mjs.
 // Do not edit by hand: change the Java, then regenerate. The palette parity test fails when they drift.
-// Colours are #AARRGGBB, as the Java ARGB ints; use cssColor() for CSS.
+// Colors are #AARRGGBB, as the Java ARGB ints; use cssColor() for CSS.
 
 export interface BookPalette {
   voidColor: string;
@@ -450,13 +450,13 @@ export const BOOK_PALETTES: BookPaletteEntry[] = [
 
 export const DEFAULT_PALETTE_ID = "midnight_royalty";
 
-/** A chapter theme's colours (with its id and name); an unknown or missing id is Midnight Royalty, as in game. */
+/** A chapter theme's colors (with its id and name); an unknown or missing id is Midnight Royalty, as in game. */
 export function paletteFor(id: string | undefined): BookPalette & { id: string; name: string } {
   const entry = BOOK_PALETTES.find((t) => t.id === id) ?? BOOK_PALETTES.find((t) => t.id === DEFAULT_PALETTE_ID)!;
   return { id: entry.id, name: entry.name, ...entry.palette };
 }
 
-/** "#AARRGGBB" → a CSS colour ("#RRGGBB" when opaque, else rgba()). */
+/** "#AARRGGBB" → a CSS color ("#RRGGBB" when opaque, else rgba()). */
 export function cssColor(argb: string): string {
   const a = parseInt(argb.slice(1, 3), 16);
   const rgb = argb.slice(3);

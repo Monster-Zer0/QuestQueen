@@ -66,7 +66,7 @@ public final class InventoryButton {
         }
     }
 
-    /** Re-place every frame: toggling the recipe book moves the panel without re-initialising the screen. */
+    /** Re-place every frame: toggling the recipe book moves the panel without re-initializing the screen. */
     public static void onRender(ScreenEvent.Render.Pre event) {
         if (event.getScreen() instanceof InventoryScreen screen) {
             for (var child : screen.children()) {

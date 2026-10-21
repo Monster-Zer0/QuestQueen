@@ -199,7 +199,7 @@ public final class RecipeBlocks {
         return out;
     }
 
-    /** Inputs in rows (wrapping), then the arrow and the output, vertically centred. */
+    /** Inputs in rows (wrapping), then the arrow and the output, vertically centered. */
     private static Shown row(List<Ingredient> inputs, ItemStack result, int column) {
         int room = Math.max(1, (column - ARROW_W - SLOT - 2 * GAP) / SLOT);
         int perRow = Math.max(1, Math.min(Math.min(MAX_ROW_INPUTS, room), inputs.size()));
@@ -252,7 +252,7 @@ public final class RecipeBlocks {
         }
     }
 
-    /** A slot like the inventory's: dark top-left edge, light bottom-right edge, grey inside. */
+    /** A slot like the inventory's: dark top-left edge, light bottom-right edge, gray inside. */
     private static void slotFrame(GuiGraphics graphics, int x, int y, boolean output) {
         MockChrome.box(graphics, x, y, SLOT, SLOT, 0xFF8B8B8B);
         MockChrome.box(graphics, x, y, SLOT - 1, 1, 0xFF373737);

@@ -10,7 +10,7 @@ export interface InlineOptions {
 }
 
 export function inlineText(el: HTMLElement, opts: InlineOptions): void {
-  let cancelled = false;
+  let canceled = false;
   el.textContent = opts.value;
   el.contentEditable = "true";
   el.spellcheck = true;
@@ -19,8 +19,8 @@ export function inlineText(el: HTMLElement, opts: InlineOptions): void {
   el.classList.add("editable");
   const commit = () => {
     delete el.dataset.editing;
-    if (cancelled) {
-      cancelled = false;
+    if (canceled) {
+      canceled = false;
       el.textContent = opts.value;
       return;
     }
@@ -41,7 +41,7 @@ export function inlineText(el: HTMLElement, opts: InlineOptions): void {
     } else if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      cancelled = true;
+      canceled = true;
       commit();
       el.blur();
     }

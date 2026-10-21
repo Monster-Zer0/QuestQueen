@@ -16,7 +16,7 @@ Open the book with **J**. JourneyMap also defaults to J, so rebind one of them i
 
 In-game: `/questqueen editor` opens the editor at `http://127.0.0.1:47821`. The quest book in game is play-only.
 
-The editor is the book itself: the same ledger tiles, arrows, padlocks and theme colours, drawn with the game's own font.
+The editor is the book itself: the same ledger tiles, arrows, padlocks and theme colors, drawn with the game's own font.
 
 - **Edit** — click any text or picture to change it. Click an empty square to add a quest (or press **N**); drag a quest to move it; drag a blue diamond onto the next quest to link them (straight across or down only); click an arrow to choose AND, OR, NOT or FORK. The card's task and reward lines change in place; **More** holds the gates into the quest, its unlock rule, what hides it, where it jumps and the scrolls it gives.
 - **Preview as player** — the book as a player sees it. **Previewing:** picks a new player, one who has finished up to a quest, or one with certain stages.
@@ -53,7 +53,7 @@ The pinned quest shows on the HUD at `[pinnedQuest] position` (`top_left` by def
 
 An advancement task's row says what the advancement is when hovered: its title and description, or for a tracking advancement with no display, what it asks for ("Have any Logs", "Place Hospital Bed", "Go to Crashed Main Ship").
 
-A quest that is done but not yet claimed gets a gold wash over its tile and a gold frame, on every zoom level. `[claimChrome]` in the common config changes them: `claimTint` (default `33FFD54F`) and `claimEdge` (default `FFFFD54F`), as hex ARGB. Leave them empty to use the chapter theme's colours.
+A quest that is done but not yet claimed gets a gold wash over its tile and a gold frame, on every zoom level. `[claimChrome]` in the common config changes them: `claimTint` (default `33FFD54F`) and `claimEdge` (default `FFFFD54F`), as hex ARGB. Leave them empty to use the chapter theme's colors.
 
 When the pack has its own chapters, the highest-priority `book.json` outside this mod's jar sets the sidebar title. Clicking a task item opens it in EMI, then REI, then JEI, whichever of those is installed.
 
@@ -65,7 +65,7 @@ A quest's `"description"` is plain text, or text with markup. It scrolls when it
 |---|---|
 | `# Heading`, `## Smaller heading` | headings |
 | `**bold**`, `*italic*`, `__underline__` | emphasis |
-| `{#RRGGBB}text{/#}`, `{size:12}text{/size}` | colour, size (8 to 24) |
+| `{#RRGGBB}text{/#}`, `{size:12}text{/size}` | color, size (8 to 24) |
 | `- item` | a bullet |
 | `---` | a divider line |
 | `{item:minecraft:diamond}`, `{item:minecraft:iron_ingot x3}` | an item icon in the text; hover it for the name |
@@ -79,7 +79,7 @@ Recipes come from the game's own recipe list, so recipes added or changed by dat
 
 Item icons in descriptions, including the slots of a recipe, open the item in the installed recipe viewer (EMI, REI or JEI): left-click for its recipes, right-click for its uses. With no recipe viewer they only show their name on hover.
 
-Pictures are ordinary textures: put the PNG in the pack's resource pack (or a mod) and give its full resource location, which starts with `textures/` and ends in `.png`. A picture that cannot be found is drawn as a labelled frame, and the log says which texture it was. Anything that is not valid markup, such as an unclosed tag, is shown as the characters you typed. Descriptions written before this keep working unchanged.
+Pictures are ordinary textures: put the PNG in the pack's resource pack (or a mod) and give its full resource location, which starts with `textures/` and ends in `.png`. A picture that cannot be found is drawn as a labeled frame, and the log says which texture it was. Anything that is not valid markup, such as an unclosed tag, is shown as the characters you typed. Descriptions written before this keep working unchanged.
 
 The web editor has buttons for all of this above the description box, a live preview, and flags a picture path or item id that would show up as plain text.
 

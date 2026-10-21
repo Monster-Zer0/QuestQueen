@@ -97,7 +97,7 @@ public final class UiFx {
         return from + (to - from) * clamp01(t);
     }
 
-    /** Replace a colour's alpha, keeping its hue — the only colour change allowed on locked/failed chrome. */
+    /** Replace a color's alpha, keeping its hue — the only color change allowed on locked/failed chrome. */
     public static int withAlpha(int argb, float alpha) {
         int a = Math.round(255f * clamp01(alpha));
         if (a <= 0) {
@@ -106,7 +106,7 @@ public final class UiFx {
         return (a << 24) | (argb & 0x00FFFFFF);
     }
 
-    /** Scale a colour's existing alpha by {@code factor}, keeping its hue. */
+    /** Scale a color's existing alpha by {@code factor}, keeping its hue. */
     public static int scaleAlpha(int argb, float factor) {
         int a = (argb >>> 24) & 0xFF;
         if (a == 0) {
@@ -119,7 +119,7 @@ public final class UiFx {
         return (scaled << 24) | (argb & 0x00FFFFFF);
     }
 
-    /** Primary loop period for the travelling path-arrow highlight. */
+    /** Primary loop period for the traveling path-arrow highlight. */
     public static final long FLOW_PERIOD_MS = 1800L;
     /** How dim an arrow falls between highlight passes (never zero — the path must stay readable). */
     public static final float FLOW_MIN = 0.45f;
@@ -143,7 +143,7 @@ public final class UiFx {
     }
 
     /**
-     * Travelling-highlight factor for a path arrow: a soft bright segment that sweeps along the link from
+     * Traveling-highlight factor for a path arrow: a soft bright segment that sweeps along the link from
      * source to destination, so the eye reads direction instead of a uniform blink.
      *
      * <p>{@code anchor} seeds the phase so parallel links do not pulse in lockstep. Returns a brightness
@@ -154,7 +154,7 @@ public final class UiFx {
         if (!enabled) {
             return 1f;
         }
-        // Cheap integer mixer so neighbouring ports get clearly different phases.
+        // Cheap integer mixer so neighboring ports get clearly different phases.
         int h = anchor * 0x9E3779B9;
         h ^= h >>> 16;
         long offset = (h & 0xFFFFL) * 37L;

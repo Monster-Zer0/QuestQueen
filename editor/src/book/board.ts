@@ -95,7 +95,7 @@ function iconEl(cls: string, item: string | undefined, glyph: string | undefined
 const EXPAND_BOXES: [number, number, number, number][] = [[1, 3, 4, 1], [1, 6, 4, 1], [1, 3, 1, 4], [4, 3, 1, 4], [4, 1, 1, 1], [5, 1, 1, 1], [6, 1, 1, 1], [6, 2, 1, 1], [6, 3, 1, 1], [5, 2, 1, 1]];
 let expandTemplate: HTMLElement | null = null;
 
-/** MockChrome.expandIcon in the tile's state colour (fill: currentColor). */
+/** MockChrome.expandIcon in the tile's state color (fill: currentColor). */
 function expandGlyph(size: number, color: string): HTMLElement {
   if (!expandTemplate) {
     expandTemplate = h("span", { class: "expand", "aria-hidden": "true" });
@@ -246,7 +246,7 @@ function fillArrow(el: HTMLElement, a: ArrowModel, g: Geometry) {
   el.style.color = color;
   if (a.showGate) {
     const op = gateOp(a.link);
-    // In the middle of the gap the arrow crosses, beside it (GAP 12: the gap centre is 6 past the edge).
+    // In the middle of the gap the arrow crosses, beside it (GAP 12: the gap center is 6 past the edge).
     const half = GAP / 2;
     const pos = dx !== 0
       ? `left:${bp(dx * half)};top:${bp(5)};transform:translateX(-50%)`
@@ -284,7 +284,7 @@ export const SIDE_STEP = SIDES;
 
 /**
  * Edit-mode handles on the selected quest, after the original mock: four NEW-blue diamonds at its side midpoints
- * (drag one onto a neighbour to link, or onto an empty neighbour to add a linked quest) and a dim ⊕ ADD in each
+ * (drag one onto a neighbor to link, or onto an empty neighbor to add a linked quest) and a dim ⊕ ADD in each
  * empty grid cell beside it.
  */
 function renderAffordances(layer: HTMLElement, s: BookState, ch: Chapter, g: Geometry) {
@@ -369,7 +369,7 @@ export function createBoard(el: HTMLElement, store: Store): Board {
     };
   };
 
-  /** Centre the chapter's quests in the view at geometry g. */
+  /** Center the chapter's quests in the view at geometry g. */
   const center = (ch: Chapter, g: Geometry) => {
     const view = el.getBoundingClientRect();
     const b = bounds(ch);
@@ -391,7 +391,7 @@ export function createBoard(el: HTMLElement, store: Store): Board {
         return;
       }
       if (fitted !== ch.id) {
-        // A chapter opens centred at the current zoom; only Fit changes the zoom.
+        // A chapter opens centered at the current zoom; only Fit changes the zoom.
         fitted = ch.id;
         center(ch, tileGeometry(s.zoom));
       }

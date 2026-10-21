@@ -82,7 +82,7 @@ public final class MockChrome {
         }
     }
 
-    /** Ledger card chrome: face, a hairline frame, and a 3px rail down the left edge in the state colour. */
+    /** Ledger card chrome: face, a hairline frame, and a 3px rail down the left edge in the state color. */
     public static void railPanel(GuiGraphics graphics, int x, int y, int w, int h, int face, int frame, int rail) {
         box(graphics, x, y, w, h, face);
         frame(graphics, x, y, w, h, frame);
@@ -241,7 +241,7 @@ public final class MockChrome {
     }
 
     /**
-     * As {@link #pathArrowPulse(int)} but scaled by a travelling {@code flow} factor, so brightness sweeps
+     * As {@link #pathArrowPulse(int)} but scaled by a traveling {@code flow} factor, so brightness sweeps
      * along the link. Only alpha changes — the locked/open hue is never touched.
      */
     private static int pathArrowPulse(int color, float flow) {
@@ -267,7 +267,7 @@ public final class MockChrome {
         pathArrow(graphics, cx, cy, dx, dy, color, 1f);
     }
 
-    /** {@code flow} in [0,1] brightens the arrow head as the travelling highlight arrives. */
+    /** {@code flow} in [0,1] brightens the arrow head as the traveling highlight arrives. */
     public static void pathArrow(GuiGraphics graphics, int cx, int cy, int dx, int dy, int color, float flow) {
         int adx = Integer.signum(dx);
         int ady = Integer.signum(dy);
@@ -296,7 +296,7 @@ public final class MockChrome {
         pathGate(graphics, cx, cy, dx, dy, locked, hover, color, 1f);
     }
 
-    /** Full form: {@code flow} drives the travelling highlight along the path arrow. */
+    /** Full form: {@code flow} drives the traveling highlight along the path arrow. */
     public static void pathGate(GuiGraphics graphics, int cx, int cy, int dx, int dy, boolean locked, boolean hover,
             int color, float flow) {
         if (dx == 0 && dy == 0) {

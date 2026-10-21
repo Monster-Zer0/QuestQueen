@@ -48,8 +48,8 @@ export function openChapterSettings(host: HTMLElement, store: Store, chapterId: 
   const theme = select("theme", BOOK_PALETTES.map((p) => [p.id, p.name] as [string, string]), ch.theme ?? "midnight_royalty", "Theme");
   theme.addEventListener("change", () => edit("chapter theme", (c) => { c.theme = theme.value; }));
 
-  const bgMode = select("bg_mode", [["", "Theme colour"], ["color", "Colour"], ["image", "Picture"]], ch.background?.mode ?? "", "Background");
-  const bgColor = h("input", { type: "color", value: ch.background?.color ?? "#24142c", dataset: { setting: "bg_color" }, "aria-label": "Background colour" }) as HTMLInputElement;
+  const bgMode = select("bg_mode", [["", "Theme color"], ["color", "Color"], ["image", "Picture"]], ch.background?.mode ?? "", "Background");
+  const bgColor = h("input", { type: "color", value: ch.background?.color ?? "#24142c", dataset: { setting: "bg_color" }, "aria-label": "Background color" }) as HTMLInputElement;
   const bgImage = h("input", { value: ch.background?.image ?? "", placeholder: "mypack:textures/gui/bg.png", dataset: { setting: "bg_image" }, "aria-label": "Background picture" }) as HTMLInputElement;
   attachCombo(bgImage, () => store.get().catalog.textures ?? [], { icon: textureIcon });
   const bgOpacity = h("input", { type: "range", min: "0", max: "1", step: "0.05", value: String(ch.background?.opacity ?? 1), dataset: { setting: "bg_opacity" }, "aria-label": "Background opacity" }) as HTMLInputElement;

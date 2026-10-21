@@ -1,5 +1,5 @@
 // A quest description edited in place: the rendered text on the card turns into its markup, a toolbar for
-// the book's markup (bold, italic, underline, headings, bullet, rule, colour, glyph, item, picture) and a live render
+// the book's markup (bold, italic, underline, headings, bullet, rule, color, glyph, item, picture) and a live render
 // under it. Done keeps it, Cancel or Esc puts it back. Toolbar inserts go after the selection, never over it.
 import { GLYPH_IDS } from "../glyphs";
 import { descriptionProblems, richToHtml, validTexture, type PreviewOptions } from "../richtext";
@@ -75,7 +75,7 @@ export function openDescribe(host: HTMLElement, opts: DescribeOptions): void {
     area.focus();
     fire();
   };
-  const color = h("input", { type: "color", value: "#ffaa00", "aria-label": "Text colour" }) as HTMLInputElement;
+  const color = h("input", { type: "color", value: "#ffaa00", "aria-label": "Text color" }) as HTMLInputElement;
   const glyph = h("select", { "aria-label": "Insert a glyph" }, h("option", { value: "" }, "Glyph…"),
     ...GLYPH_IDS.map((id) => h("option", { value: id }, id))) as HTMLSelectElement;
   glyph.addEventListener("change", () => {
@@ -101,7 +101,7 @@ export function openDescribe(host: HTMLElement, opts: DescribeOptions): void {
     tool("•", "Bullet: - text", () => prefixLines("- ")),
     tool("—", "Divider line: ---", () => insert("---", true)),
     color,
-    tool("Colour", "Colour the selected text", () => surround(`{#${color.value.slice(1).toUpperCase()}}`, "{/#}", "coloured text")),
+    tool("Color", "Color the selected text", () => surround(`{#${color.value.slice(1).toUpperCase()}}`, "{/#}", "colored text")),
     glyph,
     h("span", { class: "desc-tool-group" }, item, tool("Item", "Show an item's icon in the text", () => {
       const id = item.value.trim();

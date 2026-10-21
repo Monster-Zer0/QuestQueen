@@ -31,7 +31,7 @@ const HELP: Record<Screen, { label: string; steps: GuideStep[] }> = {
   ] },
   card: { label: "Editing a quest", steps: [
     { title: "Title and icon", target: ".card-title", body: "Click the title or the icon to change them." },
-    { title: "Description", target: ".card-desc", body: "Click the description to write it, with bold, colours, items and pictures. The preview under it is what players read." },
+    { title: "Description", target: ".card-desc", body: "Click the description to write it, with bold, colors, items and pictures. The preview under it is what players read." },
     { title: "Tasks", target: ".card-tasks", body: "Each line is one task. Change its kind and fill in its boxes right there. ⊕ TASK adds another." },
     { title: "Rewards", target: ".card-rewards", body: "Rewards work the same way. ⊕ REWARD adds another." },
     { title: "More, copy, delete", target: ".card-strip", body: "More holds the gates into this quest, when it unlocks, what hides it, where it jumps and the scrolls it gives. Duplicate and Delete are here too." },
@@ -51,7 +51,7 @@ const HELP: Record<Screen, { label: string; steps: GuideStep[] }> = {
   ] },
   "chapter-settings": { label: "Chapter settings", steps: [
     { title: "Name and place", target: "[data-setting=title]", body: "The chapter's title, and which chapter it sits under." },
-    { title: "Look", target: "[data-setting=theme]", body: "The theme colours the book; the background can be the theme, a colour or a picture." },
+    { title: "Look", target: "[data-setting=theme]", body: "The theme colors the book; the background can be the theme, a color or a picture." },
     { title: "Unlocks", target: "[data-setting=unlock_op]", body: "What opens this chapter: all of the conditions, or any one. Hide keeps it out of the list until then." },
     { title: "Board size", target: "[data-setting=grid]", body: "How many squares wide and tall. It never shrinks under a quest." },
   ] },
@@ -124,7 +124,7 @@ export function openGuide(host: HTMLElement, steps: GuideStep[], label = "", onC
     const target = document.querySelector<HTMLElement>(step.target);
     if (!target || target.closest("[hidden]")) return;
     target.classList.add("guide-target");
-    // Centre a small target (a sticky footer would cover one scrolled only to the edge); a board-sized one stays.
+    // Center a small target (a sticky footer would cover one scrolled only to the edge); a board-sized one stays.
     if (target.getBoundingClientRect().height < window.innerHeight / 2) {
       target.scrollIntoView?.({ block: "center" });
       const t = target.getBoundingClientRect();

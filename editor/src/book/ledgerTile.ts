@@ -17,7 +17,7 @@ export const railPx = (size: number) => (size >= 40 ? 3 : 2);
 export const padPx = (size: number) => (size >= 56 ? 4 : 2);
 export const contentInset = (size: number) => Math.max(padPx(size), railPx(size) + 2);
 export const compact = (size: number) => size < 48;
-/** The state word overruns a compact tile; there the rail colour alone carries the state. */
+/** The state word overruns a compact tile; there the rail color alone carries the state. */
 export const showsHeader = (size: number) => !compact(size);
 // Java's Math.round on a float: half up.
 export const iconPx = (size: number) => Math.max(8, Math.min(16, Math.floor((16 * size) / 64 + 0.5))) & ~1;

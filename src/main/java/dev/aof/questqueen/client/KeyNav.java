@@ -10,7 +10,7 @@ import java.util.Optional;
 public final class KeyNav {
     public enum Dir { UP, DOWN, LEFT, RIGHT }
 
-    /** Something that can be selected: a tile (grid cell) or a part of the card (pixel centre). */
+    /** Something that can be selected: a tile (grid cell) or a part of the card (pixel center). */
     public record Point(String id, int x, int y) {
     }
 

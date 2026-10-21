@@ -71,7 +71,7 @@ public record BookPalette(
     }
 
     /**
-     * A config colour as hex ARGB ({@code 33FFD54F}, optional {@code #}); six digits mean opaque. Blank or
+     * A config color as hex ARGB ({@code 33FFD54F}, optional {@code #}); six digits mean opaque. Blank or
      * unreadable gives {@code fallback}.
      */
     public static int parseArgb(String hex, int fallback) {

@@ -14,7 +14,7 @@ import java.util.Locale;
  * <pre>
  * # Heading            ## Smaller heading
  * **bold**  *italic*  __underline__
- * {#RRGGBB}coloured{/#}      {size:12}bigger{/size}
+ * {#RRGGBB}colored{/#}      {size:12}bigger{/size}
  * - a bullet                  ---   (a rule)
  * {item:minecraft:diamond}    {item:minecraft:iron_ingot x3}    {glyph:sword}
  * ![caption](mypack:textures/quest/castle.png)      (a picture, alone on its line)
@@ -40,7 +40,7 @@ public final class RichText {
     public sealed interface Inline permits Text, Item, Glyph {
     }
 
-    /** {@code color} 0 means "the caller's default colour". */
+    /** {@code color} 0 means "the caller's default color". */
     public record Text(String text, int color, int size, boolean bold, boolean italic, boolean underline)
             implements Inline {
         public Text {

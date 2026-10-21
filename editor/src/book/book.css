@@ -1,4 +1,4 @@
-/* The Living Book. Colours are the chapter theme's (applyPalette writes --void, --cell, --current, …), sizes are
+/* The Living Book. Colors are the chapter theme's (applyPalette writes --void, --cell, --current, …), sizes are
    book pixels times --px (CSS px per book px), so the board lines up with the game at the same GUI scale. */
 
 .qq-book-app {
@@ -14,7 +14,7 @@
   font: 14px/1.4 system-ui, sans-serif; overflow: hidden;
 }
 
-/* Text in the book's own font: 8 book px per line, with Minecraft's 1 px drop shadow at 25% of the text colour. */
+/* Text in the book's own font: 8 book px per line, with Minecraft's 1 px drop shadow at 25% of the text color. */
 .qq-text {
   font-family: QQBook, system-ui, sans-serif;
   font-size: calc(var(--px) * 8px);

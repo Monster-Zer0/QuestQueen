@@ -68,7 +68,7 @@ function propName(field: string): string {
   return "--" + field.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
 }
 
-/** Write a chapter theme's colours onto an element as CSS custom properties. */
+/** Write a chapter theme's colors onto an element as CSS custom properties. */
 export function applyPalette(el: HTMLElement, palette: BookPalette): void {
   for (const [field, argb] of Object.entries(palette)) {
     if (typeof argb === "string" && argb.startsWith("#") && argb.length === 9) el.style.setProperty(propName(field), cssColor(argb));

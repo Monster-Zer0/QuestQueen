@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.TreeSet;
 
 /**
- * Pure camera chooser for the quest board's FIT behaviour.
+ * Pure camera chooser for the quest board's FIT behavior.
  *
  * <p>Split out of {@code QuestBookScreen} deliberately: Worf's F4 review (V4) requires the selection to be
  * a pure function of the tiles, the viewport and the zoom so that it is idempotent by construction.
@@ -18,9 +18,9 @@ import java.util.TreeSet;
  * <ol>
  *   <li>the anchor tile must sit on screen, preferably inside a margin band rather than jammed at an edge;</li>
  *   <li>among framings that satisfy that, take the one showing the most tiles;</li>
- *   <li>among those ties, prefer the framing whose viewport centre is nearest the weighted centroid of
- *       tiles near the ANCHOR - not the bounding box centre. This clause is what carries ring chapters:
- *       the anchor is on the rim, so its neighbourhood has content, while the bbox centre is the hole.</li>
+ *   <li>among those ties, prefer the framing whose viewport center is nearest the weighted centroid of
+ *       tiles near the ANCHOR - not the bounding box center. This clause is what carries ring chapters:
+ *       the anchor is on the rim, so its neighborhood has content, while the bbox center is the hole.</li>
  * </ol>
  * The anchor itself is supplied by the caller: the tile the player is on, else the chapter's entry tile.
  *
@@ -41,7 +41,7 @@ import java.util.TreeSet;
  * build passed {@code requireAnchor} unconditionally, so COUNT silently inherited the anchor constraint and
  * returned the anchor rule's own camera - which is why the comparison frames bought nothing. COUNT is for
  * comparison frames only, and the screen's default must never be it: Troi accepted the flag only on the
- * condition that the comparison cannot become the shipped behaviour by inaction.
+ * condition that the comparison cannot become the shipped behavior by inaction.
  *
  * <h2>Counting tiles (Troi's F4 follow-up 2)</h2>
  * Two counts, because they mean different things. {@link #visibleCount} counts tiles WHOLLY inside the
@@ -65,7 +65,7 @@ import java.util.TreeSet;
  */
 public final class FitCamera {
 
-    /** What FIT is optimising for. */
+    /** What FIT is optimizing for. */
     public enum Target {
         /** Ship default: anchor-first, tile count as the tie-breaker. */
         ANCHOR,
@@ -219,7 +219,7 @@ public final class FitCamera {
         for (Cell c : safe) {
             int left = c.x() * stridePx;
             int top = c.y() * stridePx;
-            // Three framings per cell, so the search always contains the edge-aligned and centred options.
+            // Three framings per cell, so the search always contains the edge-aligned and centered options.
             rawXs.add(left - view.boardLeft() - view.margin());
             rawXs.add(left + view.tilePx() - view.viewRight() + view.margin());
             rawXs.add(left + view.tilePx() / 2 - view.contentWidth() / 2);
@@ -266,7 +266,7 @@ public final class FitCamera {
 
         boolean countMax = target == Target.COUNT || anchor == null;
 
-        // Anchor-first, then the fallbacks, each weaker than the last and each labelled honestly:
+        // Anchor-first, then the fallbacks, each weaker than the last and each labeled honestly:
         // in the margin band; on screen even if flush; and only then unconstrained. COUNT skips straight to
         // the unconstrained pass - that is the whole point of it, and the first build got this wrong.
         // The FLOOR is applied to whichever framing won, and only for the anchor target: COUNT exists to be
@@ -303,7 +303,7 @@ public final class FitCamera {
      * (item 7 of the 1.1.176 verdict) then moved that range from the flush bound to stride - inset: at the
      * flush bound the anchor is whole but sits 0-2 px from the viewport edge where the clamp's own state
      * leaves the {@code inset()} px the inset exists for, so one build showed two different anchor offsets
-     * depending only on how far the shift had travelled. The target is now the whole anchor with that
+     * depending only on how far the shift had traveled. The target is now the whole anchor with that
      * gutter on every side -- stride - inset on the x axis of the live class -- so every window class
      * shares one gutter, and the price is MEASURED in the F6x record rather than estimated.
      *
@@ -470,7 +470,7 @@ public final class FitCamera {
                 }
                 boolean anchored = fit == AnchorFit.IN_BAND;
                 int visible = visibleCount(cells, camSx, camSy, view);
-                // Distance of the viewport centre to the anchor-local centroid; ties fall through to the
+                // Distance of the viewport center to the anchor-local centroid; ties fall through to the
                 // lowest camSx then lowest camSy, which is what makes the result order-independent.
                 double distance = Double.isNaN(centroidX) ? 0.0
                         : Math.abs((view.boardLeft() + view.contentWidth() / 2.0) - (centroidX - camSx))
@@ -538,7 +538,7 @@ public final class FitCamera {
      * verdict). At the flush bound (camSx = anchorX*stridePx) the anchor is whole but its left border lands
      * on the viewport edge with a 0-2 px gutter, where the clamp's own state leaves the 6 px the inset
      * exists for -- so the same build showed two anchor offsets depending only on how far the minimum
-     * shift had travelled. For an anchor at the content's corner this predicate is exactly the clamp's own
+     * shift had traveled. For an anchor at the content's corner this predicate is exactly the clamp's own
      * flush state, which is what makes one gutter appear at every window class.
      */
     public static boolean wholeInGutter(Cell c, int camSx, int camSy, View view) {

@@ -1,5 +1,5 @@
 // Editing on the board (Edit mode only): add a quest in an empty cell, drag a quest to move it, drag one of the
-// selected quest's blue diamonds onto a neighbour to link it (or onto an empty neighbour to add a linked quest),
+// selected quest's blue diamonds onto a neighbor to link it (or onto an empty neighbor to add a linked quest),
 // click an arrow to change how its quest opens, and the keyboard: arrows move the selection, Alt+arrows move the
 // quest, N adds, Ctrl+D copies, Delete removes, Ctrl+Z / Ctrl+Shift+Z undo and redo. Linked quests always share a
 // row or column: a move that would put a link on a diagonal is refused with a notice.
@@ -137,7 +137,7 @@ export function wireBoardEdit(el: HTMLElement, board: Board, store: Store, notic
     const [dx, dy] = SIDE_STEP[side];
     const at = { x: from.pos.x + dx, y: from.pos.y + dy };
     if (dropAt && (dropAt.x !== at.x || dropAt.y !== at.y)) {
-      notice("A link joins neighbours: drop the diamond on the quest or empty cell right beside it.");
+      notice("A link joins neighbors: drop the diamond on the quest or empty cell right beside it.");
       return;
     }
     const to = tileAt(ch, at);

@@ -8,7 +8,7 @@ import type { CatalogEntry } from "../packCatalog";
 import { h } from "./dom";
 
 const PAGE = 120;
-/** The book colours the panel's CSS uses. */
+/** The book colors the panel's CSS uses. */
 const THEME = ["--edit", "--ui", "--muted", "--sidebar-edge"];
 
 /** 3: id or name starts with the text · 2: a word in it does · 1: it appears inside. Order within a rank is kept. */
@@ -126,7 +126,7 @@ export function attachCombo(input: HTMLInputElement, entries: () => CatalogEntry
     count = PAGE;
     compute();
     // On the page body, above every popover and dialog (the icon and task pickers live there too, over the book),
-    // wearing the chapter's colours copied from the book root.
+    // wearing the chapter's colors copied from the book root.
     const root = document.querySelector(".qq-book-app");
     if (root) {
       const theme = getComputedStyle(root);

@@ -298,8 +298,8 @@ public final class QuestTileWidget extends AbstractWidget {
 
     /**
      * Ledger tile chrome, as on the quest card: the face, a hairline frame and a rail down the left edge in the
-     * state colour. While a reveal runs the rail cross-fades from locked red to the new state colour by alpha
-     * alone, so neither colour is ever mixed into a third.
+     * state color. While a reveal runs the rail cross-fades from locked red to the new state color by alpha
+     * alone, so neither color is ever mixed into a third.
      */
     private void drawLedgerChrome(GuiGraphics graphics, int x, int y, int size, float reveal, int extraRail) {
         MockChrome.box(graphics, x, y, size, size, face);
@@ -402,7 +402,7 @@ public final class QuestTileWidget extends AbstractWidget {
         return size < 48;
     }
 
-    /** The state word overruns a compact tile; there the rail colour alone carries the state. */
+    /** The state word overruns a compact tile; there the rail color alone carries the state. */
     static boolean showsHeader(int size) {
         return !compact(size);
     }
@@ -447,7 +447,7 @@ public final class QuestTileWidget extends AbstractWidget {
         boolean compact = compact(size);
         boolean stacked = stacked(size, titleBeside && hasIconFace());
         if (!header.isEmpty() && showsHeader(size)) {
-            // The state word sits where the filled corner tab used to be, in the state colour.
+            // The state word sits where the filled corner tab used to be, in the state color.
             tiny(graphics, font, header, x + inset, y + 2, edge != 0 ? edge : headerInk);
         }
         int iconX = x + inset;

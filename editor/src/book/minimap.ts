@@ -1,4 +1,4 @@
-// The board's map: the whole chapter in a corner box, each quest a dot in its state colour, the view as a frame.
+// The board's map: the whole chapter in a corner box, each quest a dot in its state color, the view as a frame.
 // Click to move the view there. Off by default when the board is narrow, so it never sits on top of quests.
 import { chapterGridHeight, chapterGridWidth } from "../types";
 import type { Board } from "./board";

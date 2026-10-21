@@ -2,7 +2,7 @@
 // will draw. Keep the two parsers in step.
 //
 //   # Heading   ## Smaller heading   - bullet   ---   **bold**  *italic*  __underline__
-//   {#RRGGBB}coloured{/#}   {size:12}bigger{/size}
+//   {#RRGGBB}colored{/#}   {size:12}bigger{/size}
 //   {item:minecraft:diamond}   {item:minecraft:iron_ingot x3}   {glyph:sword}
 //   ![caption](mypack:textures/quest/castle.png)       a picture alone on its line
 //   \*  a backslash keeps the next markup character literal
@@ -312,7 +312,7 @@ export function descriptionProblems(source: string | null | undefined): string[]
 export interface PreviewOptions {
   /** URL of an item's icon, as the bridge serves it. */
   iconUrl?: (id: string) => string;
-  /** URL of a resource-pack texture (GET /api/texture). Without it a picture is a labelled frame. */
+  /** URL of a resource-pack texture (GET /api/texture). Without it a picture is a labeled frame. */
   pictureUrl?: (texture: string) => string;
 }
 

@@ -8,7 +8,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 /**
- * An author's edit to the book chrome (sidebar title, colour, scale, shadow). The book used to call
+ * An author's edit to the book chrome (sidebar title, color, scale, shadow). The book used to call
  * {@code QuestDefinitions.putChrome} straight from the render thread: that raced the server thread in
  * singleplayer and did nothing at all on a dedicated server. The server now applies it, gated like
  * {@link AuthorSaveC2S}.

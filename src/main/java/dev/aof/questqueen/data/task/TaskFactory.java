@@ -46,7 +46,7 @@ public final class TaskFactory {
         int index = TYPES.indexOf(current.type());
         String type = TYPES.get((Math.max(index, 0) + 1) % TYPES.size());
         Task next = create(type);
-        // withCount returns `this` for the binary types, so identity tells us whether the new type honours a
+        // withCount returns `this` for the binary types, so identity tells us whether the new type honors a
         // count at all. The old code passed the count into those no-ops and it silently reverted.
         return next.withCount(Math.max(1, current.required()));
     }
